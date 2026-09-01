@@ -84,8 +84,6 @@ LAYOUT
 - No extra study box
 
 SPEECH BUBBLE ACCURACY
-This is extremely important.
-
 - Every speech bubble must belong to the correct speaker.
 - The bubble tail must point toward the actual person speaking.
 - The tail should visually connect toward the speaker's mouth or head.
@@ -97,10 +95,22 @@ This is extremely important.
 - Avoid ambiguous speaker placement.
 - Facial expressions and body language should match what each character is saying.
 
+QUESTION MARK ACCURACY
+- If a character is asking a question, any question mark icon must appear only near that speaker.
+- Do not place a question mark near the listener or answering character.
+- The asking character should look curious or questioning.
+- The answering character should look responsive, thoughtful, confident, surprised, or calm depending on the dialogue.
+
 DIALOGUE
 - Use the supplied dialogue as the source.
-- Do not rewrite it into textbook translation language.
-- Keep it short, casual, lively, and comic-like.
+- Keep the meaning, but make it sound like natural Korean teen conversation.
+- Avoid stiff, literal, translated, or awkward phrasing.
+- Keep dialogue short, casual, lively, and comic-like.
+- Prefer natural lines such as:
+  "넌 진짜 잘할 것 같아!"
+  "너한테 딱이야!"
+  "완전 잘 어울리는데?"
+  "넌 꼭 멋진 선수가 될 거야!"
 - Large, bold, highly readable lettering.
 - Speech should look like real comic dialogue, not small typed worksheet text.
 
@@ -112,7 +122,6 @@ ENGLISH LEARNING FORMAT
   직업(job)
   계획(plan)
   자신감(confidence)
-
 - Never move the English word to the end of the sentence.
 - Never put English alone in separate parentheses after the full sentence.
 - Never put Korean and English on separate lines.
@@ -170,7 +179,7 @@ ${panelGuide}
 
     const resizedLogo = await sharp(logoBuffer)
       .resize({
-        width: 230,
+        width: 300,
         withoutEnlargement: true,
       })
       .png()
@@ -181,7 +190,7 @@ ${panelGuide}
     const comicWidth = comicMeta.width || 1536;
     const comicHeight = comicMeta.height || 1024;
 
-    const headerHeight = 230;
+    const headerHeight = 240;
     const sideMargin = 80;
     const bottomMargin = 80;
 
@@ -231,12 +240,12 @@ ${panelGuide}
       .composite([
         {
           input: resizedLogo,
-          left: 60,
-          top: 30,
+          left: 45,
+          top: 26,
         },
         {
           input: summarySvgBuffer,
-          left: 340,
+          left: 400,
           top: 82,
         },
         {
