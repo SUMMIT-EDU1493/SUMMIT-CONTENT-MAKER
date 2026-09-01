@@ -31,72 +31,103 @@ export async function POST(request: Request) {
       .map((panel: any, index: number) => {
         const dialogueText = Array.isArray(panel.dialogue)
           ? panel.dialogue
-              .map((d: any) => `${d.speaker}: ${d.text}`)
-              .join("\n")
+              .map(
+                (d: any, dialogueIndex: number) =>
+                  `Speaker ${dialogueIndex + 1}: ${d.speaker}
+Exact dialogue: ${d.text}`
+              )
+              .join("\n\n")
           : "";
 
         return `
 PANEL ${index + 1}
-Scene: ${panel.scene}
-Characters: ${panel.characters}
 
-Dialogue:
+SCENE:
+${panel.scene}
+
+CHARACTERS:
+${panel.characters}
+
+DIALOGUE:
 ${dialogueText}
 `;
       })
-      .join("\n");
+      .join("\n\n");
 
     const prompt = `
 Create ONE polished educational four-panel comic image.
 
-STYLE:
+TARGET STYLE
 - Korean middle-school academy comic
 - warm, clean, modern illustration
-- friendly but not childish
-- visually polished
-- consistent character faces, hair, clothing, age, and proportions across all four panels
+- friendly and lively
+- not childish
+- not a worksheet
+- visually polished and print-friendly
 
-LAYOUT:
-- landscape image
-- exactly four panels
+CHARACTER CONSISTENCY
+- Keep the same characters consistent across all four panels.
+- Maintain the same face, hairstyle, clothing, age, and overall appearance.
+- Do not randomly change character appearance between panels.
+
+LAYOUT
+- Landscape orientation
+- Exactly 4 panels
 - 2 x 2 grid
-- equal-sized panels
-- clear borders
-- comic only
-- no title
-- no logo
-- no footer
-- no vocabulary box
+- Equal-sized comic panels
+- Clear panel borders
+- Balanced composition
+- No title area
+- No logo
+- No footer
+- No vocabulary section
+- No extra study box
 
-SPEECH BUBBLES:
-- Every speech bubble must clearly belong to the correct speaker.
-- The speech bubble tail must point directly toward the mouth or head of the actual speaker.
-- Never point a speech bubble tail toward the wrong character.
-- If two characters speak in one panel, use separate speech bubbles.
-- Position each bubble near its speaker.
-- Avoid ambiguous bubble placement.
+SPEECH BUBBLE ACCURACY
+This is extremely important.
 
-TEXT:
-- Use the supplied Korean dialogue exactly as the dialogue source.
-- Large, bold, highly readable comic lettering.
-- Natural comic speech bubble style.
-- No small worksheet-like typed text.
+- Every speech bubble must belong to the correct speaker.
+- The bubble tail must point toward the actual person speaking.
+- The tail should visually connect toward the speaker's mouth or head.
+- Never point a bubble tail at the listener.
+- Never attach a bubble to the wrong person.
+- If two characters speak in the same panel, create two clearly separate speech bubbles.
+- Position each speech bubble close to its speaker.
+- Avoid crossing bubble tails.
+- Avoid ambiguous speaker placement.
+- Facial expressions and body language should match what each character is saying.
 
-ENGLISH FORMAT:
+DIALOGUE
+- Use the supplied dialogue as the source.
+- Do not rewrite it into textbook translation language.
+- Keep it short, casual, lively, and comic-like.
+- Large, bold, highly readable lettering.
+- Speech should look like real comic dialogue, not small typed worksheet text.
+
+ENGLISH LEARNING FORMAT
 - Preserve Korean(English) placement exactly.
-- Example: 직업(job), 성격(personality)
-- Never move the English to the end of the sentence.
-- Never separate Korean and English onto different lines.
-- Never rewrite it as English sentence + Korean translation.
+- The English word must stay immediately after its Korean meaning.
+- Examples:
+  성격(personality)
+  직업(job)
+  계획(plan)
+  자신감(confidence)
 
-DO NOT:
-- do not invent extra educational notes
-- do not invent extra dialogue
-- do not create a logo or logo area
-- do not create a blank white logo box
-- do not add watermark
+- Never move the English word to the end of the sentence.
+- Never put English alone in separate parentheses after the full sentence.
+- Never put Korean and English on separate lines.
+- Never change the format into English sentence + Korean translation.
 
-PANELS:
+TEXT ACCURACY
+- Do not invent additional study phrases.
+- Do not add unnecessary English.
+- Do not add captions under the panels.
+- Do not add fake logos.
+- Do not add watermarks.
+- Do not create a blank logo box.
+- Do not add title text inside the comic.
+
+PANEL INFORMATION:
 ${panelGuide}
 `;
 
@@ -119,7 +150,12 @@ ${panelGuide}
 
     const comicBuffer = Buffer.from(imageBase64, "base64");
 
-    const logoPath = path.join(process.cwd(), "public", "summit-logo.png");
+    const logoPath = path.join(
+      process.cwd(),
+      "public",
+      "summit-logo.png"
+    );
+
     const fontPath = path.join(
       process.cwd(),
       "public",
@@ -134,36 +170,51 @@ ${panelGuide}
 
     const resizedLogo = await sharp(logoBuffer)
       .resize({
-        width: 180,
+        width: 230,
         withoutEnlargement: true,
       })
       .png()
       .toBuffer();
 
     const comicMeta = await sharp(comicBuffer).metadata();
+
     const comicWidth = comicMeta.width || 1536;
     const comicHeight = comicMeta.height || 1024;
 
-    const headerHeight = 220;
+    const headerHeight = 230;
     const sideMargin = 80;
     const bottomMargin = 80;
 
-    const canvasWidth = comicWidth + sideMargin * 2;
-    const canvasHeight = headerHeight + comicHeight + bottomMargin;
+    const canvasWidth =
+      comicWidth + sideMargin * 2;
 
-    const summaryText = (summary || title || "SUMMIT FOUR-CUT").trim();
+    const canvasHeight =
+      headerHeight +
+      comicHeight +
+      bottomMargin;
 
-    const summarySvgString = textToSVG.getSVG(summaryText, {
-      x: 0,
-      y: 0,
-      fontSize: 60,
-      anchor: "top",
-      attributes: {
-        fill: "#111827",
-      },
-    });
+    const summaryText = (
+      summary ||
+      title ||
+      "SUMMIT FOUR-CUT"
+    ).trim();
 
-    const summarySvgBuffer = Buffer.from(summarySvgString);
+    const summarySvgString = textToSVG.getSVG(
+      summaryText,
+      {
+        x: 0,
+        y: 0,
+        fontSize: 62,
+        anchor: "top",
+        attributes: {
+          fill: "#111827",
+        },
+      }
+    );
+
+    const summarySvgBuffer = Buffer.from(
+      summarySvgString
+    );
 
     const whiteCanvas = await sharp({
       create: {
@@ -180,13 +231,13 @@ ${panelGuide}
       .composite([
         {
           input: resizedLogo,
-          left: 80,
-          top: 40,
+          left: 60,
+          top: 30,
         },
         {
           input: summarySvgBuffer,
-          left: 320,
-          top: 78,
+          left: 340,
+          top: 82,
         },
         {
           input: comicBuffer,
@@ -198,14 +249,20 @@ ${panelGuide}
       .toBuffer();
 
     return Response.json({
-      image: `data:image/png;base64,${finalImage.toString("base64")}`,
+      image: `data:image/png;base64,${finalImage.toString(
+        "base64"
+      )}`,
     });
   } catch (error: any) {
-    console.error("IMAGE GENERATION ERROR:", error);
+    console.error(
+      "IMAGE GENERATION ERROR:",
+      error
+    );
 
     return Response.json(
       {
-        error: "만화 이미지 생성 중 오류가 발생했습니다.",
+        error:
+          "만화 이미지 생성 중 오류가 발생했습니다.",
         detail:
           error?.message ||
           error?.error?.message ||
