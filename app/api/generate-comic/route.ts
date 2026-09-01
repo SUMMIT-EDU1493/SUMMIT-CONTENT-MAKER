@@ -85,13 +85,23 @@ CHARACTER CONSISTENCY
 - Same age
 - Same general proportions
 
+VERY IMPORTANT: DO NOT DUPLICATE CHARACTERS
+- In each panel, draw each character only ONCE.
+- Never duplicate the same person just because that person has more than one line of dialogue.
+- If one speaker has two or more dialogue lines in the same panel, show ONE character with multiple speech bubbles.
+- Multiple speech bubbles from the same speaker must point to the SAME single character.
+- Do not create a second copy, clone, twin, reflection, or duplicate version of the same speaker.
+- The number of visible people in the panel must match the actual number of distinct characters in the scene, NOT the number of dialogue lines.
+- Example: if two friends are talking and one friend speaks twice, the panel must still contain only TWO people.
+
 SPEECH BUBBLE ACCURACY
 - Every speech bubble must clearly belong to the correct speaker.
 - Put each bubble close to the person speaking.
 - The bubble tail must point toward the actual speaker's mouth or head.
 - Never point the tail toward the listener.
 - Never attach a bubble to the wrong person.
-- If two people speak in one panel, use separate speech bubbles.
+- If two different people speak in one panel, use separate speech bubbles for each person.
+- If the same person speaks twice, use two bubbles pointing to that same single person.
 - Avoid ambiguous bubble placement.
 - Avoid crossed bubble tails.
 
@@ -173,6 +183,7 @@ ${panelGuide}
     const comicBuffer = Buffer.from(imageBase64, "base64");
 
     const logoPath = path.join(process.cwd(), "public", "summit-logo.png");
+
     const fontPath = path.join(
       process.cwd(),
       "public",
@@ -236,7 +247,7 @@ ${panelGuide}
         {
           input: resizedLogo,
           left: 65,
-          top: 48,
+          top: 75,
         },
         {
           input: summarySvgBuffer,
