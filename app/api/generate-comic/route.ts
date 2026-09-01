@@ -191,8 +191,9 @@ ${panelGuide}
     const textToSVG = TextToSVG.loadSync(fontPath);
 
     const resizedLogo = await sharp(logoBuffer)
+      .trim()
       .resize({
-        width: 330,
+        width: 340,
         withoutEnlargement: true,
       })
       .png()
@@ -251,11 +252,11 @@ ${panelGuide}
         {
           input: resizedLogo,
           left: 55,
-          top: 42,
+          top: 24,
         },
         {
           input: summarySvgBuffer,
-          left: 405,
+          left: 420,
           top: 72,
         },
         {
