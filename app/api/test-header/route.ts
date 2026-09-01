@@ -24,8 +24,9 @@ export async function GET() {
     const textToSVG = TextToSVG.loadSync(fontPath);
 
     const resizedLogo = await sharp(logoBuffer)
+      .trim()
       .resize({
-        width: 180,
+        width: 250,
         withoutEnlargement: true,
       })
       .png()
@@ -33,20 +34,24 @@ export async function GET() {
 
     const summaryText = "성격 유형과 직업";
 
-    const summarySvgString = textToSVG.getSVG(summaryText, {
-      x: 0,
-      y: 0,
-      fontSize: 60,
-      anchor: "top",
-      attributes: {
-        fill: "#111827",
-      },
-    });
+    const summarySvgString = textToSVG.getSVG(
+      summaryText,
+      {
+        x: 0,
+        y: 0,
+        fontSize: 64,
+        anchor: "top",
+        attributes: {
+          fill: "#111827",
+        },
+      }
+    );
 
-    const summarySvgBuffer = Buffer.from(summarySvgString);
+    const summarySvgBuffer =
+      Buffer.from(summarySvgString);
 
-    const canvasWidth = 1600;
-    const canvasHeight = 220;
+    const canvasWidth = 1700;
+    const canvasHeight = 230;
 
     const whiteCanvas = await sharp({
       create: {
@@ -63,13 +68,13 @@ export async function GET() {
       .composite([
         {
           input: resizedLogo,
-          left: 80,
-          top: 30,
+          left: 65,
+          top: 75,
         },
         {
           input: summarySvgBuffer,
-          left: 320,
-          top: 70,
+          left: 350,
+          top: 72,
         },
       ])
       .png()
@@ -83,7 +88,9 @@ export async function GET() {
   } catch (error: any) {
     return Response.json(
       {
-        error: error?.message || "헤더 테스트 실패",
+        error:
+          error?.message ||
+          "헤더 테스트 실패",
       },
       { status: 500 }
     );
