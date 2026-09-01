@@ -6,21 +6,19 @@ export async function POST(request: Request) {
 
     if (!apiKey) {
       return Response.json(
-        { error: "OPENAI_API_KEY가 서버에 설정되어 있지 않습니다." },
+        { error: "OPENAI_API_KEY가 설정되지 않았습니다." },
         { status: 500 }
       );
     }
 
-    const openai = new OpenAI({
-      apiKey,
-    });
+    const openai = new OpenAI({ apiKey });
 
     const body = await request.json();
     const text = body.text;
 
-    if (!text || typeof text !== "string") {
+    if (!text) {
       return Response.json(
-        { error: "분석할 PDF 텍스트가 없습니다." },
+        { error: "분석할 텍스트가 없습니다." },
         { status: 400 }
       );
     }
@@ -28,66 +26,37 @@ export async function POST(request: Request) {
     const response = await openai.responses.create({
       model: "gpt-5-mini",
       input: `
-아래 내용은 영어 교재 PDF에서 추출한 전체 텍스트다.
+아래는 영어 교재 PDF에서 추출한 텍스트다.
 
-내용을 분석해서 다음 항목으로 정확히 분류하라.
-
-1. 대화문
-2. 본문
-3. 문법
-4. 핵심 표현
-5. 주요 단어
+목표:
+오직 "대화문"만 찾아서 추출한다.
 
 규칙:
-- 서로 다른 대화문이 여러 개라면 각각 분리한다.
-- 교재에 없는 내용을 임의로 만들지 않는다.
-- 영어 원문은 가능한 한 그대로 유지한다.
-- 핵심 표현과 주요 단어에는 자연스러운 한국어 뜻을 붙인다.
-- 반드시 JSON만 출력한다.
-- 코드블록이나 설명은 붙이지 않는다.
+- 본문 독해, 문법 설명, 단어 목록은 제외
+- 실제 인물 간 대화 형식만 추출
+- 대화문이 여러 개면 각각 분리
+- 원문 영어는 가능한 그대로 유지
+- 각 대화문에 짧은 한글 제목을 붙인다
+- JSON만 출력
+- 설명문이나 마크다운 금지
 
-반드시 아래 구조로 응답한다.
-
+형식:
 {
   "dialogues": [
     {
-      "title": "대화문의 제목 또는 주제",
-      "content": "대화문 전체 원문"
-    }
-  ],
-  "reading": [
-    {
-      "title": "본문 제목",
-      "content": "본문 전체 내용"
-    }
-  ],
-  "grammar": [
-    {
-      "title": "문법 항목",
-      "content": "문법 내용"
-    }
-  ],
-  "keyExpressions": [
-    {
-      "english": "핵심 영어 표현",
-      "korean": "한글 뜻"
-    }
-  ],
-  "keyWords": [
-    {
-      "english": "영어 단어",
-      "korean": "한글 뜻"
+      "title": "짧은 한글 제목",
+      "content": "대화문 원문"
     }
   ]
 }
 
-PDF 내용:
+교재 텍스트:
 ${text}
-      `,
+`,
     });
 
     const raw = response.output_text
-      .replace(/```json/gi, "")
+      .replace(/```json/g, "")
       .replace(/```/g, "")
       .trim();
 
@@ -95,15 +64,12 @@ ${text}
 
     return Response.json(parsed);
   } catch (error: any) {
-    console.error("OPENAI ANALYZE ERROR:", error);
+    console.error("ANALYZE ERROR:", error);
 
     return Response.json(
       {
-        error: "OpenAI API 호출에 실패했습니다.",
-        detail:
-          error?.message ||
-          error?.error?.message ||
-          "알 수 없는 오류",
+        error: "교재 분석 중 오류가 발생했습니다.",
+        detail: error?.message || "알 수 없는 오류",
       },
       { status: 500 }
     );

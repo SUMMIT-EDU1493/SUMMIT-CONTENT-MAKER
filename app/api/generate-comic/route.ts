@@ -18,13 +18,7 @@ export async function POST(request: Request) {
 
     const body = await request.json();
 
-    const {
-      title,
-      summary,
-      panels,
-      keyWords,
-      keyExpressions,
-    } = body;
+    const { title, summary, panels } = body;
 
     if (!panels || !Array.isArray(panels) || panels.length !== 4) {
       return Response.json(
@@ -36,103 +30,55 @@ export async function POST(request: Request) {
     const panelGuide = panels
       .map(
         (panel: any, index: number) => `
-패널 ${index + 1}
-장면 설명: ${panel.scene}
-등장인물: ${panel.characters}
-원본 영어 내용: ${panel.english}
-원본 한글 의미: ${panel.korean}
+PANEL ${index + 1}
+Scene: ${panel.scene}
+Characters: ${panel.characters}
+Korean dialogue that must be preserved:
+${panel.korean}
 `
       )
       .join("\n");
 
-    const vocabHints = (keyWords || [])
-      .slice(0, 10)
-      .map((item: any) => `${item.korean}(${item.english})`)
-      .join(", ");
-
-    const expressionHints = (keyExpressions || [])
-      .slice(0, 8)
-      .map((item: any) => `${item.korean}(${item.english})`)
-      .join(", ");
-
     const prompt = `
-Create ONE polished educational four-panel comic for Korean middle-school English learners.
+Create ONE polished four-panel educational comic image.
 
-This should feel like a real "SUMMIT four-cut comic", not a worksheet.
+STYLE:
+- Korean middle-school academy comic
+- warm, clean, modern illustration
+- real comic feeling, NOT worksheet
+- friendly but not childish
+- consistent character faces, hair, clothing, and proportions across all four panels
 
-LAYOUT
-- Landscape orientation
-- Exactly four panels
+LAYOUT:
+- landscape image
+- exactly four panels
 - 2 x 2 grid
-- Equal-sized panels
-- Clear comic borders
-- Warm, clean, friendly educational comic style
-- Characters must stay visually consistent across all panels
+- equal-sized panels
+- clean borders
+- comic only
+- DO NOT create a title area
+- DO NOT create a logo area
+- DO NOT add a fake logo
+- DO NOT add a footer
+- DO NOT add a vocabulary section
 
-TEXT STYLE
-- Dialogue must feel like natural comic speech.
-- Use large, bold, highly readable speech-bubble lettering.
-- Do NOT use worksheet-style tiny typed text.
-- Keep speech bubbles visually clear and easy to read.
+TEXT:
+- Use the supplied Korean dialogue.
+- Dialogue must appear inside natural speech bubbles.
+- Large, thick, bold, highly readable comic lettering.
+- Avoid small typed-looking text.
+- Keep the text visually prominent.
 
-KOREAN DIALOGUE TONE
-- The speakers are friends or classmates.
-- Use casual Korean speech only.
-- No polite Korean endings such as "~요", "~습니다", "~해요".
-- Use friendly, lively, natural 반말.
-- The dialogue should sound like a real comic, not like a textbook translation.
-- Good examples of tone:
-  "대박이다!"
-  "와, 진짜?"
-  "넌 꼭 훌륭한 축구선수가 될 거야!"
-  "좋은 생각이다!"
-  "같이 해보자!"
+IMPORTANT:
+- Preserve Korean(English) placement exactly.
+- If the supplied dialogue says 직업(job), keep 직업(job).
+- Do not move "(job)" to the end of the sentence.
+- Do not separate Korean and English onto different lines.
+- Do not turn it into English sentence + Korean translation.
+- Do not invent extra study text.
 
-VERY IMPORTANT CONTENT RULES
-- Do NOT reproduce the original dialogue line by line.
-- Do NOT make it sound like a literal translation.
-- Adapt only the key meaning into short, lively comic dialogue.
-- Each panel should contain about 1 or 2 short speech bubbles.
-- Keep the wording concise and punchy.
-
-ENGLISH LEARNING RULE
-- Each panel should naturally include at least one important English learning word or expression if appropriate.
-- Across the whole comic, include about 4 to 6 important English learning items in total.
-- Blend them naturally into the Korean dialogue.
-- Preferred style:
-  한글(English)
-- Examples:
-  계획(plan)
-  약속(appointment)
-  축구선수(soccer player)
-  좋은 생각이야.(That's a good idea.)
-- Do NOT create a separate vocabulary box.
-- Do NOT create a separate key-expression box.
-- The English should appear naturally inside the comic dialogue only.
-
-DO NOT
-- Do not print full English dialogue.
-- Do not print English sentence + Korean translation.
-- Do not add a study note section.
-- Do not add a fake logo.
-- Do not draw a logo.
-- Do not draw a blank white logo box.
-- Do not write SUMMIT EDU inside the comic artwork.
-
-TITLE
-${title || "SUMMIT FOUR-CUT"}
-
-SUMMARY
-${summary || ""}
-
-SOURCE MATERIAL
+PANELS:
 ${panelGuide}
-
-IMPORTANT WORD HINTS
-${vocabHints}
-
-IMPORTANT EXPRESSION HINTS
-${expressionHints}
 `;
 
     const result = await openai.images.generate({
@@ -154,7 +100,12 @@ ${expressionHints}
 
     const comicBuffer = Buffer.from(imageBase64, "base64");
 
-    const logoPath = path.join(process.cwd(), "public", "summit-logo.png");
+    const logoPath = path.join(
+      process.cwd(),
+      "public",
+      "summit-logo.png"
+    );
+
     const logoBuffer = await fs.readFile(logoPath);
 
     const resizedLogo = await sharp(logoBuffer)
@@ -165,23 +116,85 @@ ${expressionHints}
       .png()
       .toBuffer();
 
-    // 만화 바깥쪽에 흰 여백 추가
-    const extendedComic = await sharp(comicBuffer)
-      .extend({
-        top: 20,
-        bottom: 90,
-        left: 20,
-        right: 140,
+    const comicMeta = await sharp(comicBuffer).metadata();
+
+    const comicWidth = comicMeta.width || 1536;
+    const comicHeight = comicMeta.height || 1024;
+
+    const headerHeight = 180;
+    const sideMargin = 70;
+    const bottomMargin = 70;
+
+    const resizedComicWidth = comicWidth;
+    const resizedComicHeight = comicHeight;
+
+    const canvasWidth =
+      resizedComicWidth + sideMargin * 2;
+
+    const canvasHeight =
+      headerHeight +
+      resizedComicHeight +
+      bottomMargin;
+
+    const summaryText = summary || title || "SUMMIT FOUR-CUT";
+
+    const safeSummary = summaryText
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+    const svgHeader = Buffer.from(`
+      <svg
+        width="${canvasWidth}"
+        height="${headerHeight}"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <rect
+          width="100%"
+          height="100%"
+          fill="white"
+        />
+
+        <text
+          x="300"
+          y="108"
+          font-size="58"
+          font-weight="800"
+          font-family="Arial, sans-serif"
+          fill="#111827"
+        >
+          ${safeSummary}
+        </text>
+      </svg>
+    `);
+
+    const whiteCanvas = await sharp({
+      create: {
+        width: canvasWidth,
+        height: canvasHeight,
+        channels: 4,
         background: "#ffffff",
-      })
+      },
+    })
       .png()
       .toBuffer();
 
-    const finalImage = await sharp(extendedComic)
+    const finalImage = await sharp(whiteCanvas)
       .composite([
         {
+          input: svgHeader,
+          left: 0,
+          top: 0,
+        },
+        {
           input: resizedLogo,
-          gravity: "southeast",
+          left: 70,
+          top: 45,
+        },
+        {
+          input: comicBuffer,
+          left: sideMargin,
+          top: headerHeight,
         },
       ])
       .png()
