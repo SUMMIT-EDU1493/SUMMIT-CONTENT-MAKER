@@ -28,54 +28,76 @@ export async function POST(request: Request) {
     }
 
     const panelGuide = panels
-      .map(
-        (panel: any, index: number) => `
+      .map((panel: any, index: number) => {
+        const dialogueText = Array.isArray(panel.dialogue)
+          ? panel.dialogue
+              .map(
+                (d: any) =>
+                  `${d.speaker}: ${d.text}`
+              )
+              .join("\n")
+          : "";
+
+        return `
 PANEL ${index + 1}
 Scene: ${panel.scene}
 Characters: ${panel.characters}
-Korean dialogue that must be preserved:
-${panel.korean}
-`
-      )
+
+Dialogue:
+${dialogueText}
+`;
+      })
       .join("\n");
 
     const prompt = `
-Create ONE polished four-panel educational comic image.
+Create ONE polished educational four-panel comic image.
 
 STYLE:
 - Korean middle-school academy comic
 - warm, clean, modern illustration
-- real comic feeling, NOT worksheet
 - friendly but not childish
-- consistent character faces, hair, clothing, and proportions across all four panels
+- visually polished
+- consistent character faces, hair, clothing, age, and proportions across all four panels
 
 LAYOUT:
 - landscape image
 - exactly four panels
 - 2 x 2 grid
 - equal-sized panels
-- clean borders
+- clear borders
 - comic only
-- DO NOT create a title area
-- DO NOT create a logo area
-- DO NOT add a fake logo
-- DO NOT add a footer
-- DO NOT add a vocabulary section
+- no title
+- no logo
+- no footer
+- no vocabulary box
+
+SPEECH BUBBLES:
+- Every speech bubble must clearly belong to the correct speaker.
+- The speech bubble tail must point directly toward the mouth or head of the actual speaker.
+- Never point a speech bubble tail toward the wrong character.
+- If two characters speak in one panel, use separate speech bubbles.
+- Position each bubble near its speaker.
+- Avoid ambiguous bubble placement.
 
 TEXT:
-- Use the supplied Korean dialogue.
-- Dialogue must appear inside natural speech bubbles.
-- Large, thick, bold, highly readable comic lettering.
-- Avoid small typed-looking text.
-- Keep the text visually prominent.
+- Use the supplied Korean dialogue exactly as the dialogue source.
+- Large, bold, highly readable comic lettering.
+- Natural comic speech bubble style.
+- No small worksheet-like typed text.
 
-IMPORTANT:
+ENGLISH FORMAT:
 - Preserve Korean(English) placement exactly.
-- If the supplied dialogue says 직업(job), keep 직업(job).
-- Do not move "(job)" to the end of the sentence.
-- Do not separate Korean and English onto different lines.
-- Do not turn it into English sentence + Korean translation.
-- Do not invent extra study text.
+- Example: 직업(job), 성격(personality)
+- Never move the English to the end of the sentence.
+- Never separate Korean and English onto different lines.
+- Never rewrite it as English sentence + Korean translation.
+
+DO NOT:
+- do not invent extra educational notes
+- do not invent extra dialogue
+- do not create a logo or logo area
+- do not create a blank white logo box
+- do not add watermark
 
 PANELS:
 ${panelGuide}
@@ -106,11 +128,19 @@ ${panelGuide}
       "summit-logo.png"
     );
 
+    const fontPath = path.join(
+      process.cwd(),
+      "public",
+      "fonts",
+      "NotoSansKR-Bold.ttf"
+    );
+
     const logoBuffer = await fs.readFile(logoPath);
+    const fontBuffer = await fs.readFile(fontPath);
 
     const resizedLogo = await sharp(logoBuffer)
       .resize({
-        width: 170,
+        width: 180,
         withoutEnlargement: true,
       })
       .png()
@@ -121,27 +151,22 @@ ${panelGuide}
     const comicWidth = comicMeta.width || 1536;
     const comicHeight = comicMeta.height || 1024;
 
-    const headerHeight = 180;
-    const sideMargin = 70;
-    const bottomMargin = 70;
+    const headerHeight = 220;
+    const sideMargin = 80;
+    const bottomMargin = 80;
 
-    const resizedComicWidth = comicWidth;
-    const resizedComicHeight = comicHeight;
-
-    const canvasWidth =
-      resizedComicWidth + sideMargin * 2;
-
+    const canvasWidth = comicWidth + sideMargin * 2;
     const canvasHeight =
       headerHeight +
-      resizedComicHeight +
+      comicHeight +
       bottomMargin;
 
-    const summaryText = summary || title || "SUMMIT FOUR-CUT";
-
-    const safeSummary = summaryText
+    const safeSummary = (summary || title || "SUMMIT FOUR-CUT")
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
+
+    const fontBase64 = fontBuffer.toString("base64");
 
     const svgHeader = Buffer.from(`
       <svg
@@ -149,6 +174,16 @@ ${panelGuide}
         height="${headerHeight}"
         xmlns="http://www.w3.org/2000/svg"
       >
+        <defs>
+          <style>
+            @font-face {
+              font-family: "NotoKR";
+              src: url("data:font/ttf;base64,${fontBase64}") format("truetype");
+              font-weight: 700;
+            }
+          </style>
+        </defs>
+
         <rect
           width="100%"
           height="100%"
@@ -156,11 +191,11 @@ ${panelGuide}
         />
 
         <text
-          x="300"
-          y="108"
-          font-size="58"
-          font-weight="800"
-          font-family="Arial, sans-serif"
+          x="330"
+          y="135"
+          font-size="62"
+          font-weight="700"
+          font-family="NotoKR"
           fill="#111827"
         >
           ${safeSummary}
@@ -188,7 +223,7 @@ ${panelGuide}
         },
         {
           input: resizedLogo,
-          left: 70,
+          left: 80,
           top: 45,
         },
         {
