@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import sharp from "sharp";
 import path from "path";
 import fs from "fs/promises";
+import TextToSVG from "text-to-svg";
 
 export async function POST(request: Request) {
   try {
@@ -17,7 +18,6 @@ export async function POST(request: Request) {
     const openai = new OpenAI({ apiKey });
 
     const body = await request.json();
-
     const { title, summary, panels } = body;
 
     if (!panels || !Array.isArray(panels) || panels.length !== 4) {
@@ -31,10 +31,7 @@ export async function POST(request: Request) {
       .map((panel: any, index: number) => {
         const dialogueText = Array.isArray(panel.dialogue)
           ? panel.dialogue
-              .map(
-                (d: any) =>
-                  `${d.speaker}: ${d.text}`
-              )
+              .map((d: any) => `${d.speaker}: ${d.text}`)
               .join("\n")
           : "";
 
@@ -122,12 +119,7 @@ ${panelGuide}
 
     const comicBuffer = Buffer.from(imageBase64, "base64");
 
-    const logoPath = path.join(
-      process.cwd(),
-      "public",
-      "summit-logo.png"
-    );
-
+    const logoPath = path.join(process.cwd(), "public", "summit-logo.png");
     const fontPath = path.join(
       process.cwd(),
       "public",
@@ -136,7 +128,9 @@ ${panelGuide}
     );
 
     const logoBuffer = await fs.readFile(logoPath);
-    const fontBuffer = await fs.readFile(fontPath);
+    await fs.access(fontPath);
+
+    const textToSVG = TextToSVG.loadSync(fontPath);
 
     const resizedLogo = await sharp(logoBuffer)
       .resize({
@@ -147,7 +141,6 @@ ${panelGuide}
       .toBuffer();
 
     const comicMeta = await sharp(comicBuffer).metadata();
-
     const comicWidth = comicMeta.width || 1536;
     const comicHeight = comicMeta.height || 1024;
 
@@ -156,52 +149,21 @@ ${panelGuide}
     const bottomMargin = 80;
 
     const canvasWidth = comicWidth + sideMargin * 2;
-    const canvasHeight =
-      headerHeight +
-      comicHeight +
-      bottomMargin;
+    const canvasHeight = headerHeight + comicHeight + bottomMargin;
 
-    const safeSummary = (summary || title || "SUMMIT FOUR-CUT")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
+    const summaryText = (summary || title || "SUMMIT FOUR-CUT").trim();
 
-    const fontBase64 = fontBuffer.toString("base64");
+    const summarySvgString = textToSVG.getSVG(summaryText, {
+      x: 0,
+      y: 0,
+      fontSize: 60,
+      anchor: "top",
+      attributes: {
+        fill: "#111827",
+      },
+    });
 
-    const svgHeader = Buffer.from(`
-      <svg
-        width="${canvasWidth}"
-        height="${headerHeight}"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <defs>
-          <style>
-            @font-face {
-              font-family: "NotoKR";
-              src: url("data:font/ttf;base64,${fontBase64}") format("truetype");
-              font-weight: 700;
-            }
-          </style>
-        </defs>
-
-        <rect
-          width="100%"
-          height="100%"
-          fill="white"
-        />
-
-        <text
-          x="330"
-          y="135"
-          font-size="62"
-          font-weight="700"
-          font-family="NotoKR"
-          fill="#111827"
-        >
-          ${safeSummary}
-        </text>
-      </svg>
-    `);
+    const summarySvgBuffer = Buffer.from(summarySvgString);
 
     const whiteCanvas = await sharp({
       create: {
@@ -217,14 +179,14 @@ ${panelGuide}
     const finalImage = await sharp(whiteCanvas)
       .composite([
         {
-          input: svgHeader,
-          left: 0,
-          top: 0,
-        },
-        {
           input: resizedLogo,
           left: 80,
-          top: 45,
+          top: 40,
+        },
+        {
+          input: summarySvgBuffer,
+          left: 320,
+          top: 78,
         },
         {
           input: comicBuffer,
