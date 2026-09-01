@@ -56,54 +56,68 @@ export async function POST(request: Request) {
       .join(", ");
 
     const prompt = `
-Create ONE polished educational four-panel comic.
+Create ONE polished educational four-panel comic for Korean middle-school English learners.
 
-This is a Korean English-academy learning comic called "SUMMIT FOUR-CUT".
-It must look like a real comic, NOT a worksheet.
+This should feel like a real "SUMMIT four-cut comic", not a worksheet.
 
 LAYOUT
-- Landscape page
+- Landscape orientation
 - Exactly four panels
 - 2 x 2 grid
 - Equal-sized panels
-- Clear panel borders
-- Consistent characters in all panels
-- Warm, modern educational comic illustration style
+- Clear comic borders
+- Warm, clean, friendly educational comic style
+- Characters must stay visually consistent across all panels
 
-DIALOGUE STYLE
-- Use short, natural Korean comic dialogue.
+TEXT STYLE
+- Dialogue must feel like natural comic speech.
+- Use large, bold, highly readable speech-bubble lettering.
+- Do NOT use worksheet-style tiny typed text.
+- Keep speech bubbles visually clear and easy to read.
+
+KOREAN DIALOGUE TONE
+- The speakers are friends or classmates.
+- Use casual Korean speech only.
+- No polite Korean endings such as "~요", "~습니다", "~해요".
+- Use friendly, lively, natural 반말.
+- The dialogue should sound like a real comic, not like a textbook translation.
+- Good examples of tone:
+  "대박이다!"
+  "와, 진짜?"
+  "넌 꼭 훌륭한 축구선수가 될 거야!"
+  "좋은 생각이다!"
+  "같이 해보자!"
+
+VERY IMPORTANT CONTENT RULES
 - Do NOT reproduce the original dialogue line by line.
-- Summarize and adapt the important meaning into lively comic speech.
-- Each panel should have about 1 to 2 speech bubbles.
-- Text must be large, bold, and highly readable.
-- Use a comic speech-bubble lettering feel, not small typed worksheet text.
+- Do NOT make it sound like a literal translation.
+- Adapt only the key meaning into short, lively comic dialogue.
+- Each panel should contain about 1 or 2 short speech bubbles.
+- Keep the wording concise and punchy.
 
-VERY IMPORTANT ENGLISH LEARNING RULE
-- Each of the four panels should include at least ONE useful English word or expression.
-- Across the whole comic, include about 4 to 6 important English learning items.
+ENGLISH LEARNING RULE
+- Each panel should naturally include at least one important English learning word or expression if appropriate.
+- Across the whole comic, include about 4 to 6 important English learning items in total.
 - Blend them naturally into the Korean dialogue.
-- Preferred format:
+- Preferred style:
   한글(English)
-
-Examples:
-계획(plan)
-약속(appointment)
-도와줄래?(Can you help me?)
-좋은 생각이야.(That's a good idea.)
-
-- Do NOT make a separate vocabulary box.
-- Do NOT make a separate key-expression box.
-- The English must appear naturally inside the comic dialogue.
-- Prioritize the most important words or phrases from the source material.
+- Examples:
+  계획(plan)
+  약속(appointment)
+  축구선수(soccer player)
+  좋은 생각이야.(That's a good idea.)
+- Do NOT create a separate vocabulary box.
+- Do NOT create a separate key-expression box.
+- The English should appear naturally inside the comic dialogue only.
 
 DO NOT
-- Do not write the full English dialogue.
-- Do not put English sentence + Korean translation underneath.
-- Do not add study notes below the comic.
+- Do not print full English dialogue.
+- Do not print English sentence + Korean translation.
+- Do not add a study note section.
 - Do not add a fake logo.
-- Do not create a blank white logo box.
-- Do not add a watermark.
-- Do not write SUMMIT EDU inside the AI-generated artwork.
+- Do not draw a logo.
+- Do not draw a blank white logo box.
+- Do not write SUMMIT EDU inside the comic artwork.
 
 TITLE
 ${title || "SUMMIT FOUR-CUT"}
@@ -140,23 +154,30 @@ ${expressionHints}
 
     const comicBuffer = Buffer.from(imageBase64, "base64");
 
-    const logoPath = path.join(
-      process.cwd(),
-      "public",
-      "summit-logo.png"
-    );
-
+    const logoPath = path.join(process.cwd(), "public", "summit-logo.png");
     const logoBuffer = await fs.readFile(logoPath);
 
     const resizedLogo = await sharp(logoBuffer)
       .resize({
-        width: 180,
+        width: 170,
         withoutEnlargement: true,
       })
       .png()
       .toBuffer();
 
-    const finalImage = await sharp(comicBuffer)
+    // 만화 바깥쪽에 흰 여백 추가
+    const extendedComic = await sharp(comicBuffer)
+      .extend({
+        top: 20,
+        bottom: 90,
+        left: 20,
+        right: 140,
+        background: "#ffffff",
+      })
+      .png()
+      .toBuffer();
+
+    const finalImage = await sharp(extendedComic)
       .composite([
         {
           input: resizedLogo,
