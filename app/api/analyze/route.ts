@@ -1,25 +1,26 @@
 import OpenAI from "openai";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 export async function POST(request: Request) {
   try {
-    if (!process.env.OPENAI_API_KEY) {
+    const apiKey = process.env.OPENAI_API_KEY;
+
+    if (!apiKey) {
       return Response.json(
-        { error: "OPENAI_API_KEY가 설정되지 않았습니다." },
+        { error: "OPENAI_API_KEY가 서버에 설정되어 있지 않습니다." },
         { status: 500 }
       );
     }
 
-    const body = await request.json();
-    const title = body.title;
-    const content = body.content;
+    const openai = new OpenAI({
+      apiKey,
+    });
 
-    if (!content || typeof content !== "string") {
+    const body = await request.json();
+    const text = body.text;
+
+    if (!text || typeof text !== "string") {
       return Response.json(
-        { error: "대화문 내용이 없습니다." },
+        { error: "분석할 PDF 텍스트가 없습니다." },
         { status: 400 }
       );
     }
@@ -27,76 +28,61 @@ export async function POST(request: Request) {
     const response = await openai.responses.create({
       model: "gpt-5-mini",
       input: `
-아래 영어 대화문을 바탕으로 학습용 가로형 4컷 만화 설계안을 만들어라.
+아래 내용은 영어 교재 PDF에서 추출한 전체 텍스트다.
 
-목표:
-- 학생들이 읽기 쉽게 4컷 학습만화로 만들기 위한 설계안 작성
-- 컷별 장면 설명, 등장인물, 영어 대사, 자연스러운 한글 뜻 포함
-- 핵심표현과 주요단어도 함께 정리
+내용을 분석해서 다음 항목으로 정확히 분류하라.
 
-반드시 아래 JSON 형식으로만 출력하라.
+1. 대화문
+2. 본문
+3. 문법
+4. 핵심 표현
+5. 주요 단어
+
+규칙:
+- 서로 다른 대화문이 여러 개라면 각각 분리한다.
+- 교재에 없는 내용을 임의로 만들지 않는다.
+- 영어 원문은 가능한 한 그대로 유지한다.
+- 핵심 표현과 주요 단어에는 자연스러운 한국어 뜻을 붙인다.
+- 반드시 JSON만 출력한다.
+- 코드블록이나 설명은 붙이지 않는다.
+
+반드시 아래 구조로 응답한다.
 
 {
-  "title": "대화문 제목",
-  "summary": "대화문 한 줄 요약",
-  "panels": [
+  "dialogues": [
     {
-      "cut": "1컷",
-      "scene": "장면 설명",
-      "characters": "등장인물",
-      "english": "영어 대사",
-      "korean": "한글 뜻"
-    },
+      "title": "대화문의 제목 또는 주제",
+      "content": "대화문 전체 원문"
+    }
+  ],
+  "reading": [
     {
-      "cut": "2컷",
-      "scene": "장면 설명",
-      "characters": "등장인물",
-      "english": "영어 대사",
-      "korean": "한글 뜻"
-    },
+      "title": "본문 제목",
+      "content": "본문 전체 내용"
+    }
+  ],
+  "grammar": [
     {
-      "cut": "3컷",
-      "scene": "장면 설명",
-      "characters": "등장인물",
-      "english": "영어 대사",
-      "korean": "한글 뜻"
-    },
-    {
-      "cut": "4컷",
-      "scene": "장면 설명",
-      "characters": "등장인물",
-      "english": "영어 대사",
-      "korean": "한글 뜻"
+      "title": "문법 항목",
+      "content": "문법 내용"
     }
   ],
   "keyExpressions": [
     {
-      "english": "핵심표현",
+      "english": "핵심 영어 표현",
       "korean": "한글 뜻"
     }
   ],
   "keyWords": [
     {
-      "english": "주요단어",
+      "english": "영어 단어",
       "korean": "한글 뜻"
     }
   ]
 }
 
-규칙:
-- 대화문 흐름이 자연스럽게 4컷으로 이어지게 나눌 것
-- 영어 원문은 가능한 유지할 것
-- 한글 뜻은 학생용으로 자연스럽게 쓸 것
-- 장면 설명은 실제 만화 그림을 만들기 좋게 구체적으로 쓸 것
-- 핵심표현 3~6개
-- 주요단어 5~10개
-- JSON 외의 설명은 쓰지 말 것
-
-대화문 제목:
-${title || "대화문"}
-
-대화문 내용:
-${content}
+PDF 내용:
+${text}
       `,
     });
 
@@ -109,11 +95,11 @@ ${content}
 
     return Response.json(parsed);
   } catch (error: any) {
-    console.error("COMIC PLAN ERROR:", error);
+    console.error("OPENAI ANALYZE ERROR:", error);
 
     return Response.json(
       {
-        error: "써밋네컷 설계안 생성 중 오류가 발생했습니다.",
+        error: "OpenAI API 호출에 실패했습니다.",
         detail:
           error?.message ||
           error?.error?.message ||
