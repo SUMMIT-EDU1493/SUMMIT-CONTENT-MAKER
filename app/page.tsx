@@ -41,21 +41,42 @@ type AnalysisResult = {
   keyWords?: KeyWord[];
 };
 
+type ComicPanel = {
+  cut: string;
+  scene: string;
+  characters: string;
+  english: string;
+  korean: string;
+};
+
+type ComicPlan = {
+  title: string;
+  summary: string;
+  panels: ComicPanel[];
+  keyExpressions: KeyExpression[];
+  keyWords: KeyWord[];
+};
+
 export default function Home() {
   const [fileName, setFileName] = useState("");
   const [pdfText, setPdfText] = useState("");
 
   const [loadingPdf, setLoadingPdf] = useState(false);
   const [loadingAi, setLoadingAi] = useState(false);
+  const [loadingComic, setLoadingComic] = useState(false);
 
   const [errorMessage, setErrorMessage] = useState("");
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  const [comicPlan, setComicPlan] = useState<ComicPlan | null>(null);
+  const [selectedDialogueTitle, setSelectedDialogueTitle] = useState("");
 
   const readPdf = async (file: File) => {
     try {
       setLoadingPdf(true);
       setPdfText("");
       setAnalysis(null);
+      setComicPlan(null);
+      setSelectedDialogueTitle("");
       setErrorMessage("");
 
       const arrayBuffer = await file.arrayBuffer();
@@ -81,7 +102,6 @@ export default function Home() {
             if ("str" in item) {
               return item.str;
             }
-
             return "";
           })
           .join(" ");
@@ -93,17 +113,13 @@ export default function Home() {
         setErrorMessage(
           "PDF는 열렸지만 텍스트를 찾지 못했어. 스캔본 PDF일 가능성이 있어."
         );
-
         return;
       }
 
       setPdfText(fullText.trim());
     } catch (error) {
       console.error("PDF ERROR:", error);
-
-      setErrorMessage(
-        "PDF를 읽는 중 오류가 발생했어."
-      );
+      setErrorMessage("PDF를 읽는 중 오류가 발생했어.");
     } finally {
       setLoadingPdf(false);
     }
@@ -119,6 +135,8 @@ export default function Home() {
       setLoadingAi(true);
       setErrorMessage("");
       setAnalysis(null);
+      setComicPlan(null);
+      setSelectedDialogueTitle("");
 
       const response = await fetch("/api/analyze", {
         method: "POST",
@@ -134,19 +152,75 @@ export default function Home() {
 
       if (!response.ok) {
         throw new Error(
-          data?.error || "AI 분석에 실패했습니다."
+          data?.detail ||
+            data?.error ||
+            "AI 분석에 실패했습니다."
         );
       }
 
       setAnalysis(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error("AI ERROR:", error);
 
       setErrorMessage(
-        "AI 분석 중 오류가 발생했어. 잠시 후 다시 시도해봐."
+        error?.message ||
+          "AI 분석 중 오류가 발생했어."
       );
     } finally {
       setLoadingAi(false);
+    }
+  };
+
+  const makeComicPlan = async (
+    title: string,
+    content: string
+  ) => {
+    try {
+      setLoadingComic(true);
+      setErrorMessage("");
+      setComicPlan(null);
+      setSelectedDialogueTitle(title);
+
+      const response = await fetch("/api/comic-plan", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title,
+          content,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.detail ||
+            data?.error ||
+            "써밋네컷 설계안 생성에 실패했습니다."
+        );
+      }
+
+      setComicPlan(data);
+
+      setTimeout(() => {
+        document
+          .getElementById("comic-plan-result")
+          ?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+      }, 100);
+    } catch (error: any) {
+      console.error("COMIC ERROR:", error);
+
+      setErrorMessage(
+        error?.message ||
+          "써밋네컷 설계안을 만드는 중 오류가 발생했어."
+      );
+    } finally {
+      setLoadingComic(false);
     }
   };
 
@@ -162,8 +236,8 @@ export default function Home() {
         </h1>
 
         <p className="mt-3 text-slate-600">
-          교재 PDF를 업로드하면 대화문, 본문, 문법,
-          핵심표현과 주요단어를 자동으로 분석해요.
+          교재 PDF를 업로드하면 내용을 분석하고,
+          원하는 대화문을 써밋네컷용으로 자동 설계해요.
         </p>
 
         <section className="mt-10 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
@@ -237,14 +311,15 @@ export default function Home() {
             <textarea
               value={pdfText}
               readOnly
-              rows={12}
+              rows={10}
               className="mt-5 w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700"
             />
 
             <button
+              type="button"
               onClick={analyzePdf}
               disabled={loadingAi}
-              className="mt-5 w-full rounded-xl bg-blue-600 px-6 py-4 text-lg font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-5 w-full cursor-pointer rounded-xl bg-blue-600 px-6 py-4 text-lg font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loadingAi
                 ? "AI가 교재를 분석하는 중..."
@@ -259,7 +334,7 @@ export default function Home() {
               오류
             </p>
 
-            <p className="mt-2 text-sm text-red-600">
+            <p className="mt-2 whitespace-pre-wrap text-sm text-red-600">
               {errorMessage}
             </p>
           </div>
@@ -282,6 +357,10 @@ export default function Home() {
                 💬 대화문
               </h3>
 
+              <p className="mt-2 text-sm text-slate-500">
+                만들고 싶은 대화문을 골라줘.
+              </p>
+
               <div className="mt-5 space-y-4">
                 {analysis.dialogues &&
                 analysis.dialogues.length > 0 ? (
@@ -303,8 +382,22 @@ export default function Home() {
                           {item.content}
                         </p>
 
-                        <button className="mt-4 rounded-xl bg-slate-900 px-4 py-2 font-semibold text-white">
-                          이 대화문으로 써밋네컷 만들기
+                        <button
+                          type="button"
+                          onClick={() =>
+                            makeComicPlan(
+                              item.title,
+                              item.content
+                            )
+                          }
+                          disabled={loadingComic}
+                          className="mt-4 cursor-pointer rounded-xl bg-slate-900 px-5 py-3 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {loadingComic &&
+                          selectedDialogueTitle ===
+                            item.title
+                            ? "써밋네컷 설계안 만드는 중..."
+                            : "이 대화문으로 써밋네컷 만들기"}
                         </button>
                       </div>
                     )
@@ -445,6 +538,166 @@ export default function Home() {
                   )}
                 </div>
               </div>
+            </div>
+          </section>
+        )}
+
+        {loadingComic && (
+          <div className="mt-8 rounded-2xl bg-purple-50 p-6">
+            <p className="font-semibold text-purple-700">
+              선택한 대화문으로 써밋네컷 설계안을 만드는 중...
+            </p>
+          </div>
+        )}
+
+        {comicPlan && (
+          <section
+            id="comic-plan-result"
+            className="mt-10 space-y-6"
+          >
+            <div>
+              <p className="text-sm font-semibold text-purple-600">
+                SUMMIT FOUR-CUT PLAN
+              </p>
+
+              <h2 className="mt-1 text-2xl font-bold text-slate-900">
+                써밋네컷 설계안 완료
+              </h2>
+
+              <p className="mt-2 text-slate-600">
+                {comicPlan.summary}
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+              <h3 className="text-xl font-bold text-slate-900">
+                {comicPlan.title}
+              </h3>
+
+              <div className="mt-6 grid gap-5 md:grid-cols-2">
+                {comicPlan.panels?.map(
+                  (panel, index) => (
+                    <div
+                      key={index}
+                      className="rounded-2xl border border-slate-200 bg-slate-50 p-5"
+                    >
+                      <div className="mb-4 flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-600 font-bold text-white">
+                          {index + 1}
+                        </div>
+
+                        <h4 className="font-bold text-slate-900">
+                          {panel.cut}
+                        </h4>
+                      </div>
+
+                      <div className="space-y-4 text-sm">
+                        <div>
+                          <p className="font-semibold text-slate-700">
+                            장면 설명
+                          </p>
+
+                          <p className="mt-1 whitespace-pre-wrap text-slate-600">
+                            {panel.scene}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="font-semibold text-slate-700">
+                            등장인물
+                          </p>
+
+                          <p className="mt-1 whitespace-pre-wrap text-slate-600">
+                            {panel.characters}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="font-semibold text-slate-700">
+                            영어 대사
+                          </p>
+
+                          <p className="mt-1 whitespace-pre-wrap text-slate-600">
+                            {panel.english}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="font-semibold text-slate-700">
+                            한글 뜻
+                          </p>
+
+                          <p className="mt-1 whitespace-pre-wrap text-slate-600">
+                            {panel.korean}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+                <h3 className="text-xl font-bold">
+                  ⭐ 핵심표현
+                </h3>
+
+                <div className="mt-4 space-y-3">
+                  {comicPlan.keyExpressions?.map(
+                    (item, index) => (
+                      <div
+                        key={index}
+                        className="rounded-xl bg-blue-50 p-4"
+                      >
+                        <p className="font-semibold">
+                          {item.english}
+                        </p>
+
+                        <p className="mt-1 text-sm text-slate-600">
+                          {item.korean}
+                        </p>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+                <h3 className="text-xl font-bold">
+                  🔤 주요단어
+                </h3>
+
+                <div className="mt-4 space-y-3">
+                  {comicPlan.keyWords?.map(
+                    (item, index) => (
+                      <div
+                        key={index}
+                        className="rounded-xl bg-amber-50 p-4"
+                      >
+                        <p className="font-semibold">
+                          {item.english}
+                        </p>
+
+                        <p className="mt-1 text-sm text-slate-600">
+                          {item.korean}
+                        </p>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border-2 border-dashed border-purple-300 bg-purple-50 p-6">
+              <h3 className="text-xl font-bold text-slate-900">
+                다음 단계
+              </h3>
+
+              <p className="mt-2 text-slate-700">
+                이제 이 설계안을 실제 가로형 4컷 만화 이미지 생성에 연결하면 돼.
+              </p>
             </div>
           </section>
         )}
