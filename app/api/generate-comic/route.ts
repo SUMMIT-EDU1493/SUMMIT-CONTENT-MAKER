@@ -103,7 +103,7 @@ FACIAL EXPRESSIONS
 
 DECORATIVE SYMBOL RULE
 - Floating question marks, exclamation marks, sparkles, motion marks, and comic reaction symbols are allowed.
-- However, every decorative symbol must belong to the correct character and emotion.
+- Every decorative symbol must belong to the correct character and emotion.
 - A question mark should appear only near the character who is confused, curious, or asking a question.
 - Do not place a question mark beside the answering character unless that character is also genuinely confused.
 - Exclamation marks should appear near the character who is surprised, excited, or strongly reacting.
@@ -111,7 +111,7 @@ DECORATIVE SYMBOL RULE
 - Decorative symbols should support the scene and must not confuse who is speaking or reacting.
 
 DIALOGUE
-- Use the supplied dialogue as the dialogue source.
+- Use the supplied dialogue as the source.
 - Keep the meaning and natural conversational tone.
 - Dialogue should feel like real Korean teen conversation.
 - Avoid stiff, literal, translated, or textbook-like Korean.
@@ -172,12 +172,7 @@ ${panelGuide}
 
     const comicBuffer = Buffer.from(imageBase64, "base64");
 
-    const logoPath = path.join(
-      process.cwd(),
-      "public",
-      "summit-logo.png"
-    );
-
+    const logoPath = path.join(process.cwd(), "public", "summit-logo.png");
     const fontPath = path.join(
       process.cwd(),
       "public",
@@ -193,7 +188,7 @@ ${panelGuide}
     const resizedLogo = await sharp(logoBuffer)
       .trim()
       .resize({
-        width: 340,
+        width: 250,
         withoutEnlargement: true,
       })
       .png()
@@ -208,33 +203,22 @@ ${panelGuide}
     const headerHeight = 230;
     const bottomMargin = 70;
 
-    const canvasWidth =
-      comicWidth + sideMargin * 2;
+    const canvasWidth = comicWidth + sideMargin * 2;
+    const canvasHeight = headerHeight + comicHeight + bottomMargin;
 
-    const canvasHeight =
-      headerHeight +
-      comicHeight +
-      bottomMargin;
+    const summaryText = (summary || title || "SUMMIT FOUR-CUT").trim();
 
-    const summaryText = (
-      summary ||
-      title ||
-      "SUMMIT FOUR-CUT"
-    ).trim();
+    const summarySvgString = textToSVG.getSVG(summaryText, {
+      x: 0,
+      y: 0,
+      fontSize: 64,
+      anchor: "top",
+      attributes: {
+        fill: "#111827",
+      },
+    });
 
-    const summarySvgString =
-      textToSVG.getSVG(summaryText, {
-        x: 0,
-        y: 0,
-        fontSize: 64,
-        anchor: "top",
-        attributes: {
-          fill: "#111827",
-        },
-      });
-
-    const summarySvgBuffer =
-      Buffer.from(summarySvgString);
+    const summarySvgBuffer = Buffer.from(summarySvgString);
 
     const whiteCanvas = await sharp({
       create: {
@@ -251,12 +235,12 @@ ${panelGuide}
       .composite([
         {
           input: resizedLogo,
-          left: 55,
-          top: 24,
+          left: 65,
+          top: 48,
         },
         {
           input: summarySvgBuffer,
-          left: 420,
+          left: 350,
           top: 72,
         },
         {
@@ -269,20 +253,14 @@ ${panelGuide}
       .toBuffer();
 
     return Response.json({
-      image: `data:image/png;base64,${finalImage.toString(
-        "base64"
-      )}`,
+      image: `data:image/png;base64,${finalImage.toString("base64")}`,
     });
   } catch (error: any) {
-    console.error(
-      "IMAGE GENERATION ERROR:",
-      error
-    );
+    console.error("IMAGE GENERATION ERROR:", error);
 
     return Response.json(
       {
-        error:
-          "만화 이미지 생성 중 오류가 발생했습니다.",
+        error: "만화 이미지 생성 중 오류가 발생했습니다.",
         detail:
           error?.message ||
           error?.error?.message ||
