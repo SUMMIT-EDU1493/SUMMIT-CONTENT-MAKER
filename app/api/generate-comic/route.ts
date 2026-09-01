@@ -32,9 +32,9 @@ export async function POST(request: Request) {
         const dialogueText = Array.isArray(panel.dialogue)
           ? panel.dialogue
               .map(
-                (d: any, dialogueIndex: number) =>
-                  `Speaker ${dialogueIndex + 1}: ${d.speaker}
-Exact dialogue: ${d.text}`
+                (d: any) =>
+                  `SPEAKER: ${d.speaker}
+DIALOGUE: ${d.text}`
               )
               .join("\n\n")
           : "";
@@ -48,95 +48,108 @@ ${panel.scene}
 CHARACTERS:
 ${panel.characters}
 
-DIALOGUE:
 ${dialogueText}
 `;
       })
       .join("\n\n");
 
     const prompt = `
-Create ONE polished educational four-panel comic image.
+Create ONE polished educational four-panel comic.
 
-TARGET STYLE
-- Korean middle-school academy comic
-- warm, clean, modern illustration
-- friendly and lively
-- not childish
-- not a worksheet
-- visually polished and print-friendly
-
-CHARACTER CONSISTENCY
-- Keep the same characters consistent across all four panels.
-- Maintain the same face, hairstyle, clothing, age, and overall appearance.
-- Do not randomly change character appearance between panels.
+STYLE
+- Korean middle-school educational comic
+- clean and modern
+- warm and lively
+- friendly but not childish
+- high-quality academy learning material
+- visually polished like a professionally illustrated educational comic
 
 LAYOUT
-- Landscape orientation
-- Exactly 4 panels
+- landscape orientation
+- exactly four panels
 - 2 x 2 grid
-- Equal-sized comic panels
-- Clear panel borders
-- Balanced composition
-- No title area
-- No logo
-- No footer
-- No vocabulary section
-- No extra study box
+- equal-sized panels
+- clean panel borders
+- balanced spacing
+- no title inside the generated comic
+- no logo
+- no footer
+- no vocabulary box
+- no separate study section
+
+CHARACTER CONSISTENCY
+- Keep every recurring character visually identical across all four panels.
+- Same face
+- Same hairstyle
+- Same clothing
+- Same age
+- Same general proportions
 
 SPEECH BUBBLE ACCURACY
-- Every speech bubble must belong to the correct speaker.
-- The bubble tail must point toward the actual person speaking.
-- The tail should visually connect toward the speaker's mouth or head.
-- Never point a bubble tail at the listener.
+- Every speech bubble must clearly belong to the correct speaker.
+- Put each bubble close to the person speaking.
+- The bubble tail must point toward the actual speaker's mouth or head.
+- Never point the tail toward the listener.
 - Never attach a bubble to the wrong person.
-- If two characters speak in the same panel, create two clearly separate speech bubbles.
-- Position each speech bubble close to its speaker.
-- Avoid crossing bubble tails.
-- Avoid ambiguous speaker placement.
-- Facial expressions and body language should match what each character is saying.
+- If two people speak in one panel, use separate speech bubbles.
+- Avoid ambiguous bubble placement.
+- Avoid crossed bubble tails.
 
-QUESTION MARK ACCURACY
-- If a character is asking a question, any question mark icon must appear only near that speaker.
-- Do not place a question mark near the listener or answering character.
-- The asking character should look curious or questioning.
-- The answering character should look responsive, thoughtful, confident, surprised, or calm depending on the dialogue.
+FACIAL EXPRESSIONS
+- Facial expressions must match the dialogue and situation.
+- A character asking a question should look curious or questioning.
+- A character answering should look like they are responding, thinking, agreeing, explaining, or reacting as appropriate.
+- Do not give the answering character a confused expression unless the scene actually requires it.
+
+DECORATIVE SYMBOL RULE
+- Floating question marks, exclamation marks, sparkles, motion marks, and comic reaction symbols are allowed.
+- However, every decorative symbol must belong to the correct character and emotion.
+- A question mark should appear only near the character who is confused, curious, or asking a question.
+- Do not place a question mark beside the answering character unless that character is also genuinely confused.
+- Exclamation marks should appear near the character who is surprised, excited, or strongly reacting.
+- Sparkles may be used to emphasize excitement, confidence, dreams, success, or a positive moment.
+- Decorative symbols should support the scene and must not confuse who is speaking or reacting.
 
 DIALOGUE
-- Use the supplied dialogue as the source.
-- Keep the meaning, but make it sound like natural Korean teen conversation.
-- Avoid stiff, literal, translated, or awkward phrasing.
-- Keep dialogue short, casual, lively, and comic-like.
-- Prefer natural lines such as:
-  "넌 진짜 잘할 것 같아!"
-  "너한테 딱이야!"
-  "완전 잘 어울리는데?"
-  "넌 꼭 멋진 선수가 될 거야!"
-- Large, bold, highly readable lettering.
-- Speech should look like real comic dialogue, not small typed worksheet text.
+- Use the supplied dialogue as the dialogue source.
+- Keep the meaning and natural conversational tone.
+- Dialogue should feel like real Korean teen conversation.
+- Avoid stiff, literal, translated, or textbook-like Korean.
+- Keep dialogue short and lively.
+- Use large, thick, bold, highly readable comic lettering.
+- Speech should look like real comic dialogue, not worksheet text.
+- Do not turn dialogue into explanatory captions.
 
-ENGLISH LEARNING FORMAT
-- Preserve Korean(English) placement exactly.
-- The English word must stay immediately after its Korean meaning.
-- Examples:
-  성격(personality)
-  직업(job)
-  계획(plan)
-  자신감(confidence)
-- Never move the English word to the end of the sentence.
-- Never put English alone in separate parentheses after the full sentence.
-- Never put Korean and English on separate lines.
-- Never change the format into English sentence + Korean translation.
+ENGLISH FORMAT
+- Preserve the supplied 한글(English) format.
+- English must remain immediately after the matching Korean word.
 
-TEXT ACCURACY
-- Do not invent additional study phrases.
-- Do not add unnecessary English.
-- Do not add captions under the panels.
-- Do not add fake logos.
-- Do not add watermarks.
-- Do not create a blank logo box.
-- Do not add title text inside the comic.
+Correct examples:
+직업(job)
+성격(personality)
+흥미(interest)
+계획(plan)
+
+Incorrect example:
+이 직업이 좋아. (job)
+
+- Never move English to the end of the full sentence.
+- Never separate Korean and English onto different lines.
+- Never turn it into English sentence + Korean translation.
+
+DO NOT
+- invent unnecessary extra dialogue
+- invent extra study notes
+- invent a logo
+- create a fake logo
+- create a logo placeholder
+- create title text inside the comic
+- create vocabulary lists
+- create captions below the comic
+- create a watermark
 
 PANEL INFORMATION:
+
 ${panelGuide}
 `;
 
@@ -179,7 +192,7 @@ ${panelGuide}
 
     const resizedLogo = await sharp(logoBuffer)
       .resize({
-        width: 300,
+        width: 330,
         withoutEnlargement: true,
       })
       .png()
@@ -190,9 +203,9 @@ ${panelGuide}
     const comicWidth = comicMeta.width || 1536;
     const comicHeight = comicMeta.height || 1024;
 
-    const headerHeight = 240;
     const sideMargin = 80;
-    const bottomMargin = 80;
+    const headerHeight = 230;
+    const bottomMargin = 70;
 
     const canvasWidth =
       comicWidth + sideMargin * 2;
@@ -208,22 +221,19 @@ ${panelGuide}
       "SUMMIT FOUR-CUT"
     ).trim();
 
-    const summarySvgString = textToSVG.getSVG(
-      summaryText,
-      {
+    const summarySvgString =
+      textToSVG.getSVG(summaryText, {
         x: 0,
         y: 0,
-        fontSize: 62,
+        fontSize: 64,
         anchor: "top",
         attributes: {
           fill: "#111827",
         },
-      }
-    );
+      });
 
-    const summarySvgBuffer = Buffer.from(
-      summarySvgString
-    );
+    const summarySvgBuffer =
+      Buffer.from(summarySvgString);
 
     const whiteCanvas = await sharp({
       create: {
@@ -240,13 +250,13 @@ ${panelGuide}
       .composite([
         {
           input: resizedLogo,
-          left: 45,
-          top: 26,
+          left: 55,
+          top: 42,
         },
         {
           input: summarySvgBuffer,
-          left: 400,
-          top: 82,
+          left: 405,
+          top: 72,
         },
         {
           input: comicBuffer,
