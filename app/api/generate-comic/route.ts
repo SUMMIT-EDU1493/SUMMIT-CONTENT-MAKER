@@ -14,9 +14,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const openai = new OpenAI({
-      apiKey,
-    });
+    const openai = new OpenAI({ apiKey });
 
     const body = await request.json();
 
@@ -25,6 +23,7 @@ export async function POST(request: Request) {
       summary,
       panels,
       keyWords,
+      keyExpressions,
     } = body;
 
     if (!panels || !Array.isArray(panels) || panels.length !== 4) {
@@ -47,67 +46,79 @@ export async function POST(request: Request) {
       .join("\n");
 
     const vocabHints = (keyWords || [])
+      .slice(0, 10)
+      .map((item: any) => `${item.korean}(${item.english})`)
+      .join(", ");
+
+    const expressionHints = (keyExpressions || [])
       .slice(0, 8)
       .map((item: any) => `${item.korean}(${item.english})`)
       .join(", ");
 
     const prompt = `
-Create ONE finished educational four-panel comic page for Korean middle-school English learners.
+Create ONE polished educational four-panel comic.
 
-IMPORTANT:
-This must feel like a polished "Summit four-cut comic", NOT a worksheet.
+This is a Korean English-academy learning comic called "SUMMIT FOUR-CUT".
+It must look like a real comic, NOT a worksheet.
 
-LAYOUT:
-- Landscape orientation.
-- Four panels in a 2 x 2 grid.
-- Equal-sized panels.
-- Clear comic panel borders.
-- Clean, warm, friendly educational comic style.
-- Consistent character appearance across all four panels.
+LAYOUT
+- Landscape page
+- Exactly four panels
+- 2 x 2 grid
+- Equal-sized panels
+- Clear panel borders
+- Consistent characters in all panels
+- Warm, modern educational comic illustration style
 
-TEXT STYLE:
-- Use large, bold, highly readable comic speech-bubble lettering.
-- Text should feel like real comic dialogue.
-- Avoid small typed worksheet-style text.
-- Strong readability is very important.
+DIALOGUE STYLE
+- Use short, natural Korean comic dialogue.
+- Do NOT reproduce the original dialogue line by line.
+- Summarize and adapt the important meaning into lively comic speech.
+- Each panel should have about 1 to 2 speech bubbles.
+- Text must be large, bold, and highly readable.
+- Use a comic speech-bubble lettering feel, not small typed worksheet text.
 
-VERY IMPORTANT TEXT RULES:
-- Do NOT reproduce the full original English dialogue.
-- Do NOT print English one line and Korean one line.
-- Do NOT create a vocabulary box.
-- Do NOT create a key expressions box.
-- Adapt the source meaning into short, natural comic dialogue.
-- Each panel should contain only 1 or 2 short speech-bubble lines.
-- Use mostly Korean dialogue for readability.
-- If helpful, include only a few important vocabulary items inline in Korean(English) format.
-- Keep the dialogue concise, lively, and educational.
-- Focus only on the main idea of each scene.
+VERY IMPORTANT ENGLISH LEARNING RULE
+- Each of the four panels should include at least ONE useful English word or expression.
+- Across the whole comic, include about 4 to 6 important English learning items.
+- Blend them naturally into the Korean dialogue.
+- Preferred format:
+  한글(English)
 
-VISUAL GOAL:
-- Feels like a neat academy four-cut learning comic.
-- Main focus is the four comic scenes.
-- Speech bubbles should be clear and visually prominent.
-- Avoid clutter.
-- No bottom study section.
-- No long explanation blocks.
+Examples:
+계획(plan)
+약속(appointment)
+도와줄래?(Can you help me?)
+좋은 생각이야.(That's a good idea.)
 
-LOGO RULE:
-- Leave a clean blank area near the bottom-right corner.
-- Do NOT invent or draw any logo.
-- Do NOT write SUMMIT EDU inside the generated artwork.
-- The official logo will be overlaid later by the app.
+- Do NOT make a separate vocabulary box.
+- Do NOT make a separate key-expression box.
+- The English must appear naturally inside the comic dialogue.
+- Prioritize the most important words or phrases from the source material.
 
-TITLE:
+DO NOT
+- Do not write the full English dialogue.
+- Do not put English sentence + Korean translation underneath.
+- Do not add study notes below the comic.
+- Do not add a fake logo.
+- Do not create a blank white logo box.
+- Do not add a watermark.
+- Do not write SUMMIT EDU inside the AI-generated artwork.
+
+TITLE
 ${title || "SUMMIT FOUR-CUT"}
 
-SUMMARY:
+SUMMARY
 ${summary || ""}
 
-SOURCE MATERIAL:
+SOURCE MATERIAL
 ${panelGuide}
 
-VOCAB HINTS:
+IMPORTANT WORD HINTS
 ${vocabHints}
+
+IMPORTANT EXPRESSION HINTS
+${expressionHints}
 `;
 
     const result = await openai.images.generate({
@@ -135,23 +146,11 @@ ${vocabHints}
       "summit-logo.png"
     );
 
-    let logoBuffer: Buffer;
-
-    try {
-      logoBuffer = await fs.readFile(logoPath);
-    } catch {
-      return Response.json(
-        {
-          error:
-            "public/summit-logo.png 파일을 찾지 못했습니다.",
-        },
-        { status: 500 }
-      );
-    }
+    const logoBuffer = await fs.readFile(logoPath);
 
     const resizedLogo = await sharp(logoBuffer)
       .resize({
-        width: 220,
+        width: 180,
         withoutEnlargement: true,
       })
       .png()
@@ -162,17 +161,13 @@ ${vocabHints}
         {
           input: resizedLogo,
           gravity: "southeast",
-          left: 35,
-          top: 35,
         },
       ])
       .png()
       .toBuffer();
 
     return Response.json({
-      image: `data:image/png;base64,${finalImage.toString(
-        "base64"
-      )}`,
+      image: `data:image/png;base64,${finalImage.toString("base64")}`,
     });
   } catch (error: any) {
     console.error("IMAGE GENERATION ERROR:", error);
