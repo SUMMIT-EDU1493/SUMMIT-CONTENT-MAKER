@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
+import { jsPDF } from "jspdf";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -60,6 +61,7 @@ export default function Home() {
   const [loadingComic, setLoadingComic] = useState(false);
   const [loadingAllComics, setLoadingAllComics] =
     useState(false);
+  const [makingPdf, setMakingPdf] = useState(false);
 
   const [currentCreatingTitle, setCurrentCreatingTitle] =
     useState("");
@@ -691,6 +693,21 @@ export default function Home() {
       return;
     }
 
+    const alreadyAdded =
+      workItems.some(
+        (item) =>
+          item.title ===
+            project.sourceTitle &&
+          item.image === project.image
+      );
+
+    if (alreadyAdded) {
+      alert(
+        "이 이미지는 이미 한 과 작업함에 들어가 있어."
+      );
+      return;
+    }
+
     const newItem: WorkItem = {
       id: makeId(),
       title:
@@ -757,6 +774,134 @@ export default function Home() {
 
     setWorkItems(newItems);
   };
+
+  const downloadLessonPdf =
+    async () => {
+      if (
+        workItems.length === 0
+      ) {
+        alert(
+          "먼저 한 과 작업함에 써밋네컷을 추가해줘."
+        );
+        return;
+      }
+
+      try {
+        setMakingPdf(true);
+
+        const pdf = new jsPDF({
+          orientation: "landscape",
+          unit: "mm",
+          format: "a4",
+          compress: true,
+        });
+
+        for (
+          let index = 0;
+          index < workItems.length;
+          index++
+        ) {
+          const item =
+            workItems[index];
+
+          if (index > 0) {
+            pdf.addPage(
+              "a4",
+              "landscape"
+            );
+          }
+
+          const pageWidth =
+            pdf.internal.pageSize.getWidth();
+
+          const pageHeight =
+            pdf.internal.pageSize.getHeight();
+
+          const margin = 10;
+
+          const availableWidth =
+            pageWidth -
+            margin * 2;
+
+          const availableHeight =
+            pageHeight -
+            margin * 2;
+
+          const imageProps =
+            pdf.getImageProperties(
+              item.image
+            );
+
+          const imageRatio =
+            imageProps.width /
+            imageProps.height;
+
+          let imageWidth =
+            availableWidth;
+
+          let imageHeight =
+            imageWidth /
+            imageRatio;
+
+          if (
+            imageHeight >
+            availableHeight
+          ) {
+            imageHeight =
+              availableHeight;
+
+            imageWidth =
+              imageHeight *
+              imageRatio;
+          }
+
+          const x =
+            (pageWidth -
+              imageWidth) /
+            2;
+
+          const y =
+            (pageHeight -
+              imageHeight) /
+            2;
+
+          pdf.addImage(
+            item.image,
+            "PNG",
+            x,
+            y,
+            imageWidth,
+            imageHeight,
+            undefined,
+            "FAST"
+          );
+        }
+
+        const baseName =
+          fileName
+            .replace(
+              /\.pdf$/i,
+              ""
+            )
+            .trim() ||
+          "summit-lesson";
+
+        pdf.save(
+          `${baseName}-써밋네컷.pdf`
+        );
+      } catch (error) {
+        console.error(
+          "PDF ERROR:",
+          error
+        );
+
+        alert(
+          "PDF를 만드는 중 오류가 발생했어."
+        );
+      } finally {
+        setMakingPdf(false);
+      }
+    };
 
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-10">
@@ -1416,92 +1561,124 @@ export default function Home() {
               없어.
             </div>
           ) : (
-            <div className="mt-6 space-y-5">
-              {workItems.map(
-                (
-                  item,
-                  index
-                ) => (
-                  <div
-                    key={item.id}
-                    className="rounded-2xl bg-white p-5 text-slate-900"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-bold text-purple-600">
-                          페이지{" "}
-                          {index + 1}
-                        </p>
+            <>
+              <div className="mt-6 space-y-5">
+                {workItems.map(
+                  (
+                    item,
+                    index
+                  ) => (
+                    <div
+                      key={item.id}
+                      className="rounded-2xl bg-white p-5 text-slate-900"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-bold text-purple-600">
+                            페이지{" "}
+                            {index + 1}
+                          </p>
 
-                        <h3 className="mt-1 text-xl font-black">
-                          {
-                            item.summary
-                          }
-                        </h3>
+                          <h3 className="mt-1 text-xl font-black">
+                            {
+                              item.summary
+                            }
+                          </h3>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              moveWorkItem(
+                                index,
+                                "up"
+                              )
+                            }
+                            disabled={
+                              index ===
+                              0
+                            }
+                            className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-bold disabled:opacity-30"
+                          >
+                            ↑ 위로
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              moveWorkItem(
+                                index,
+                                "down"
+                              )
+                            }
+                            disabled={
+                              index ===
+                              workItems.length -
+                                1
+                            }
+                            className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-bold disabled:opacity-30"
+                          >
+                            ↓ 아래로
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              removeWorkItem(
+                                item.id
+                              )
+                            }
+                            className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-600"
+                          >
+                            삭제
+                          </button>
+                        </div>
                       </div>
 
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            moveWorkItem(
-                              index,
-                              "up"
-                            )
-                          }
-                          disabled={
-                            index === 0
-                          }
-                          className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-bold disabled:opacity-30"
-                        >
-                          ↑ 위로
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            moveWorkItem(
-                              index,
-                              "down"
-                            )
-                          }
-                          disabled={
-                            index ===
-                            workItems.length -
-                              1
-                          }
-                          className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-bold disabled:opacity-30"
-                        >
-                          ↓ 아래로
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            removeWorkItem(
-                              item.id
-                            )
-                          }
-                          className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-600"
-                        >
-                          삭제
-                        </button>
-                      </div>
+                      <img
+                        src={
+                          item.image
+                        }
+                        alt={`써밋네컷 ${
+                          index + 1
+                        }`}
+                        className="mt-4 w-full rounded-xl border border-slate-200"
+                      />
                     </div>
+                  )
+                )}
+              </div>
 
-                    <img
-                      src={
-                        item.image
-                      }
-                      alt={`써밋네컷 ${
-                        index + 1
-                      }`}
-                      className="mt-4 w-full rounded-xl border border-slate-200"
-                    />
-                  </div>
-                )
-              )}
-            </div>
+              <div className="mt-8 rounded-2xl bg-purple-500/20 p-6 ring-1 ring-purple-400/30">
+                <p className="text-sm font-bold text-purple-200">
+                  FINAL STEP
+                </p>
+
+                <h3 className="mt-1 text-2xl font-black">
+                  한 과 PDF 만들기
+                </h3>
+
+                <p className="mt-2 text-sm leading-6 text-slate-300">
+                  위에 정리된 순서 그대로
+                  써밋네컷 한 장당 PDF 한 페이지로
+                  자동 묶어줄게.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={
+                    downloadLessonPdf
+                  }
+                  disabled={makingPdf}
+                  className="mt-5 w-full rounded-xl bg-purple-500 px-6 py-4 text-lg font-black text-white disabled:opacity-50"
+                >
+                  {makingPdf
+                    ? "PDF 만드는 중..."
+                    : `한 과 PDF 다운로드 · ${workItems.length}페이지`}
+                </button>
+              </div>
+            </>
           )}
         </section>
       </div>
