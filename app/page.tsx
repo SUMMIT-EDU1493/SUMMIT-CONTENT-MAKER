@@ -35,6 +35,15 @@ type ComicPlan = {
   panels: ComicPanel[];
 };
 
+type ComicProject = {
+  id: string;
+  sourceTitle: string;
+  sourceContent: string;
+  plan: ComicPlan;
+  image: string;
+  loadingImage: boolean;
+};
+
 type WorkItem = {
   id: string;
   title: string;
@@ -49,24 +58,27 @@ export default function Home() {
   const [loadingPdf, setLoadingPdf] = useState(false);
   const [loadingAi, setLoadingAi] = useState(false);
   const [loadingComic, setLoadingComic] = useState(false);
-  const [loadingImage, setLoadingImage] = useState(false);
+  const [loadingAllComics, setLoadingAllComics] =
+    useState(false);
+
+  const [currentCreatingTitle, setCurrentCreatingTitle] =
+    useState("");
 
   const [errorMessage, setErrorMessage] = useState("");
 
   const [analysis, setAnalysis] =
     useState<AnalysisResult | null>(null);
 
-  const [comicPlan, setComicPlan] =
-    useState<ComicPlan | null>(null);
-
-  const [selectedDialogueTitle, setSelectedDialogueTitle] =
-    useState("");
-
-  const [generatedComicImage, setGeneratedComicImage] =
-    useState("");
+  const [comicProjects, setComicProjects] =
+    useState<ComicProject[]>([]);
 
   const [workItems, setWorkItems] =
     useState<WorkItem[]>([]);
+
+  const makeId = () =>
+    `${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}`;
 
   const readPdf = async (file: File) => {
     try {
@@ -74,8 +86,7 @@ export default function Home() {
       setErrorMessage("");
       setPdfText("");
       setAnalysis(null);
-      setComicPlan(null);
-      setGeneratedComicImage("");
+      setComicProjects([]);
 
       const arrayBuffer = await file.arrayBuffer();
 
@@ -100,6 +111,7 @@ export default function Home() {
             if ("str" in item) {
               return item.str;
             }
+
             return "";
           })
           .join(" ");
@@ -117,6 +129,7 @@ export default function Home() {
       setPdfText(fullText.trim());
     } catch (error) {
       console.error(error);
+
       setErrorMessage(
         "PDF를 읽는 중 오류가 발생했어."
       );
@@ -135,8 +148,7 @@ export default function Home() {
       setLoadingAi(true);
       setErrorMessage("");
       setAnalysis(null);
-      setComicPlan(null);
-      setGeneratedComicImage("");
+      setComicProjects([]);
 
       const response = await fetch("/api/analyze", {
         method: "POST",
@@ -169,12 +181,15 @@ export default function Home() {
     }
   };
 
-  const deleteDialogue = (indexToDelete: number) => {
+  const deleteDialogue = (
+    indexToDelete: number
+  ) => {
     if (!analysis?.dialogues) return;
 
     const newDialogues =
       analysis.dialogues.filter(
-        (_, index) => index !== indexToDelete
+        (_, index) =>
+          index !== indexToDelete
       );
 
     setAnalysis({
@@ -183,47 +198,71 @@ export default function Home() {
     });
   };
 
+  const requestComicPlan = async (
+    title: string,
+    content: string
+  ): Promise<ComicPlan> => {
+    const response = await fetch(
+      "/api/comic-plan",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+        body: JSON.stringify({
+          title,
+          content,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data?.detail ||
+          data?.error ||
+          "써밋네컷 설계안 생성에 실패했습니다."
+      );
+    }
+
+    return data;
+  };
+
   const makeComicPlan = async (
     title: string,
     content: string
   ) => {
     try {
       setLoadingComic(true);
+      setCurrentCreatingTitle(title);
       setErrorMessage("");
-      setComicPlan(null);
-      setGeneratedComicImage("");
-      setSelectedDialogueTitle(title);
 
-      const response = await fetch(
-        "/api/comic-plan",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
-            title,
-            content,
-          }),
-        }
+      const plan = await requestComicPlan(
+        title,
+        content
       );
 
-      const data = await response.json();
+      const newProject: ComicProject = {
+        id: makeId(),
+        sourceTitle: title,
+        sourceContent: content,
+        plan,
+        image: "",
+        loadingImage: false,
+      };
 
-      if (!response.ok) {
-        throw new Error(
-          data?.detail ||
-            data?.error ||
-            "써밋네컷 설계안 생성에 실패했습니다."
-        );
-      }
-
-      setComicPlan(data);
+      setComicProjects((prev) => [
+        ...prev,
+        newProject,
+      ]);
 
       setTimeout(() => {
         document
-          .getElementById("comic-plan-result")
+          .getElementById(
+            "comic-projects"
+          )
           ?.scrollIntoView({
             behavior: "smooth",
             block: "start",
@@ -236,214 +275,432 @@ export default function Home() {
       );
     } finally {
       setLoadingComic(false);
+      setCurrentCreatingTitle("");
     }
   };
 
-  const updateSummary = (value: string) => {
-    if (!comicPlan) return;
+  const makeAllComicPlans =
+    async () => {
+      const dialogues =
+        analysis?.dialogues || [];
 
-    setComicPlan({
-      ...comicPlan,
-      summary: value,
-    });
+      if (dialogues.length === 0) {
+        alert(
+          "남아 있는 대화문이 없어."
+        );
+        return;
+      }
+
+      try {
+        setLoadingAllComics(true);
+        setErrorMessage("");
+        setComicProjects([]);
+
+        const newProjects: ComicProject[] =
+          [];
+
+        for (
+          let index = 0;
+          index < dialogues.length;
+          index++
+        ) {
+          const dialogue =
+            dialogues[index];
+
+          setCurrentCreatingTitle(
+            `${index + 1}/${dialogues.length} · ${dialogue.title}`
+          );
+
+          const plan =
+            await requestComicPlan(
+              dialogue.title,
+              dialogue.content
+            );
+
+          newProjects.push({
+            id: makeId(),
+            sourceTitle:
+              dialogue.title,
+            sourceContent:
+              dialogue.content,
+            plan,
+            image: "",
+            loadingImage: false,
+          });
+
+          setComicProjects([
+            ...newProjects,
+          ]);
+        }
+
+        setTimeout(() => {
+          document
+            .getElementById(
+              "comic-projects"
+            )
+            ?.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+        }, 100);
+      } catch (error: any) {
+        setErrorMessage(
+          error?.message ||
+            "전체 설계안 생성 중 오류가 발생했어."
+        );
+      } finally {
+        setLoadingAllComics(false);
+        setCurrentCreatingTitle("");
+      }
+    };
+
+  const updateSummary = (
+    projectId: string,
+    value: string
+  ) => {
+    setComicProjects((prev) =>
+      prev.map((project) =>
+        project.id === projectId
+          ? {
+              ...project,
+              plan: {
+                ...project.plan,
+                summary: value,
+              },
+            }
+          : project
+      )
+    );
   };
 
   const updatePanelScene = (
+    projectId: string,
     panelIndex: number,
     value: string
   ) => {
-    if (!comicPlan) return;
+    setComicProjects((prev) =>
+      prev.map((project) => {
+        if (
+          project.id !== projectId
+        ) {
+          return project;
+        }
 
-    const newPanels = [...comicPlan.panels];
+        const newPanels = [
+          ...project.plan.panels,
+        ];
 
-    newPanels[panelIndex] = {
-      ...newPanels[panelIndex],
-      scene: value,
-    };
+        newPanels[panelIndex] = {
+          ...newPanels[panelIndex],
+          scene: value,
+        };
 
-    setComicPlan({
-      ...comicPlan,
-      panels: newPanels,
-    });
+        return {
+          ...project,
+          plan: {
+            ...project.plan,
+            panels: newPanels,
+          },
+        };
+      })
+    );
   };
 
   const updateSpeaker = (
+    projectId: string,
     panelIndex: number,
     dialogueIndex: number,
     value: string
   ) => {
-    if (!comicPlan) return;
+    setComicProjects((prev) =>
+      prev.map((project) => {
+        if (
+          project.id !== projectId
+        ) {
+          return project;
+        }
 
-    const newPanels = [...comicPlan.panels];
-    const newDialogue = [
-      ...newPanels[panelIndex].dialogue,
-    ];
+        const newPanels = [
+          ...project.plan.panels,
+        ];
 
-    newDialogue[dialogueIndex] = {
-      ...newDialogue[dialogueIndex],
-      speaker: value,
-    };
+        const newDialogue = [
+          ...newPanels[panelIndex]
+            .dialogue,
+        ];
 
-    newPanels[panelIndex] = {
-      ...newPanels[panelIndex],
-      dialogue: newDialogue,
-    };
+        newDialogue[dialogueIndex] = {
+          ...newDialogue[dialogueIndex],
+          speaker: value,
+        };
 
-    setComicPlan({
-      ...comicPlan,
-      panels: newPanels,
-    });
+        newPanels[panelIndex] = {
+          ...newPanels[panelIndex],
+          dialogue: newDialogue,
+        };
+
+        return {
+          ...project,
+          plan: {
+            ...project.plan,
+            panels: newPanels,
+          },
+        };
+      })
+    );
   };
 
   const updateDialogueText = (
+    projectId: string,
     panelIndex: number,
     dialogueIndex: number,
     value: string
   ) => {
-    if (!comicPlan) return;
+    setComicProjects((prev) =>
+      prev.map((project) => {
+        if (
+          project.id !== projectId
+        ) {
+          return project;
+        }
 
-    const newPanels = [...comicPlan.panels];
-    const newDialogue = [
-      ...newPanels[panelIndex].dialogue,
-    ];
+        const newPanels = [
+          ...project.plan.panels,
+        ];
 
-    newDialogue[dialogueIndex] = {
-      ...newDialogue[dialogueIndex],
-      text: value,
-    };
+        const newDialogue = [
+          ...newPanels[panelIndex]
+            .dialogue,
+        ];
 
-    newPanels[panelIndex] = {
-      ...newPanels[panelIndex],
-      dialogue: newDialogue,
-    };
+        newDialogue[dialogueIndex] = {
+          ...newDialogue[dialogueIndex],
+          text: value,
+        };
 
-    setComicPlan({
-      ...comicPlan,
-      panels: newPanels,
-    });
+        newPanels[panelIndex] = {
+          ...newPanels[panelIndex],
+          dialogue: newDialogue,
+        };
+
+        return {
+          ...project,
+          plan: {
+            ...project.plan,
+            panels: newPanels,
+          },
+        };
+      })
+    );
   };
 
-  const addDialogue = (panelIndex: number) => {
-    if (!comicPlan) return;
+  const addDialogue = (
+    projectId: string,
+    panelIndex: number
+  ) => {
+    setComicProjects((prev) =>
+      prev.map((project) => {
+        if (
+          project.id !== projectId
+        ) {
+          return project;
+        }
 
-    const newPanels = [...comicPlan.panels];
+        const newPanels = [
+          ...project.plan.panels,
+        ];
 
-    newPanels[panelIndex] = {
-      ...newPanels[panelIndex],
-      dialogue: [
-        ...newPanels[panelIndex].dialogue,
-        {
-          speaker: "",
-          text: "",
-        },
-      ],
-    };
+        newPanels[panelIndex] = {
+          ...newPanels[panelIndex],
+          dialogue: [
+            ...newPanels[panelIndex]
+              .dialogue,
+            {
+              speaker: "",
+              text: "",
+            },
+          ],
+        };
 
-    setComicPlan({
-      ...comicPlan,
-      panels: newPanels,
-    });
+        return {
+          ...project,
+          plan: {
+            ...project.plan,
+            panels: newPanels,
+          },
+        };
+      })
+    );
   };
 
   const removeDialogue = (
+    projectId: string,
     panelIndex: number,
     dialogueIndex: number
   ) => {
-    if (!comicPlan) return;
+    setComicProjects((prev) =>
+      prev.map((project) => {
+        if (
+          project.id !== projectId
+        ) {
+          return project;
+        }
 
-    const newPanels = [...comicPlan.panels];
+        const newPanels = [
+          ...project.plan.panels,
+        ];
 
-    newPanels[panelIndex] = {
-      ...newPanels[panelIndex],
-      dialogue: newPanels[
-        panelIndex
-      ].dialogue.filter(
-        (_, index) =>
-          index !== dialogueIndex
-      ),
-    };
+        newPanels[panelIndex] = {
+          ...newPanels[panelIndex],
+          dialogue:
+            newPanels[
+              panelIndex
+            ].dialogue.filter(
+              (_, index) =>
+                index !==
+                dialogueIndex
+            ),
+        };
 
-    setComicPlan({
-      ...comicPlan,
-      panels: newPanels,
-    });
+        return {
+          ...project,
+          plan: {
+            ...project.plan,
+            panels: newPanels,
+          },
+        };
+      })
+    );
   };
 
-  const generateComicImage = async () => {
-    if (!comicPlan) {
-      alert(
-        "먼저 써밋네컷 설계안을 만들어줘."
-      );
-      return;
-    }
+  const removeComicProject = (
+    projectId: string
+  ) => {
+    setComicProjects((prev) =>
+      prev.filter(
+        (project) =>
+          project.id !== projectId
+      )
+    );
+  };
 
-    try {
-      setLoadingImage(true);
-      setErrorMessage("");
-      setGeneratedComicImage("");
+  const generateComicImage =
+    async (projectId: string) => {
+      const project =
+        comicProjects.find(
+          (item) =>
+            item.id === projectId
+        );
 
-      const response = await fetch(
-        "/api/generate-comic",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify(comicPlan),
+      if (!project) return;
+
+      try {
+        setErrorMessage("");
+
+        setComicProjects((prev) =>
+          prev.map((item) =>
+            item.id === projectId
+              ? {
+                  ...item,
+                  loadingImage: true,
+                  image: "",
+                }
+              : item
+          )
+        );
+
+        const response = await fetch(
+          "/api/generate-comic",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify(
+              project.plan
+            ),
+          }
+        );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data?.detail ||
+              data?.error ||
+              "만화 이미지 생성에 실패했습니다."
+          );
         }
-      );
 
-      const data = await response.json();
+        setComicProjects((prev) =>
+          prev.map((item) =>
+            item.id === projectId
+              ? {
+                  ...item,
+                  loadingImage: false,
+                  image: data.image,
+                }
+              : item
+          )
+        );
 
-      if (!response.ok) {
-        throw new Error(
-          data?.detail ||
-            data?.error ||
-            "만화 이미지 생성에 실패했습니다."
+        setTimeout(() => {
+          document
+            .getElementById(
+              `image-${projectId}`
+            )
+            ?.scrollIntoView({
+              behavior: "smooth",
+              block: "center",
+            });
+        }, 100);
+      } catch (error: any) {
+        setComicProjects((prev) =>
+          prev.map((item) =>
+            item.id === projectId
+              ? {
+                  ...item,
+                  loadingImage: false,
+                }
+              : item
+          )
+        );
+
+        setErrorMessage(
+          error?.message ||
+            "만화 이미지 생성 중 오류가 발생했어."
         );
       }
+    };
 
-      setGeneratedComicImage(data.image);
-
-      setTimeout(() => {
-        document
-          .getElementById(
-            "generated-comic-result"
-          )
-          ?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
-      }, 100);
-    } catch (error: any) {
-      setErrorMessage(
-        error?.message ||
-          "만화 이미지 생성 중 오류가 발생했어."
+  const addToWorkBox = (
+    projectId: string
+  ) => {
+    const project =
+      comicProjects.find(
+        (item) =>
+          item.id === projectId
       );
-    } finally {
-      setLoadingImage(false);
-    }
-  };
 
-  const addToWorkBox = () => {
     if (
-      !generatedComicImage ||
-      !comicPlan
+      !project ||
+      !project.image
     ) {
       return;
     }
 
     const newItem: WorkItem = {
-      id: `${Date.now()}-${Math.random()}`,
+      id: makeId(),
       title:
-        selectedDialogueTitle ||
-        comicPlan.title ||
+        project.sourceTitle ||
+        project.plan.title ||
         "써밋네컷",
       summary:
-        comicPlan.summary ||
+        project.plan.summary ||
         "써밋네컷",
-      image: generatedComicImage,
+      image: project.image,
     };
 
     setWorkItems((prev) => [
@@ -458,7 +715,9 @@ export default function Home() {
     );
   };
 
-  const removeWorkItem = (id: string) => {
+  const removeWorkItem = (
+    id: string
+  ) => {
     setWorkItems((prev) =>
       prev.filter(
         (item) => item.id !== id
@@ -470,7 +729,9 @@ export default function Home() {
     index: number,
     direction: "up" | "down"
   ) => {
-    const newItems = [...workItems];
+    const newItems = [
+      ...workItems,
+    ];
 
     const targetIndex =
       direction === "up"
@@ -479,17 +740,20 @@ export default function Home() {
 
     if (
       targetIndex < 0 ||
-      targetIndex >= newItems.length
+      targetIndex >=
+        newItems.length
     ) {
       return;
     }
 
-    const temp = newItems[index];
+    const temp =
+      newItems[index];
 
     newItems[index] =
       newItems[targetIndex];
 
-    newItems[targetIndex] = temp;
+    newItems[targetIndex] =
+      temp;
 
     setWorkItems(newItems);
   };
@@ -497,7 +761,6 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-10">
       <div className="mx-auto max-w-6xl">
-
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>
             <p className="text-sm font-bold text-blue-600">
@@ -509,8 +772,10 @@ export default function Home() {
             </h1>
 
             <p className="mt-3 text-slate-600">
-              중3 영어 교재의 대화문을 찾아
-              필요한 것만 골라 써밋네컷으로 만들자.
+              중3 영어 교재의
+              대화문을 찾아 필요한
+              것만 골라 써밋네컷으로
+              만들자.
             </p>
           </div>
 
@@ -531,7 +796,8 @@ export default function Home() {
 
         <section className="mt-10 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <h2 className="text-xl font-bold">
-            1. 중3 교재 PDF 업로드
+            1. 중3 교재 PDF
+            업로드
           </h2>
 
           <label className="mt-5 inline-block cursor-pointer rounded-xl bg-slate-900 px-6 py-3 font-semibold text-white">
@@ -547,7 +813,10 @@ export default function Home() {
 
                 if (!file) return;
 
-                setFileName(file.name);
+                setFileName(
+                  file.name
+                );
+
                 readPdf(file);
               }}
             />
@@ -572,29 +841,34 @@ export default function Home() {
           </div>
         )}
 
-        {!loadingPdf && pdfText && (
-          <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-            <h2 className="text-xl font-bold">
-              2. 대화문 찾기
-            </h2>
+        {!loadingPdf &&
+          pdfText && (
+            <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+              <h2 className="text-xl font-bold">
+                2. 대화문 찾기
+              </h2>
 
-            <p className="mt-2 text-sm text-slate-500">
-              교재 안의 대화문을 모두 찾아줄게.
-              필요한 것만 남기면 돼.
-            </p>
+              <p className="mt-2 text-sm text-slate-500">
+                교재 안의 대화문을
+                모두 찾은 다음,
+                필요한 것만 남기면
+                돼.
+              </p>
 
-            <button
-              type="button"
-              onClick={analyzePdf}
-              disabled={loadingAi}
-              className="mt-5 w-full rounded-xl bg-blue-600 px-6 py-4 text-lg font-bold text-white disabled:opacity-50"
-            >
-              {loadingAi
-                ? "대화문 찾는 중..."
-                : "대화문 전체 찾기"}
-            </button>
-          </section>
-        )}
+              <button
+                type="button"
+                onClick={analyzePdf}
+                disabled={
+                  loadingAi
+                }
+                className="mt-5 w-full rounded-xl bg-blue-600 px-6 py-4 text-lg font-bold text-white disabled:opacity-50"
+              >
+                {loadingAi
+                  ? "대화문 찾는 중..."
+                  : "대화문 전체 찾기"}
+              </button>
+            </section>
+          )}
 
         {errorMessage && (
           <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5 text-red-700">
@@ -611,33 +885,45 @@ export default function Home() {
                 </h2>
 
                 <p className="mt-2 text-sm text-slate-500">
-                  필요 없는 대화문은 삭제하고
-                  사용할 것만 남겨줘.
+                  필요 없는 것은
+                  삭제하고 사용할
+                  대화문만 남겨줘.
                 </p>
               </div>
 
               <div className="rounded-full bg-blue-100 px-4 py-2 text-sm font-bold text-blue-700">
-                {analysis.dialogues?.length || 0}개 남음
+                {analysis
+                  .dialogues
+                  ?.length || 0}
+                개 남음
               </div>
             </div>
 
             <div className="mt-6 space-y-4">
               {analysis.dialogues?.map(
-                (dialogue, index) => (
+                (
+                  dialogue,
+                  index
+                ) => (
                   <div
-                    key={index}
+                    key={`${dialogue.title}-${index}`}
                     className="rounded-2xl border border-slate-200 bg-slate-50 p-5"
                   >
                     <p className="text-sm font-bold text-blue-600">
-                      대화문 {index + 1}
+                      대화문{" "}
+                      {index + 1}
                     </p>
 
                     <p className="mt-1 text-lg font-bold">
-                      {dialogue.title}
+                      {
+                        dialogue.title
+                      }
                     </p>
 
                     <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">
-                      {dialogue.content}
+                      {
+                        dialogue.content
+                      }
                     </p>
 
                     <div className="mt-5 flex flex-wrap gap-3">
@@ -649,240 +935,445 @@ export default function Home() {
                             dialogue.content
                           )
                         }
-                        disabled={loadingComic}
-                        className="rounded-xl bg-slate-900 px-5 py-3 font-bold text-white disabled:opacity-50"
+                        disabled={
+                          loadingComic ||
+                          loadingAllComics
+                        }
+                        className="rounded-xl bg-slate-900 px-5 py-3 font-bold text-white disabled:opacity-40"
                       >
                         {loadingComic &&
-                        selectedDialogueTitle ===
+                        currentCreatingTitle ===
                           dialogue.title
                           ? "설계안 만드는 중..."
-                          : "이 대화문으로 써밋네컷 만들기"}
+                          : "이 대화문만 설계안 만들기"}
                       </button>
 
                       <button
                         type="button"
                         onClick={() =>
-                          deleteDialogue(index)
+                          deleteDialogue(
+                            index
+                          )
                         }
-                        disabled={loadingComic}
-                        className="rounded-xl border border-red-200 bg-red-50 px-5 py-3 font-bold text-red-600"
+                        disabled={
+                          loadingAllComics
+                        }
+                        className="rounded-xl border border-red-200 bg-red-50 px-5 py-3 font-bold text-red-600 disabled:opacity-40"
                       >
-                        필요 없는 대화문 삭제
+                        필요 없는
+                        대화문 삭제
                       </button>
                     </div>
                   </div>
                 )
               )}
 
-              {analysis.dialogues?.length === 0 && (
+              {analysis.dialogues
+                ?.length === 0 && (
                 <div className="rounded-xl bg-slate-100 p-8 text-center text-slate-500">
-                  남아 있는 대화문이 없어.
+                  남아 있는 대화문이
+                  없어.
                 </div>
               )}
             </div>
+
+            {(analysis.dialogues
+              ?.length || 0) >
+              0 && (
+              <div className="mt-8 rounded-2xl bg-purple-50 p-6 ring-1 ring-purple-200">
+                <p className="text-sm font-bold text-purple-600">
+                  STEP 3
+                </p>
+
+                <h3 className="mt-1 text-2xl font-black text-slate-900">
+                  남은 대화문 전체
+                  설계안 만들기
+                </h3>
+
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  지금 남아 있는
+                  대화문을 순서대로
+                  모두 써밋네컷
+                  설계안으로 만들게.
+                  이미지는 아직
+                  만들지 않아.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={
+                    makeAllComicPlans
+                  }
+                  disabled={
+                    loadingAllComics ||
+                    loadingComic
+                  }
+                  className="mt-5 w-full rounded-xl bg-purple-600 px-6 py-4 text-lg font-black text-white disabled:opacity-50"
+                >
+                  {loadingAllComics
+                    ? `전체 설계안 만드는 중 · ${currentCreatingTitle}`
+                    : `남은 ${
+                        analysis
+                          .dialogues
+                          ?.length ||
+                        0
+                      }개 전체 설계안 만들기`}
+                </button>
+
+                {loadingAllComics && (
+                  <p className="mt-3 text-center text-sm font-semibold text-purple-700">
+                    하나씩 순서대로
+                    만들고 있어.
+                    조금만 기다려줘.
+                  </p>
+                )}
+              </div>
+            )}
           </section>
         )}
 
-        {comicPlan && (
+        {comicProjects.length >
+          0 && (
           <section
-            id="comic-plan-result"
-            className="mt-10 space-y-6"
+            id="comic-projects"
+            className="mt-10"
           >
-            <div>
+            <div className="mb-6">
               <p className="text-sm font-bold text-purple-600">
-                SUMMIT FOUR-CUT EDITOR
+                SUMMIT FOUR-CUT
+                EDITOR
               </p>
 
               <h2 className="mt-1 text-3xl font-black">
-                써밋네컷 설계안 편집
+                써밋네컷 설계안
               </h2>
 
               <p className="mt-2 text-slate-600">
-                이상한 대사가 있으면 여기서 바로 고치면 돼.
+                현재{" "}
+                {
+                  comicProjects.length
+                }
+                개의 설계안이 있어.
+                각각 확인하고 수정한
+                뒤 이미지를 만들면 돼.
               </p>
             </div>
 
-            <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-              <label className="text-sm font-bold text-slate-700">
-                만화 상단 한줄 제목
-              </label>
-
-              <input
-                value={comicPlan.summary}
-                onChange={(e) =>
-                  updateSummary(e.target.value)
-                }
-                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-xl font-bold"
-              />
-            </div>
-
-            <div className="grid gap-6 md:grid-cols-2">
-              {comicPlan.panels.map(
+            <div className="space-y-12">
+              {comicProjects.map(
                 (
-                  panel,
-                  panelIndex
+                  project,
+                  projectIndex
                 ) => (
                   <div
-                    key={panelIndex}
-                    className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200"
+                    key={project.id}
+                    className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-600 font-bold text-white">
-                        {panelIndex + 1}
+                    <div className="border-b border-slate-200 bg-slate-900 p-6 text-white">
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-bold text-purple-300">
+                            설계안{" "}
+                            {projectIndex +
+                              1}
+                          </p>
+
+                          <h3 className="mt-1 text-2xl font-black">
+                            {
+                              project.sourceTitle
+                            }
+                          </h3>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            removeComicProject(
+                              project.id
+                            )
+                          }
+                          className="rounded-xl bg-white/10 px-4 py-2 text-sm font-bold text-white"
+                        >
+                          이 설계안 삭제
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-6">
+                      <div className="rounded-2xl bg-slate-50 p-5 ring-1 ring-slate-200">
+                        <label className="text-sm font-bold text-slate-700">
+                          만화 상단
+                          한줄 제목
+                        </label>
+
+                        <input
+                          value={
+                            project
+                              .plan
+                              .summary
+                          }
+                          onChange={(
+                            e
+                          ) =>
+                            updateSummary(
+                              project.id,
+                              e.target
+                                .value
+                            )
+                          }
+                          className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-xl font-bold"
+                        />
                       </div>
 
-                      <h3 className="text-xl font-bold">
-                        {panel.cut}
-                      </h3>
-                    </div>
-
-                    <div className="mt-5">
-                      <label className="text-sm font-bold text-slate-700">
-                        장면 설명
-                      </label>
-
-                      <textarea
-                        value={panel.scene}
-                        onChange={(e) =>
-                          updatePanelScene(
-                            panelIndex,
-                            e.target.value
-                          )
-                        }
-                        rows={4}
-                        className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm"
-                      />
-                    </div>
-
-                    <div className="mt-6 space-y-5">
-                      {panel.dialogue.map(
-                        (
-                          dialogue,
-                          dialogueIndex
-                        ) => (
-                          <div
-                            key={dialogueIndex}
-                            className="rounded-xl bg-purple-50 p-4"
-                          >
-                            <label className="text-xs font-bold text-purple-700">
-                              화자
-                            </label>
-
-                            <input
-                              value={dialogue.speaker}
-                              onChange={(e) =>
-                                updateSpeaker(
-                                  panelIndex,
-                                  dialogueIndex,
-                                  e.target.value
-                                )
+                      <div className="mt-6 grid gap-6 md:grid-cols-2">
+                        {project.plan.panels.map(
+                          (
+                            panel,
+                            panelIndex
+                          ) => (
+                            <div
+                              key={
+                                panelIndex
                               }
-                              className="mt-1 w-full rounded-lg border border-purple-200 bg-white px-3 py-2"
-                            />
+                              className="rounded-2xl border border-slate-200 bg-white p-5"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-600 font-bold text-white">
+                                  {panelIndex +
+                                    1}
+                                </div>
 
-                            <label className="mt-3 block text-xs font-bold text-purple-700">
-                              말풍선 대사
-                            </label>
+                                <h4 className="text-xl font-bold">
+                                  {
+                                    panel.cut
+                                  }
+                                </h4>
+                              </div>
 
-                            <textarea
-                              value={dialogue.text}
-                              onChange={(e) =>
-                                updateDialogueText(
-                                  panelIndex,
-                                  dialogueIndex,
-                                  e.target.value
-                                )
-                              }
-                              rows={3}
-                              className="mt-1 w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-lg font-semibold"
-                            />
+                              <div className="mt-5">
+                                <label className="text-sm font-bold text-slate-700">
+                                  장면 설명
+                                </label>
 
-                            {panel.dialogue.length >
-                              1 && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  removeDialogue(
-                                    panelIndex,
+                                <textarea
+                                  value={
+                                    panel.scene
+                                  }
+                                  onChange={(
+                                    e
+                                  ) =>
+                                    updatePanelScene(
+                                      project.id,
+                                      panelIndex,
+                                      e
+                                        .target
+                                        .value
+                                    )
+                                  }
+                                  rows={
+                                    4
+                                  }
+                                  className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm"
+                                />
+                              </div>
+
+                              <div className="mt-6 space-y-5">
+                                {panel.dialogue.map(
+                                  (
+                                    dialogue,
                                     dialogueIndex
+                                  ) => (
+                                    <div
+                                      key={
+                                        dialogueIndex
+                                      }
+                                      className="rounded-xl bg-purple-50 p-4"
+                                    >
+                                      <label className="text-xs font-bold text-purple-700">
+                                        화자
+                                      </label>
+
+                                      <input
+                                        value={
+                                          dialogue.speaker
+                                        }
+                                        onChange={(
+                                          e
+                                        ) =>
+                                          updateSpeaker(
+                                            project.id,
+                                            panelIndex,
+                                            dialogueIndex,
+                                            e
+                                              .target
+                                              .value
+                                          )
+                                        }
+                                        className="mt-1 w-full rounded-lg border border-purple-200 bg-white px-3 py-2"
+                                      />
+
+                                      <label className="mt-3 block text-xs font-bold text-purple-700">
+                                        말풍선
+                                        대사
+                                      </label>
+
+                                      <textarea
+                                        value={
+                                          dialogue.text
+                                        }
+                                        onChange={(
+                                          e
+                                        ) =>
+                                          updateDialogueText(
+                                            project.id,
+                                            panelIndex,
+                                            dialogueIndex,
+                                            e
+                                              .target
+                                              .value
+                                          )
+                                        }
+                                        rows={
+                                          3
+                                        }
+                                        className="mt-1 w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-lg font-semibold"
+                                      />
+
+                                      {panel
+                                        .dialogue
+                                        .length >
+                                        1 && (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            removeDialogue(
+                                              project.id,
+                                              panelIndex,
+                                              dialogueIndex
+                                            )
+                                          }
+                                          className="mt-3 text-sm font-semibold text-red-500"
+                                        >
+                                          이 대사
+                                          삭제
+                                        </button>
+                                      )}
+                                    </div>
                                   )
-                                }
-                                className="mt-3 text-sm font-semibold text-red-500"
-                              >
-                                이 대사 삭제
-                              </button>
-                            )}
-                          </div>
-                        )
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    addDialogue(
+                                      project.id,
+                                      panelIndex
+                                    )
+                                  }
+                                  className="w-full rounded-xl border-2 border-dashed border-purple-300 py-3 font-bold text-purple-600"
+                                >
+                                  + 대사 추가
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        )}
+                      </div>
+
+                      <div className="mt-6 rounded-2xl bg-purple-50 p-6 ring-1 ring-purple-200">
+                        <h4 className="text-xl font-black">
+                          설계안{" "}
+                          {projectIndex +
+                            1}{" "}
+                          확인 끝났어?
+                        </h4>
+
+                        <p className="mt-2 text-sm text-slate-600">
+                          이 설계안만
+                          이미지로
+                          생성할게.
+                        </p>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            generateComicImage(
+                              project.id
+                            )
+                          }
+                          disabled={
+                            project.loadingImage
+                          }
+                          className="mt-5 w-full rounded-xl bg-purple-600 px-6 py-4 text-lg font-black text-white disabled:opacity-50"
+                        >
+                          {project.loadingImage
+                            ? "써밋네컷 이미지 생성 중..."
+                            : `설계안 ${
+                                projectIndex +
+                                1
+                              } 이미지 생성`}
+                        </button>
+                      </div>
+
+                      {project.loadingImage && (
+                        <div className="mt-6 rounded-2xl bg-amber-50 p-6 font-semibold text-amber-700">
+                          AI가 최종
+                          써밋네컷을
+                          만드는 중...
+                        </div>
                       )}
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          addDialogue(panelIndex)
-                        }
-                        className="w-full rounded-xl border-2 border-dashed border-purple-300 py-3 font-bold text-purple-600"
-                      >
-                        + 대사 추가
-                      </button>
+                      {project.image && (
+                        <div
+                          id={`image-${project.id}`}
+                          className="mt-8 rounded-2xl border border-slate-200 bg-white p-5"
+                        >
+                          <img
+                            src={
+                              project.image
+                            }
+                            alt={`써밋네컷 ${
+                              projectIndex +
+                              1
+                            }`}
+                            className="w-full rounded-xl"
+                          />
+
+                          <div className="mt-5 flex flex-wrap gap-3">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                addToWorkBox(
+                                  project.id
+                                )
+                              }
+                              className="rounded-xl bg-purple-600 px-6 py-3 font-bold text-white"
+                            >
+                              한 과
+                              작업함에
+                              추가
+                            </button>
+
+                            <a
+                              href={
+                                project.image
+                              }
+                              download={`summit-four-cut-${
+                                projectIndex +
+                                1
+                              }.png`}
+                              className="rounded-xl bg-slate-900 px-6 py-3 font-bold text-white"
+                            >
+                              PNG
+                              다운로드
+                            </a>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )
               )}
-            </div>
-
-            <div className="rounded-2xl bg-purple-50 p-6 ring-1 ring-purple-200">
-              <h3 className="text-xl font-black">
-                대사 확인 끝났어?
-              </h3>
-
-              <button
-                type="button"
-                onClick={generateComicImage}
-                disabled={loadingImage}
-                className="mt-5 w-full rounded-xl bg-purple-600 px-6 py-4 text-lg font-black text-white disabled:opacity-50"
-              >
-                {loadingImage
-                  ? "써밋네컷 이미지 생성 중..."
-                  : "수정된 설계안으로 만화 생성"}
-              </button>
-            </div>
-          </section>
-        )}
-
-        {loadingImage && (
-          <div className="mt-8 rounded-2xl bg-amber-50 p-6 font-semibold text-amber-700">
-            AI가 최종 네컷 만화를 만드는 중...
-          </div>
-        )}
-
-        {generatedComicImage && (
-          <section
-            id="generated-comic-result"
-            className="mt-10 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200"
-          >
-            <img
-              src={generatedComicImage}
-              alt="써밋네컷"
-              className="w-full rounded-xl"
-            />
-
-            <div className="mt-5 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={addToWorkBox}
-                className="rounded-xl bg-purple-600 px-6 py-3 font-bold text-white"
-              >
-                한 과 작업함에 추가
-              </button>
-
-              <a
-                href={generatedComicImage}
-                download="summit-four-cut.png"
-                className="rounded-xl bg-slate-900 px-6 py-3 font-bold text-white"
-              >
-                PNG 다운로드
-              </a>
             </div>
           </section>
         )}
@@ -899,7 +1390,10 @@ export default function Home() {
               </h2>
 
               <p className="mt-2 text-sm text-slate-300">
-                완성된 써밋네컷을 순서대로 모아둘 수 있어.
+                완성된
+                써밋네컷을
+                순서대로
+                모아둘 수 있어.
               </p>
             </div>
 
@@ -914,9 +1408,12 @@ export default function Home() {
             </div>
           </div>
 
-          {workItems.length === 0 ? (
+          {workItems.length ===
+          0 ? (
             <div className="mt-6 rounded-2xl border border-dashed border-slate-600 p-8 text-center text-slate-400">
-              아직 작업함에 넣은 써밋네컷이 없어.
+              아직 작업함에
+              넣은 써밋네컷이
+              없어.
             </div>
           ) : (
             <div className="mt-6 space-y-5">
@@ -932,11 +1429,14 @@ export default function Home() {
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div>
                         <p className="text-sm font-bold text-purple-600">
-                          페이지 {index + 1}
+                          페이지{" "}
+                          {index + 1}
                         </p>
 
                         <h3 className="mt-1 text-xl font-black">
-                          {item.summary}
+                          {
+                            item.summary
+                          }
                         </h3>
                       </div>
 
@@ -967,7 +1467,8 @@ export default function Home() {
                           }
                           disabled={
                             index ===
-                            workItems.length - 1
+                            workItems.length -
+                              1
                           }
                           className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-bold disabled:opacity-30"
                         >
@@ -989,7 +1490,9 @@ export default function Home() {
                     </div>
 
                     <img
-                      src={item.image}
+                      src={
+                        item.image
+                      }
                       alt={`써밋네컷 ${
                         index + 1
                       }`}
