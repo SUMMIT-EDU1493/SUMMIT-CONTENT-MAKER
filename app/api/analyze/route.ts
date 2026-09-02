@@ -29,55 +29,37 @@ export async function POST(request: Request) {
 아래는 중학교 영어 교과서 PDF에서 추출한 텍스트다.
 
 목표:
-교재 안에서 아래 5개 학습 코너의 대화문만 찾아서 추출한다.
+교재 안에 있는 영어 대화문을 가능한 한 빠짐없이 찾아서 각각 분리한다.
 
-찾아야 할 코너:
-1. Listen and Talk 1
-2. Listen and Talk 2
-3. Listen & Write 1
-4. Listen & Write 2
-5. Real Life Talk
+중요 규칙:
+1. 인물 두 명 이상이 서로 주고받는 실제 대화문을 찾아라.
+2. Listen and Talk, Listen & Write, Real Life Talk뿐 아니라 다른 대화 활동도 포함한다.
+3. 대화문이 여러 개면 각각 별도의 항목으로 분리한다.
+4. 원문의 대화 순서는 절대 바꾸지 않는다.
+5. 영어 문장은 가능한 한 원문 그대로 보존한다.
+6. 본문 독해 지문은 제외한다.
+7. 문법 설명, 단어 목록, 문제 지시문, 보기, 선택지, 해설은 제외한다.
+8. 한두 문장짜리 단순 예문은 가능한 한 제외한다.
+9. 실제 대화문인지 애매하면 대화 형식이 명확한 경우만 포함한다.
+10. 없는 대화를 만들어내지 않는다.
 
-매우 중요한 규칙:
-- 위 5개 코너 외의 다른 대화문은 추출하지 않는다.
-- 본문 읽기, 문법, 단어, 활동 문제, 보기 문장 등은 제외한다.
-- 코너명이 약간 다르게 표기되어 있어도 의미상 같은 코너면 찾아낸다.
-- 예: Listen and Talk / Listen & Talk 같은 표기 차이는 허용한다.
-- 각 코너의 실제 영어 대화 내용만 추출한다.
-- 문제 지시문, 번호, 선택지, 정답 설명은 가능한 한 제외한다.
-- 원문 영어 대화 순서는 그대로 유지한다.
-- 영어 문장은 가능한 한 원문 그대로 보존한다.
-- 해당 코너가 교재에 없으면 content를 빈 문자열로 둔다.
-- 절대 없는 내용을 만들어내지 않는다.
+각 대화문에는 내용 파악용으로 짧은 한글 제목을 하나 붙인다.
 
-반드시 아래 JSON 형식만 출력한다:
+예:
+- 장래희망 이야기
+- 좋아하는 활동
+- 길 묻기
+- 계획 세우기
+
+반드시 JSON만 출력한다.
+
+형식:
 
 {
-  "sections": [
+  "dialogues": [
     {
-      "key": "listen-talk-1",
-      "title": "Listen and Talk 1",
-      "content": ""
-    },
-    {
-      "key": "listen-talk-2",
-      "title": "Listen and Talk 2",
-      "content": ""
-    },
-    {
-      "key": "listen-write-1",
-      "title": "Listen & Write 1",
-      "content": ""
-    },
-    {
-      "key": "listen-write-2",
-      "title": "Listen & Write 2",
-      "content": ""
-    },
-    {
-      "key": "real-life-talk",
-      "title": "Real Life Talk",
-      "content": ""
+      "title": "짧은 한글 제목",
+      "content": "실제 영어 대화문"
     }
   ]
 }

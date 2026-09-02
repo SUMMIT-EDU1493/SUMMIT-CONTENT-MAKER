@@ -8,14 +8,13 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
-type Section = {
-  key: string;
+type Dialogue = {
   title: string;
   content: string;
 };
 
 type AnalysisResult = {
-  sections?: Section[];
+  dialogues?: Dialogue[];
 };
 
 type ComicDialogue = {
@@ -60,7 +59,7 @@ export default function Home() {
   const [comicPlan, setComicPlan] =
     useState<ComicPlan | null>(null);
 
-  const [selectedSectionTitle, setSelectedSectionTitle] =
+  const [selectedDialogueTitle, setSelectedDialogueTitle] =
     useState("");
 
   const [generatedComicImage, setGeneratedComicImage] =
@@ -98,7 +97,9 @@ export default function Home() {
 
         const pageText = content.items
           .map((item: any) => {
-            if ("str" in item) return item.str;
+            if ("str" in item) {
+              return item.str;
+            }
             return "";
           })
           .join(" ");
@@ -116,7 +117,9 @@ export default function Home() {
       setPdfText(fullText.trim());
     } catch (error) {
       console.error(error);
-      setErrorMessage("PDF를 읽는 중 오류가 발생했어.");
+      setErrorMessage(
+        "PDF를 읽는 중 오류가 발생했어."
+      );
     } finally {
       setLoadingPdf(false);
     }
@@ -166,6 +169,20 @@ export default function Home() {
     }
   };
 
+  const deleteDialogue = (indexToDelete: number) => {
+    if (!analysis?.dialogues) return;
+
+    const newDialogues =
+      analysis.dialogues.filter(
+        (_, index) => index !== indexToDelete
+      );
+
+    setAnalysis({
+      ...analysis,
+      dialogues: newDialogues,
+    });
+  };
+
   const makeComicPlan = async (
     title: string,
     content: string
@@ -175,7 +192,7 @@ export default function Home() {
       setErrorMessage("");
       setComicPlan(null);
       setGeneratedComicImage("");
-      setSelectedSectionTitle(title);
+      setSelectedDialogueTitle(title);
 
       const response = await fetch(
         "/api/comic-plan",
@@ -420,7 +437,7 @@ export default function Home() {
     const newItem: WorkItem = {
       id: `${Date.now()}-${Math.random()}`,
       title:
-        selectedSectionTitle ||
+        selectedDialogueTitle ||
         comicPlan.title ||
         "써밋네컷",
       summary:
@@ -468,8 +485,10 @@ export default function Home() {
     }
 
     const temp = newItems[index];
+
     newItems[index] =
       newItems[targetIndex];
+
     newItems[targetIndex] = temp;
 
     setWorkItems(newItems);
@@ -478,6 +497,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-10">
       <div className="mx-auto max-w-6xl">
+
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>
             <p className="text-sm font-bold text-blue-600">
@@ -489,9 +509,8 @@ export default function Home() {
             </h1>
 
             <p className="mt-3 text-slate-600">
-              중3 영어 교과서에서
-              핵심 대화 코너를 찾아
-              써밋네컷으로 만들어보자.
+              중3 영어 교재의 대화문을 찾아
+              필요한 것만 골라 써밋네컷으로 만들자.
             </p>
           </div>
 
@@ -553,31 +572,29 @@ export default function Home() {
           </div>
         )}
 
-        {!loadingPdf &&
-          pdfText && (
-            <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-              <h2 className="text-xl font-bold">
-                2. 중3 핵심 대화 코너 찾기
-              </h2>
+        {!loadingPdf && pdfText && (
+          <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+            <h2 className="text-xl font-bold">
+              2. 대화문 찾기
+            </h2>
 
-              <p className="mt-2 text-sm text-slate-500">
-                Listen and Talk 1·2,
-                Listen & Write 1·2,
-                Real Life Talk만 찾을게.
-              </p>
+            <p className="mt-2 text-sm text-slate-500">
+              교재 안의 대화문을 모두 찾아줄게.
+              필요한 것만 남기면 돼.
+            </p>
 
-              <button
-                type="button"
-                onClick={analyzePdf}
-                disabled={loadingAi}
-                className="mt-5 w-full rounded-xl bg-blue-600 px-6 py-4 text-lg font-bold text-white disabled:opacity-50"
-              >
-                {loadingAi
-                  ? "5개 코너 찾는 중..."
-                  : "중3 대화 코너 분석하기"}
-              </button>
-            </section>
-          )}
+            <button
+              type="button"
+              onClick={analyzePdf}
+              disabled={loadingAi}
+              className="mt-5 w-full rounded-xl bg-blue-600 px-6 py-4 text-lg font-bold text-white disabled:opacity-50"
+            >
+              {loadingAi
+                ? "대화문 찾는 중..."
+                : "대화문 전체 찾기"}
+            </button>
+          </section>
+        )}
 
         {errorMessage && (
           <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5 text-red-700">
@@ -587,96 +604,80 @@ export default function Home() {
 
         {analysis && (
           <section className="mt-8 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-            <h2 className="text-2xl font-bold">
-              중3 대화 코너
-            </h2>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="text-2xl font-bold">
+                  발견된 대화문
+                </h2>
 
-            <p className="mt-2 text-sm text-slate-500">
-              아래 5개 코너만
-              써밋네컷 대상으로 사용할게.
-            </p>
+                <p className="mt-2 text-sm text-slate-500">
+                  필요 없는 대화문은 삭제하고
+                  사용할 것만 남겨줘.
+                </p>
+              </div>
 
-            <div className="mt-6 grid gap-5 md:grid-cols-2">
-              {analysis.sections?.map(
-                (section, index) => {
-                  const hasContent =
-                    Boolean(
-                      section.content?.trim()
-                    );
+              <div className="rounded-full bg-blue-100 px-4 py-2 text-sm font-bold text-blue-700">
+                {analysis.dialogues?.length || 0}개 남음
+              </div>
+            </div>
 
-                  return (
-                    <div
-                      key={
-                        section.key ||
-                        index
-                      }
-                      className="rounded-2xl border border-slate-200 bg-slate-50 p-5"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-bold text-blue-600">
-                            코너{" "}
-                            {index + 1}
-                          </p>
+            <div className="mt-6 space-y-4">
+              {analysis.dialogues?.map(
+                (dialogue, index) => (
+                  <div
+                    key={index}
+                    className="rounded-2xl border border-slate-200 bg-slate-50 p-5"
+                  >
+                    <p className="text-sm font-bold text-blue-600">
+                      대화문 {index + 1}
+                    </p>
 
-                          <h3 className="mt-1 text-xl font-black">
-                            {
-                              section.title
-                            }
-                          </h3>
-                        </div>
+                    <p className="mt-1 text-lg font-bold">
+                      {dialogue.title}
+                    </p>
 
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-bold ${
-                            hasContent
-                              ? "bg-green-100 text-green-700"
-                              : "bg-slate-200 text-slate-500"
-                          }`}
-                        >
-                          {hasContent
-                            ? "찾음"
-                            : "내용 없음"}
-                        </span>
-                      </div>
+                    <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">
+                      {dialogue.content}
+                    </p>
 
-                      {hasContent ? (
-                        <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-600">
-                          {
-                            section.content
-                          }
-                        </p>
-                      ) : (
-                        <p className="mt-4 text-sm text-slate-400">
-                          이 PDF에서는
-                          해당 코너의
-                          대화문을 찾지
-                          못했어.
-                        </p>
-                      )}
-
+                    <div className="mt-5 flex flex-wrap gap-3">
                       <button
                         type="button"
                         onClick={() =>
                           makeComicPlan(
-                            section.title,
-                            section.content
+                            dialogue.title,
+                            dialogue.content
                           )
                         }
-                        disabled={
-                          !hasContent ||
-                          loadingComic
-                        }
-                        className="mt-5 w-full rounded-xl bg-slate-900 px-5 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-30"
+                        disabled={loadingComic}
+                        className="rounded-xl bg-slate-900 px-5 py-3 font-bold text-white disabled:opacity-50"
                       >
                         {loadingComic &&
-                        selectedSectionTitle ===
-                          section.title
+                        selectedDialogueTitle ===
+                          dialogue.title
                           ? "설계안 만드는 중..."
-                          : "이 코너로 써밋네컷 만들기"}
+                          : "이 대화문으로 써밋네컷 만들기"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          deleteDialogue(index)
+                        }
+                        disabled={loadingComic}
+                        className="rounded-xl border border-red-200 bg-red-50 px-5 py-3 font-bold text-red-600"
+                      >
+                        필요 없는 대화문 삭제
                       </button>
                     </div>
-                  );
-                }
+                  </div>
+                )
+              )}
+
+              {analysis.dialogues?.length === 0 && (
+                <div className="rounded-xl bg-slate-100 p-8 text-center text-slate-500">
+                  남아 있는 대화문이 없어.
+                </div>
               )}
             </div>
           </section>
@@ -697,9 +698,7 @@ export default function Home() {
               </h2>
 
               <p className="mt-2 text-slate-600">
-                이상한 대사가 있으면
-                여기서 바로 고치고
-                이미지로 만들면 돼.
+                이상한 대사가 있으면 여기서 바로 고치면 돼.
               </p>
             </div>
 
@@ -711,9 +710,7 @@ export default function Home() {
               <input
                 value={comicPlan.summary}
                 onChange={(e) =>
-                  updateSummary(
-                    e.target.value
-                  )
+                  updateSummary(e.target.value)
                 }
                 className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-xl font-bold"
               />
@@ -731,8 +728,7 @@ export default function Home() {
                   >
                     <div className="flex items-center gap-3">
                       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-600 font-bold text-white">
-                        {panelIndex +
-                          1}
+                        {panelIndex + 1}
                       </div>
 
                       <h3 className="text-xl font-bold">
@@ -746,16 +742,11 @@ export default function Home() {
                       </label>
 
                       <textarea
-                        value={
-                          panel.scene
-                        }
-                        onChange={(
-                          e
-                        ) =>
+                        value={panel.scene}
+                        onChange={(e) =>
                           updatePanelScene(
                             panelIndex,
-                            e.target
-                              .value
+                            e.target.value
                           )
                         }
                         rows={4}
@@ -770,63 +761,43 @@ export default function Home() {
                           dialogueIndex
                         ) => (
                           <div
-                            key={
-                              dialogueIndex
-                            }
+                            key={dialogueIndex}
                             className="rounded-xl bg-purple-50 p-4"
                           >
-                            <div>
-                              <label className="text-xs font-bold text-purple-700">
-                                화자
-                              </label>
+                            <label className="text-xs font-bold text-purple-700">
+                              화자
+                            </label>
 
-                              <input
-                                value={
-                                  dialogue.speaker
-                                }
-                                onChange={(
-                                  e
-                                ) =>
-                                  updateSpeaker(
-                                    panelIndex,
-                                    dialogueIndex,
-                                    e
-                                      .target
-                                      .value
-                                  )
-                                }
-                                className="mt-1 w-full rounded-lg border border-purple-200 bg-white px-3 py-2"
-                              />
-                            </div>
+                            <input
+                              value={dialogue.speaker}
+                              onChange={(e) =>
+                                updateSpeaker(
+                                  panelIndex,
+                                  dialogueIndex,
+                                  e.target.value
+                                )
+                              }
+                              className="mt-1 w-full rounded-lg border border-purple-200 bg-white px-3 py-2"
+                            />
 
-                            <div className="mt-3">
-                              <label className="text-xs font-bold text-purple-700">
-                                말풍선 대사
-                              </label>
+                            <label className="mt-3 block text-xs font-bold text-purple-700">
+                              말풍선 대사
+                            </label>
 
-                              <textarea
-                                value={
-                                  dialogue.text
-                                }
-                                onChange={(
-                                  e
-                                ) =>
-                                  updateDialogueText(
-                                    panelIndex,
-                                    dialogueIndex,
-                                    e
-                                      .target
-                                      .value
-                                  )
-                                }
-                                rows={3}
-                                className="mt-1 w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-lg font-semibold"
-                              />
-                            </div>
+                            <textarea
+                              value={dialogue.text}
+                              onChange={(e) =>
+                                updateDialogueText(
+                                  panelIndex,
+                                  dialogueIndex,
+                                  e.target.value
+                                )
+                              }
+                              rows={3}
+                              className="mt-1 w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-lg font-semibold"
+                            />
 
-                            {panel
-                              .dialogue
-                              .length >
+                            {panel.dialogue.length >
                               1 && (
                               <button
                                 type="button"
@@ -848,9 +819,7 @@ export default function Home() {
                       <button
                         type="button"
                         onClick={() =>
-                          addDialogue(
-                            panelIndex
-                          )
+                          addDialogue(panelIndex)
                         }
                         className="w-full rounded-xl border-2 border-dashed border-purple-300 py-3 font-bold text-purple-600"
                       >
@@ -867,19 +836,10 @@ export default function Home() {
                 대사 확인 끝났어?
               </h3>
 
-              <p className="mt-2 text-sm text-slate-600">
-                수정한 내용을 그대로
-                사용해서 만화를 만들게.
-              </p>
-
               <button
                 type="button"
-                onClick={
-                  generateComicImage
-                }
-                disabled={
-                  loadingImage
-                }
+                onClick={generateComicImage}
+                disabled={loadingImage}
                 className="mt-5 w-full rounded-xl bg-purple-600 px-6 py-4 text-lg font-black text-white disabled:opacity-50"
               >
                 {loadingImage
@@ -892,8 +852,7 @@ export default function Home() {
 
         {loadingImage && (
           <div className="mt-8 rounded-2xl bg-amber-50 p-6 font-semibold text-amber-700">
-            AI가 최종 네컷
-            만화를 만드는 중...
+            AI가 최종 네컷 만화를 만드는 중...
           </div>
         )}
 
@@ -903,9 +862,7 @@ export default function Home() {
             className="mt-10 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200"
           >
             <img
-              src={
-                generatedComicImage
-              }
+              src={generatedComicImage}
               alt="써밋네컷"
               className="w-full rounded-xl"
             />
@@ -913,18 +870,14 @@ export default function Home() {
             <div className="mt-5 flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={
-                  addToWorkBox
-                }
+                onClick={addToWorkBox}
                 className="rounded-xl bg-purple-600 px-6 py-3 font-bold text-white"
               >
                 한 과 작업함에 추가
               </button>
 
               <a
-                href={
-                  generatedComicImage
-                }
+                href={generatedComicImage}
                 download="summit-four-cut.png"
                 className="rounded-xl bg-slate-900 px-6 py-3 font-bold text-white"
               >
@@ -946,9 +899,7 @@ export default function Home() {
               </h2>
 
               <p className="mt-2 text-sm text-slate-300">
-                완성된 써밋네컷을
-                순서대로 모아둘 수
-                있어.
+                완성된 써밋네컷을 순서대로 모아둘 수 있어.
               </p>
             </div>
 
@@ -965,8 +916,7 @@ export default function Home() {
 
           {workItems.length === 0 ? (
             <div className="mt-6 rounded-2xl border border-dashed border-slate-600 p-8 text-center text-slate-400">
-              아직 작업함에 넣은
-              써밋네컷이 없어.
+              아직 작업함에 넣은 써밋네컷이 없어.
             </div>
           ) : (
             <div className="mt-6 space-y-5">
@@ -982,14 +932,11 @@ export default function Home() {
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div>
                         <p className="text-sm font-bold text-purple-600">
-                          페이지{" "}
-                          {index + 1}
+                          페이지 {index + 1}
                         </p>
 
                         <h3 className="mt-1 text-xl font-black">
-                          {
-                            item.summary
-                          }
+                          {item.summary}
                         </h3>
                       </div>
 
@@ -1020,8 +967,7 @@ export default function Home() {
                           }
                           disabled={
                             index ===
-                            workItems.length -
-                              1
+                            workItems.length - 1
                           }
                           className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-bold disabled:opacity-30"
                         >
