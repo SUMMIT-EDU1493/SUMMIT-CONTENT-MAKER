@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import type { OverlayOptions } from "sharp";
 import path from "path";
 import fs from "fs/promises";
 import TextToSVG from "text-to-svg";
@@ -33,34 +34,39 @@ export async function GET() {
     const black = "#111111";
     const gray = "#505050";
 
-    const schoolGrade = "발안중 · 3";
-    const lessonLine = "Lesson 5 · 대화문";
+    const schoolGrade =
+      "발안중 · 3";
 
-    const schoolSvg = textToSVG.getSVG(
-      schoolGrade,
-      {
-        x: 0,
-        y: 0,
-        fontSize: 42,
-        anchor: "top",
-        attributes: {
-          fill: black,
-        },
-      }
-    );
+    const lessonLine =
+      "Lesson 5 · 대화문";
 
-    const lessonSvg = textToSVG.getSVG(
-      lessonLine,
-      {
-        x: 0,
-        y: 0,
-        fontSize: 50,
-        anchor: "top",
-        attributes: {
-          fill: gray,
-        },
-      }
-    );
+    const schoolSvg =
+      textToSVG.getSVG(
+        schoolGrade,
+        {
+          x: 0,
+          y: 0,
+          fontSize: 42,
+          anchor: "top",
+          attributes: {
+            fill: black,
+          },
+        }
+      );
+
+    const lessonSvg =
+      textToSVG.getSVG(
+        lessonLine,
+        {
+          x: 0,
+          y: 0,
+          fontSize: 50,
+          anchor: "top",
+          attributes: {
+            fill: gray,
+          },
+        }
+      );
 
     const schoolBuffer =
       Buffer.from(schoolSvg);
@@ -75,7 +81,9 @@ export async function GET() {
 
     const innerMarginX = 48;
     const frameGap = 20;
-    const frameTop = filmY + 72;
+    const frameTop =
+      filmY + 72;
+
     const frameHeight =
       filmHeight - 144;
 
@@ -95,7 +103,8 @@ export async function GET() {
       "컷",
     ];
 
-    const filmSvgParts: string[] = [];
+    const filmSvgParts: string[] =
+      [];
 
     filmSvgParts.push(`
       <rect
@@ -218,23 +227,20 @@ export async function GET() {
         .png()
         .toBuffer();
 
-    const composites: sharp.OverlayOptions[] =
+    const composites: OverlayOptions[] =
       [
         {
-          input:
-            schoolBuffer,
+          input: schoolBuffer,
           left: 150,
           top: 125,
         },
         {
-          input:
-            lessonBuffer,
+          input: lessonBuffer,
           left: 150,
           top: 185,
         },
         {
-          input:
-            filmBuffer,
+          input: filmBuffer,
           left: 0,
           top: 0,
         },
