@@ -1036,7 +1036,8 @@ ${pageText}
   };
 
   const fetchPdfPageImage = async (
-    url: string
+    url: string,
+    extraBody: Record<string, any> = {}
   ) => {
     const response = await fetch(url, {
       method: "POST",
@@ -1047,6 +1048,7 @@ ${pageText}
         schoolName,
         gradeName,
         lessonName,
+        ...extraBody,
       }),
     });
 
