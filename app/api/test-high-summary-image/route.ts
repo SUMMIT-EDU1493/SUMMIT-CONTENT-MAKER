@@ -161,20 +161,32 @@ TEXT RULES
 IMPORTANT LOGO / LAYOUT RULE
 ==================================================
 
-The official SUMMIT logo will be added later by software.
+The official SUMMIT logo will be overlaid later by software
+in the extreme upper-left corner.
 
-Keep the extreme upper-left corner visually calm enough
-for a small logo overlay.
+Keep a REAL clean safety zone in the upper-left area:
+approximately 260 px wide × 120 px high.
 
-BUT:
+Inside that safety zone:
+- no title
+- no subtitle
+- no underline
+- no doodle
+- no icon
+- no illustration
+- no box
+- no sticky note
+- no decorative line
 
-- DO NOT draw an empty box.
-- DO NOT draw a dotted rectangle.
-- DO NOT draw a photo frame.
-- DO NOT draw a placeholder.
-- DO NOT draw a reserved-logo area.
-- DO NOT label any space "logo".
-- The page must look completely finished even before the logo is added.
+Start the main title farther to the right
+or lower than this safety zone.
+
+IMPORTANT:
+Do NOT draw an empty box.
+Do NOT draw a dotted rectangle.
+Do NOT draw a placeholder.
+Do NOT visibly mark the reserved area.
+The area should simply remain visually calm and empty.
 
 ==================================================
 DO NOT
@@ -212,10 +224,6 @@ DO NOT
         imageData,
         "base64"
       );
-
-    // -----------------------------
-    // 공식 SUMMIT 로고 직접 합성
-    // -----------------------------
 
     const logoPath =
       path.join(
