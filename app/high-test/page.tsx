@@ -711,6 +711,38 @@ ${pageText}
     );
   };
 
+  const fetchPdfPageImage = async (
+    url: string
+  ) => {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        schoolName,
+        gradeName,
+        lessonName,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data?.detail ||
+          data?.error ||
+          "PDF 페이지 생성에 실패했습니다."
+      );
+    }
+
+    if (!data?.image) {
+      throw new Error("생성된 페이지 이미지가 없습니다.");
+    }
+
+    return data.image as string;
+  };
+
   const makeFinalPdf = async () => {
     if (workItems.length === 0) {
       alert(
@@ -723,10 +755,14 @@ ${pageText}
       setMakingPdf(true);
 
       const coverImage =
-        await createHighCoverImage();
+        await fetchPdfPageImage(
+          "/api/high-cover"
+        );
 
       const backCoverImage =
-        await createHighBackCoverImage();
+        await fetchPdfPageImage(
+          "/api/high-back-cover"
+        );
 
       const pdf = new jsPDF({
         orientation: "landscape",
@@ -1026,103 +1062,6 @@ ${pageText}
           </section>
         )}
 
-        {workItems.length > 0 && (
-          <section className="mt-10 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-bold text-emerald-600">
-                  WORKBOX
-                </p>
-
-                <h2 className="mt-1 text-2xl font-black text-slate-900">
-                  고등 써밋네컷 작업함
-                </h2>
-
-                <p className="mt-2 text-sm text-slate-500">
-                  현재 {workItems.length}장
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-6 grid gap-6 md:grid-cols-2">
-              {workItems.map(
-                (item, index) => (
-                  <div
-                    key={item.id}
-                    className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"
-                  >
-                    <img
-                      src={item.image}
-                      alt={item.title}
-                      className="w-full"
-                    />
-
-                    <div className="p-4">
-                      <p className="text-xs font-black text-emerald-600">
-                        PAGE {index + 1}
-                      </p>
-
-                      <p className="mt-1 font-black text-slate-900">
-                        {item.title}
-                      </p>
-
-                      <p className="mt-1 text-sm text-slate-600">
-                        {item.subtitle}
-                      </p>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          removeWorkItem(
-                            item.id
-                          )
-                        }
-                        className="mt-4 w-full rounded-xl bg-red-50 px-4 py-3 text-sm font-black text-red-600"
-                      >
-                        작업함에서 삭제
-                      </button>
-                    </div>
-                  </div>
-                )
-              )}
-            </div>
-          </section>
-        )}
-
-        {workItems.length > 0 && (
-          <section className="mt-8 rounded-3xl bg-slate-900 p-6 text-white">
-            <p className="text-sm font-bold text-purple-300">
-              FINAL PDF
-            </p>
-
-            <h2 className="mt-1 text-2xl font-black">
-              고등 써밋네컷 최종 PDF
-            </h2>
-
-            <p className="mt-2 text-sm leading-6 text-slate-300">
-              앞표지 + 작업함 이미지 {workItems.length}장 + 뒷표지
-              순서로 PDF를 만들어.
-            </p>
-
-            <div className="mt-4 rounded-2xl bg-white/10 p-4">
-              <p className="text-sm font-bold text-slate-200">
-                총 {workItems.length + 2}페이지
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={makeFinalPdf}
-              disabled={makingPdf}
-              className="mt-5 w-full rounded-2xl bg-white px-6 py-4 text-lg font-black text-slate-900 disabled:opacity-50"
-            >
-              {makingPdf
-                ? "최종 PDF 만드는 중..."
-                : "앞표지 · 본문 · 뒷표지 PDF 저장"}
-            </button>
-          </section>
-        )}
-
         {result && (
           <section className="mt-10">
             <div className="rounded-3xl bg-slate-900 p-6 text-white">
@@ -1146,67 +1085,7 @@ ${pageText}
               </div>
             </div>
 
-            <div className="mt-8 rounded-3xl bg-purple-50 p-6 ring-1 ring-purple-200">
-              <p className="text-sm font-bold text-purple-600">
-                전체 이미지 생성
-              </p>
 
-              <h3 className="mt-1 text-2xl font-black text-slate-900">
-                확인한 설계안 전체 이미지 생성
-              </h3>
-
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                이미 만들어진 이미지는 건너뛰고,
-                아직 없는 블록만 순서대로 생성해.
-              </p>
-
-              <button
-                type="button"
-                onClick={generateAllImages}
-                disabled={
-                  generatingAll ||
-                  Boolean(generatingId)
-                }
-                className="mt-5 w-full rounded-2xl bg-purple-600 px-6 py-4 text-lg font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {generatingAll
-                  ? "전체 이미지 생성 중..."
-                  : "확인한 설계안 전체 이미지 생성"}
-              </button>
-
-              {batchProgress && (
-                <div className="mt-4 rounded-xl bg-white p-4 text-sm font-bold text-slate-700 ring-1 ring-purple-200">
-                  {batchProgress}
-                </div>
-              )}
-
-              <p className="mt-3 text-center text-xs font-semibold text-slate-500">
-                ⚠️ 생성되는 이미지 수만큼 이미지 API 비용이 발생해.
-              </p>
-            </div>
-
-            <div className="mt-6 rounded-3xl bg-emerald-50 p-6 ring-1 ring-emerald-200">
-              <p className="text-sm font-bold text-emerald-600">
-                작업함
-              </p>
-
-              <h3 className="mt-1 text-2xl font-black text-slate-900">
-                생성된 이미지 전체 작업함에 추가
-              </h3>
-
-              <p className="mt-2 text-sm text-slate-600">
-                현재 생성되어 있는 이미지만 추가하고,
-                이미 작업함에 있는 이미지는 건너뛰어.
-              </p>
-
-              <button
-                type="button"
-                onClick={addAllToWorkbox}
-                className="mt-5 w-full rounded-2xl bg-emerald-600 px-6 py-4 text-lg font-black text-white"
-              >
-                생성된 이미지 전체 작업함에 추가
-              </button>
-            </div>
 
             <div className="mt-8 space-y-10">
               {result.plans.map(
@@ -1506,8 +1385,171 @@ ${pageText}
                 )
               )}
             </div>
+
+            <div className="mt-8 rounded-3xl bg-purple-50 p-6 ring-1 ring-purple-200">
+              <p className="text-sm font-bold text-purple-600">
+                전체 이미지 생성
+              </p>
+
+              <h3 className="mt-1 text-2xl font-black text-slate-900">
+                확인한 설계안 전체 이미지 생성
+              </h3>
+
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                이미 만들어진 이미지는 건너뛰고,
+                아직 없는 블록만 순서대로 생성해.
+              </p>
+
+              <button
+                type="button"
+                onClick={generateAllImages}
+                disabled={
+                  generatingAll ||
+                  Boolean(generatingId)
+                }
+                className="mt-5 w-full rounded-2xl bg-purple-600 px-6 py-4 text-lg font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {generatingAll
+                  ? "전체 이미지 생성 중..."
+                  : "확인한 설계안 전체 이미지 생성"}
+              </button>
+
+              {batchProgress && (
+                <div className="mt-4 rounded-xl bg-white p-4 text-sm font-bold text-slate-700 ring-1 ring-purple-200">
+                  {batchProgress}
+                </div>
+              )}
+
+              <p className="mt-3 text-center text-xs font-semibold text-slate-500">
+                ⚠️ 생성되는 이미지 수만큼 이미지 API 비용이 발생해.
+              </p>
+            </div>
+
+            <div className="mt-6 rounded-3xl bg-emerald-50 p-6 ring-1 ring-emerald-200">
+              <p className="text-sm font-bold text-emerald-600">
+                작업함
+              </p>
+
+              <h3 className="mt-1 text-2xl font-black text-slate-900">
+                생성된 이미지 전체 작업함에 추가
+              </h3>
+
+              <p className="mt-2 text-sm text-slate-600">
+                현재 생성되어 있는 이미지만 추가하고,
+                이미 작업함에 있는 이미지는 건너뛰어.
+              </p>
+
+              <button
+                type="button"
+                onClick={addAllToWorkbox}
+                className="mt-5 w-full rounded-2xl bg-emerald-600 px-6 py-4 text-lg font-black text-white"
+              >
+                생성된 이미지 전체 작업함에 추가
+              </button>
+            </div>
+
           </section>
         )}
+
+        {workItems.length > 0 && (
+          <section className="mt-10 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-bold text-emerald-600">
+                  WORKBOX
+                </p>
+
+                <h2 className="mt-1 text-2xl font-black text-slate-900">
+                  고등 써밋네컷 작업함
+                </h2>
+
+                <p className="mt-2 text-sm text-slate-500">
+                  현재 {workItems.length}장
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-6 md:grid-cols-2">
+              {workItems.map(
+                (item, index) => (
+                  <div
+                    key={item.id}
+                    className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"
+                  >
+                    <img
+                      src={item.image}
+                      alt={item.title}
+                      className="w-full"
+                    />
+
+                    <div className="p-4">
+                      <p className="text-xs font-black text-emerald-600">
+                        PAGE {index + 1}
+                      </p>
+
+                      <p className="mt-1 font-black text-slate-900">
+                        {item.title}
+                      </p>
+
+                      <p className="mt-1 text-sm text-slate-600">
+                        {item.subtitle}
+                      </p>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          removeWorkItem(
+                            item.id
+                          )
+                        }
+                        className="mt-4 w-full rounded-xl bg-red-50 px-4 py-3 text-sm font-black text-red-600"
+                      >
+                        작업함에서 삭제
+                      </button>
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+          </section>
+        )}
+
+
+        {workItems.length > 0 && (
+          <section className="mt-8 rounded-3xl bg-slate-900 p-6 text-white">
+            <p className="text-sm font-bold text-purple-300">
+              FINAL PDF
+            </p>
+
+            <h2 className="mt-1 text-2xl font-black">
+              고등 써밋네컷 최종 PDF
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              앞표지 + 작업함 이미지 {workItems.length}장 + 뒷표지
+              순서로 PDF를 만들어.
+            </p>
+
+            <div className="mt-4 rounded-2xl bg-white/10 p-4">
+              <p className="text-sm font-bold text-slate-200">
+                총 {workItems.length + 2}페이지
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={makeFinalPdf}
+              disabled={makingPdf}
+              className="mt-5 w-full rounded-2xl bg-white px-6 py-4 text-lg font-black text-slate-900 disabled:opacity-50"
+            >
+              {makingPdf
+                ? "최종 PDF 만드는 중..."
+                : "앞표지 · 본문 · 뒷표지 PDF 저장"}
+            </button>
+          </section>
+        )}
+
+
       </div>
     </main>
   );
