@@ -1458,7 +1458,7 @@ export default function Home() {
             <div className="text-center">
 
               <img
-                src="/summit-logo-trimmed.png"
+                src="/summit-edu.png"
                 alt="SUMMIT EDU"
                 className="mx-auto w-[220px] md:w-[260px]"
               />
@@ -1499,6 +1499,12 @@ export default function Home() {
               <div className="absolute bottom-6 right-8 text-4xl opacity-20">
                 ✦
               </div>
+
+              <img
+                src="/summit-bulb.png"
+                alt=""
+                className="absolute right-6 top-6 w-16 opacity-80"
+              />
 
               <div className="inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-black tracking-widest text-emerald-700 shadow-sm">
                 MIDDLE SCHOOL
@@ -1547,6 +1553,12 @@ export default function Home() {
               <div className="absolute bottom-6 right-8 text-4xl opacity-20">
                 ✧
               </div>
+
+              <img
+                src="/summit-bulb.png"
+                alt=""
+                className="absolute right-6 top-6 w-16 opacity-80"
+              />
 
               <div className="inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-black tracking-widest text-amber-700 shadow-sm">
                 HIGH SCHOOL
