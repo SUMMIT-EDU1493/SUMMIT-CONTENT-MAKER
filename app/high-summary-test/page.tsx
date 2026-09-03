@@ -242,22 +242,27 @@ export default function HighSummaryTestPage() {
 
           <div className="mt-6">
 
-            <div className="mb-2 text-sm font-bold">
+            <div className="mb-3 text-sm font-bold">
               PDF 업로드
             </div>
 
-            <input
-              type="file"
-              accept="application/pdf"
-              onChange={(e) => {
-                const file =
-                  e.target.files?.[0];
+            <label className="inline-flex cursor-pointer items-center rounded-2xl bg-emerald-600 px-5 py-3 font-black text-white shadow-sm transition hover:bg-emerald-700">
+              PDF 업로드
 
-                if (file) {
-                  extractPdfText(file);
-                }
-              }}
-            />
+              <input
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const file =
+                    e.target.files?.[0];
+
+                  if (file) {
+                    extractPdfText(file);
+                  }
+                }}
+              />
+            </label>
 
             {loadingPdf && (
               <div className="mt-3 text-sm font-bold text-emerald-600">
