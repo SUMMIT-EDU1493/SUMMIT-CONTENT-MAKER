@@ -1083,7 +1083,16 @@ ${pageText}
 
       const backCoverImage =
         await fetchPdfPageImage(
-          "/api/high-back-cover"
+          "/api/high-back-cover",
+          {
+            referenceImages:
+              workItems
+                .slice(0, 2)
+                .map(
+                  (item) =>
+                    item.image
+                ),
+          }
         );
 
       const pdf = new jsPDF({
