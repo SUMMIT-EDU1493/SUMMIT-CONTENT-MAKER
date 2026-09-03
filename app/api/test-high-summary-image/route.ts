@@ -1,4 +1,7 @@
 import OpenAI from "openai";
+import sharp from "sharp";
+import fs from "fs/promises";
+import path from "path";
 
 export const runtime = "nodejs";
 
@@ -14,27 +17,40 @@ type RequestBody = {
   };
 };
 
+function toDataUri(buffer: Buffer) {
+  return `data:image/png;base64,${buffer.toString("base64")}`;
+}
+
 export async function POST(request: Request) {
   try {
     if (!process.env.OPENAI_API_KEY) {
       return Response.json(
-        { error: "OPENAI_API_KEY가 설정되어 있지 않아." },
+        {
+          error:
+            "OPENAI_API_KEY가 설정되어 있지 않아.",
+        },
         { status: 500 }
       );
     }
 
-    const body = (await request.json()) as RequestBody;
+    const body =
+      (await request.json()) as RequestBody;
+
     const page = body.page;
 
     if (!page) {
       return Response.json(
-        { error: "요약 페이지 계획이 없어." },
+        {
+          error:
+            "요약 페이지 계획이 없어.",
+        },
         { status: 400 }
       );
     }
 
     const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
+      apiKey:
+        process.env.OPENAI_API_KEY,
     });
 
     const prompt = `
@@ -60,12 +76,18 @@ ${page.oneLineSummary || ""}
 
 Key points:
 ${(page.keyPoints || [])
-  .map((v, i) => `${i + 1}. ${v}`)
+  .map(
+    (v, i) =>
+      `${i + 1}. ${v}`
+  )
   .join("\n")}
 
 Key vocabulary:
 ${(page.keyWords || [])
-  .map((v) => `- ${v}`)
+  .map(
+    (v) =>
+      `- ${v}`
+  )
   .join("\n")}
 
 Visual type:
@@ -136,36 +158,111 @@ TEXT RULES
   한국어 뜻(English)
 
 ==================================================
-IMPORTANT
+IMPORTANT LOGO / LAYOUT RULE
 ==================================================
 
-Do NOT draw or invent a SUMMIT logo.
-Leave clean empty space near the upper-left area so the official logo can be composited later.
+The official SUMMIT logo will be added later by software.
 
-Do NOT create a full-page dark background.
+Keep the extreme upper-left corner visually calm enough
+for a small logo overlay.
 
-Do NOT make it look like a presentation slide.
+BUT:
 
-Do NOT make it look like a children's worksheet.
+- DO NOT draw an empty box.
+- DO NOT draw a dotted rectangle.
+- DO NOT draw a photo frame.
+- DO NOT draw a placeholder.
+- DO NOT draw a reserved-logo area.
+- DO NOT label any space "logo".
+- The page must look completely finished even before the logo is added.
+
+==================================================
+DO NOT
+==================================================
+
+- Do NOT draw or invent a SUMMIT logo.
+- Do NOT create meaningless empty frames.
+- Do NOT leave large unexplained blank boxes.
+- Do NOT create a full-page dark background.
+- Do NOT make it look like a presentation slide.
+- Do NOT make it look like a children's worksheet.
 `;
 
-    const imageResponse = await openai.images.generate({
-      model: "gpt-image-2",
-      size: "1536x1024",
-      quality: "medium",
-      n: 1,
-      prompt,
-    });
+    const imageResponse =
+      await openai.images.generate({
+        model: "gpt-image-2",
+        size: "1536x1024",
+        quality: "medium",
+        n: 1,
+        prompt,
+      });
 
     const imageData =
-      imageResponse.data?.[0]?.b64_json;
+      imageResponse.data?.[0]
+        ?.b64_json;
 
     if (!imageData) {
-      throw new Error("요약집 이미지 데이터가 없습니다.");
+      throw new Error(
+        "요약집 이미지 데이터가 없습니다."
+      );
     }
 
+    const generatedImage =
+      Buffer.from(
+        imageData,
+        "base64"
+      );
+
+    // -----------------------------
+    // 공식 SUMMIT 로고 직접 합성
+    // -----------------------------
+
+    const logoPath =
+      path.join(
+        process.cwd(),
+        "public",
+        "summit-logo.png"
+      );
+
+    const logoFile =
+      await fs.readFile(
+        logoPath
+      );
+
+    const logoBuffer =
+      await sharp(logoFile)
+        .trim()
+        .resize({
+          width: 210,
+        })
+        .png()
+        .toBuffer();
+
+    const finalImage =
+      await sharp(
+        generatedImage
+      )
+        .resize({
+          width: 1536,
+          height: 1024,
+          fit: "cover",
+        })
+        .composite([
+          {
+            input:
+              logoBuffer,
+            left: 55,
+            top: 45,
+          },
+        ])
+        .png()
+        .toBuffer();
+
     return Response.json({
-      image: `data:image/png;base64,${imageData}`,
+      image:
+        toDataUri(
+          finalImage
+        ),
     });
   } catch (error: any) {
     console.error(
@@ -175,8 +272,11 @@ Do NOT make it look like a children's worksheet.
 
     return Response.json(
       {
-        error: "고등 요약집 이미지 테스트 중 오류가 생겼어.",
-        detail: error?.message || "알 수 없는 오류",
+        error:
+          "고등 요약집 이미지 테스트 중 오류가 생겼어.",
+        detail:
+          error?.message ||
+          "알 수 없는 오류",
       },
       { status: 500 }
     );
