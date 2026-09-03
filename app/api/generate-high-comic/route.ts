@@ -1,5 +1,8 @@
 import OpenAI from "openai";
 import sharp from "sharp";
+import fs from "fs/promises";
+import path from "path";
+import TextToSVG from "text-to-svg";
 
 export const runtime = "nodejs";
 
@@ -59,7 +62,8 @@ export async function POST(request: Request) {
     if (panels.length !== 4) {
       return Response.json(
         {
-          error: "고등 써밋네컷 설계안은 정확히 4컷이어야 합니다.",
+          error:
+            "고등 써밋네컷 설계안은 정확히 4컷이어야 합니다.",
         },
         { status: 400 }
       );
@@ -71,7 +75,9 @@ export async function POST(request: Request) {
 
     const panelText = panels
       .map((panel, index) => {
-        const dialogueText = Array.isArray(panel.dialogue)
+        const dialogueText = Array.isArray(
+          panel.dialogue
+        )
           ? panel.dialogue
               .map(
                 (line) =>
@@ -100,7 +106,9 @@ ${dialogueText}
       })
       .join("\n");
 
-    const keyWords = Array.isArray(plan.keyWords)
+    const keyWords = Array.isArray(
+      plan.keyWords
+    )
       ? plan.keyWords.join(", ")
       : "";
 
@@ -317,10 +325,6 @@ If the same character appears in multiple panels:
 - keep clothing consistent unless the story clearly changes time/place
 - keep facial identity consistent
 
-If real historical or public figures are described in the plan,
-depict them as recognizable fictionalized educational representations based on the description,
-without adding unrelated people.
-
 Do not randomly change a character's gender, age, hairstyle, or clothing.
 
 ==================================================
@@ -421,25 +425,130 @@ Verify all of the following:
       );
     }
 
-    const imageBuffer = Buffer.from(
+    const comicBuffer = Buffer.from(
       imageData,
       "base64"
     );
 
-    const finalBuffer = await sharp(imageBuffer)
+    const logoPath = path.join(
+      process.cwd(),
+      "public",
+      "summit-logo.png"
+    );
+
+    const fontPath = path.join(
+      process.cwd(),
+      "public",
+      "fonts",
+      "NotoSansKR-Bold.ttf"
+    );
+
+    const [logoBuffer] = await Promise.all([
+      fs.readFile(logoPath),
+      fs.access(fontPath),
+    ]);
+
+    const textToSVG =
+      TextToSVG.loadSync(fontPath);
+
+    const resizedLogo = await sharp(
+      logoBuffer
+    )
+      .trim()
       .resize({
-        width: 1536,
-        height: 1024,
-        fit: "cover",
+        width: 250,
+        withoutEnlargement: true,
       })
       .png()
       .toBuffer();
 
-    const base64 =
-      finalBuffer.toString("base64");
+    const comicMetadata =
+      await sharp(
+        comicBuffer
+      ).metadata();
+
+    const comicWidth =
+      comicMetadata.width || 1536;
+
+    const comicHeight =
+      comicMetadata.height || 1024;
+
+    // 중등과 동일한 최종 합성 규격
+    const sideMargin = 80;
+    const headerHeight = 230;
+    const bottomMargin = 70;
+
+    const finalWidth =
+      comicWidth +
+      sideMargin * 2;
+
+    const finalHeight =
+      headerHeight +
+      comicHeight +
+      bottomMargin;
+
+    // 고등은 한글 부제를 상단 한 줄 요약으로 사용
+    const summaryText =
+      plan.koreanSubtitle?.trim() ||
+      plan.blockSummary?.trim() ||
+      "핵심 내용을 한눈에 정리해보자!";
+
+    const summarySvg =
+      textToSVG.getSVG(
+        summaryText,
+        {
+          x: 0,
+          y: 0,
+          fontSize: 64,
+          anchor: "top",
+          attributes: {
+            fill: "#111827",
+          },
+        }
+      );
+
+    const summarySvgBuffer =
+      Buffer.from(summarySvg);
+
+    const finalImage =
+      await sharp({
+        create: {
+          width: finalWidth,
+          height: finalHeight,
+          channels: 4,
+          background: {
+            r: 255,
+            g: 255,
+            b: 255,
+            alpha: 1,
+          },
+        },
+      })
+        .composite([
+          {
+            input: resizedLogo,
+            left: 65,
+            top: 75,
+          },
+          {
+            input: summarySvgBuffer,
+            left: 350,
+            top: 72,
+          },
+          {
+            input: comicBuffer,
+            left: sideMargin,
+            top: headerHeight,
+          },
+        ])
+        .png()
+        .toBuffer();
+
+    const finalBase64 =
+      finalImage.toString("base64");
 
     return Response.json({
-      image: `data:image/png;base64,${base64}`,
+      image: `data:image/png;base64,${finalBase64}`,
     });
   } catch (error: any) {
     console.error(
@@ -452,7 +561,9 @@ Verify all of the following:
         error:
           "고등 써밋네컷 이미지 생성 중 오류가 발생했습니다.",
         detail:
-          error?.message || "알 수 없는 오류",
+          error?.message ||
+          error?.error?.message ||
+          "알 수 없는 오류",
       },
       { status: 500 }
     );

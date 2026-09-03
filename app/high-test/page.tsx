@@ -518,92 +518,251 @@ ${pageText}
       throw new Error("표지 캔버스를 만들 수 없어.");
     }
 
-    ctx.fillStyle = "#F4F1EA";
+    const white = "#FFFFFF";
+    const black = "#111111";
+
+    ctx.fillStyle = "#F7F5ED";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    ctx.fillStyle = "#111827";
-    ctx.fillRect(120, 250, 1296, 420);
+    const loadImage = (src: string) =>
+      new Promise<HTMLImageElement>(
+        (resolve, reject) => {
+          const image = new Image();
 
-    ctx.fillStyle = "#FFFFFF";
-    ctx.fillRect(165, 295, 240, 330);
-    ctx.fillRect(445, 295, 240, 330);
-    ctx.fillRect(725, 295, 240, 330);
-    ctx.fillRect(1005, 295, 240, 330);
+          image.onload = () =>
+            resolve(image);
 
-    ctx.fillStyle = "#111827";
-    ctx.font = "700 42px sans-serif";
-    ctx.textAlign = "left";
+          image.onerror = () =>
+            reject(
+              new Error(
+                `이미지를 불러오지 못했어: ${src}`
+              )
+            );
+
+          image.src = src;
+        }
+      );
+
+    // --------------------------------
+    // 학교 / 학년
+    // --------------------------------
 
     const schoolLine =
       [schoolName.trim(), gradeName.trim()]
         .filter(Boolean)
-        .join(" · ");
+        .join(" ");
 
-    ctx.fillText(
-      schoolLine || "HIGH SCHOOL",
-      150,
-      120
-    );
-
-    ctx.font = "800 50px sans-serif";
-    ctx.fillText(
-      lessonName || "Lesson",
-      150,
-      185
-    );
-
-    const letters = ["써", "밋", "네", "컷"];
-    const xValues = [285, 565, 845, 1125];
-
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = "900 138px sans-serif";
-
-    letters.forEach((letter, index) => {
-      ctx.fillText(
-        letter,
-        xValues[index],
-        460
-      );
-    });
-
-    ctx.textAlign = "center";
+    ctx.fillStyle = black;
+    ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = "#374151";
-    ctx.font = "700 28px sans-serif";
+
+    ctx.font =
+      '700 36px "Noto Sans KR", "Malgun Gothic", sans-serif';
+
     ctx.fillText(
-      "SUMMIT HIGH SCHOOL FOUR-CUT",
-      768,
-      760
+      schoolLine || "고등부",
+      150,
+      150
     );
 
-    const logo = new Image();
-    logo.src = "/summit-logo.png";
+    // --------------------------------
+    // Lesson + 써밋네컷
+    // --------------------------------
 
-    await new Promise<void>(
-      (resolve, reject) => {
-        logo.onload = () => resolve();
-        logo.onerror = () =>
-          reject(
-            new Error(
-              "SUMMIT 로고를 불러오지 못했어."
-            )
-          );
+    ctx.font =
+      '800 42px "Noto Sans KR", "Malgun Gothic", sans-serif';
+
+    const lessonText =
+      `${lessonName.trim() || "Lesson"} · 써밋네컷`;
+
+    ctx.fillText(
+      lessonText,
+      150,
+      215
+    );
+
+    // --------------------------------
+    // 필름
+    // --------------------------------
+
+    const filmX = 150;
+    const filmY = 330;
+    const filmWidth = 1236;
+    const filmHeight = 390;
+
+    ctx.fillStyle = black;
+
+    ctx.fillRect(
+      filmX,
+      filmY,
+      filmWidth,
+      filmHeight
+    );
+
+    // 필름 위/아래 구멍
+    const holeWidth = 28;
+    const holeHeight = 24;
+    const holeGap = 22;
+
+    for (
+      let x = filmX + 22;
+      x <
+      filmX +
+        filmWidth -
+        holeWidth -
+        10;
+      x += holeWidth + holeGap
+    ) {
+      ctx.fillStyle = white;
+
+      ctx.fillRect(
+        x,
+        filmY + 15,
+        holeWidth,
+        holeHeight
+      );
+
+      ctx.fillRect(
+        x,
+        filmY +
+          filmHeight -
+          holeHeight -
+          15,
+        holeWidth,
+        holeHeight
+      );
+    }
+
+    const letters = [
+      "써",
+      "밋",
+      "네",
+      "컷",
+    ];
+
+    const innerMarginX = 34;
+    const frameGap = 14;
+
+    const frameTop =
+      filmY + 60;
+
+    const frameHeight =
+      filmHeight - 120;
+
+    const totalInnerWidth =
+      filmWidth -
+      innerMarginX * 2;
+
+    const frameWidth =
+      (totalInnerWidth -
+        frameGap * 3) /
+      4;
+
+    letters.forEach(
+      (letter, index) => {
+        const x =
+          filmX +
+          innerMarginX +
+          index *
+            (frameWidth +
+              frameGap);
+
+        ctx.fillStyle = white;
+
+        ctx.fillRect(
+          x,
+          frameTop,
+          frameWidth,
+          frameHeight
+        );
+
+        ctx.fillStyle = black;
+        ctx.strokeStyle = black;
+        ctx.lineWidth = 2;
+
+        ctx.font =
+          '900 138px "Noto Sans KR", "Malgun Gothic", sans-serif';
+
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        const centerX =
+          x + frameWidth / 2;
+
+        const centerY =
+          frameTop +
+          frameHeight / 2 +
+          3;
+
+        ctx.strokeText(
+          letter,
+          centerX,
+          centerY
+        );
+
+        ctx.fillText(
+          letter,
+          centerX,
+          centerY
+        );
       }
     );
 
-    const logoWidth = 430;
-    const logoHeight =
-      (logo.height / logo.width) *
-      logoWidth;
+    // --------------------------------
+    // 공식 SUMMIT 로고
+    // 중등과 같은 방식 + 안전 영역
+    // --------------------------------
 
-    ctx.drawImage(
-      logo,
-      (1536 - logoWidth) / 2,
-      820,
-      logoWidth,
-      logoHeight
-    );
+    try {
+      const logo =
+        await loadImage(
+          "/summit-logo.png"
+        );
+
+      const maxLogoWidth = 430;
+      const maxLogoHeight = 125;
+
+      const ratio = Math.min(
+        maxLogoWidth /
+          logo.naturalWidth,
+        maxLogoHeight /
+          logo.naturalHeight
+      );
+
+      const logoWidth =
+        logo.naturalWidth *
+        ratio;
+
+      const logoHeight =
+        logo.naturalHeight *
+        ratio;
+
+      ctx.drawImage(
+        logo,
+        canvas.width / 2 -
+          logoWidth / 2,
+        815,
+        logoWidth,
+        logoHeight
+      );
+    } catch (error) {
+      console.error(
+        "HIGH COVER LOGO ERROR:",
+        error
+      );
+
+      ctx.fillStyle = black;
+      ctx.textAlign = "center";
+
+      ctx.font =
+        '800 36px "Noto Sans KR", "Malgun Gothic", sans-serif';
+
+      ctx.fillText(
+        "SUMMIT EDU",
+        canvas.width / 2,
+        880
+      );
+    }
 
     return canvas.toDataURL(
       "image/png",
@@ -755,9 +914,7 @@ ${pageText}
       setMakingPdf(true);
 
       const coverImage =
-        await fetchPdfPageImage(
-          "/api/high-cover"
-        );
+        await createHighCoverImage();
 
       const backCoverImage =
         await fetchPdfPageImage(
