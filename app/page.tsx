@@ -1439,21 +1439,13 @@ export default function Home() {
           <div className="relative overflow-hidden rounded-[32px] border border-slate-200 bg-white px-6 py-10 shadow-sm md:px-10 md:py-12">
 
             {/* 두들 장식 */}
-            <div className="pointer-events-none absolute left-8 top-8 text-3xl">
-              ✦
-            </div>
+            
 
-            <div className="pointer-events-none absolute right-10 top-10 rotate-12 text-4xl">
-              ✎
-            </div>
+            
 
-            <div className="pointer-events-none absolute bottom-8 left-14 -rotate-12 text-3xl">
-              ✧
-            </div>
+            
 
-            <div className="pointer-events-none absolute bottom-8 right-14 text-4xl">
-              ⌁
-            </div>
+            
 
             <div className="text-center">
 
@@ -1463,17 +1455,14 @@ export default function Home() {
                 className="mx-auto w-[220px] md:w-[260px]"
               />
 
-              <p className="mt-6 text-sm font-black tracking-[0.2em] text-emerald-600">
-                SUMMIT EDU
-              </p>
+              
 
               <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-900 md:text-6xl">
                 SUMMIT CONTENT MAKER
               </h1>
 
-              <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-slate-600 md:text-lg">
-                교재 PDF를 올리면,
-                수업용 콘텐츠를 써밋 스타일로 만들어줘.
+              <p className="mx-auto mt-5 max-w-2xl text-base font-medium leading-7 text-slate-600 md:text-lg">
+                교과서와 부교재를 최적화된 VISUAL 학습자료로
               </p>
 
             </div>
@@ -1503,7 +1492,7 @@ export default function Home() {
               <img
                 src="/summit-bulb.png"
                 alt=""
-                className="absolute right-6 top-6 w-16 opacity-80"
+                className="absolute right-7 top-5 w-28 opacity-90"
               />
 
               <div className="inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-black tracking-widest text-emerald-700 shadow-sm">
@@ -1523,9 +1512,7 @@ export default function Home() {
                   써밋네컷
                 </span>
 
-                <span className="rounded-full bg-white px-3 py-2 text-sm font-bold text-slate-700">
-                  학습자료
-                </span>
+                
               </div>
 
               <div className="mt-8 text-sm font-black text-emerald-700">
@@ -1557,7 +1544,7 @@ export default function Home() {
               <img
                 src="/summit-bulb.png"
                 alt=""
-                className="absolute right-6 top-6 w-16 opacity-80"
+                className="absolute right-7 top-5 w-28 opacity-90"
               />
 
               <div className="inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-black tracking-widest text-amber-700 shadow-sm">
