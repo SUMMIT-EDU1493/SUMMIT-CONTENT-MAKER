@@ -9,6 +9,7 @@ type RequestBody = {
   schoolName?: string;
   gradeName?: string;
   lessonName?: string;
+  characterHints?: string[];
 };
 
 function toDataUri(buffer: Buffer) {
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
       );
     }
 
-    await request.json().catch(() => ({} as RequestBody));
+    const body = (await request.json()) as RequestBody;
 
     const openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
@@ -40,6 +41,38 @@ export async function POST(request: Request) {
     const pickedMessage =
       messages[Math.floor(Math.random() * messages.length)];
 
+    const characterHints = Array.isArray(body.characterHints)
+      ? body.characterHints
+          .map((v) => v.trim())
+          .filter(Boolean)
+      : [];
+
+    const uniqueCharacterHints = [...new Set(characterHints)].slice(0, 10);
+
+    const characterPrompt =
+      uniqueCharacterHints.length > 0
+        ? `
+IMPORTANT CHARACTER REUSE:
+Use the SAME main characters that appeared in the comic pages.
+Do NOT replace them with random generic students.
+
+Here are the character hints collected from the comic pages:
+${uniqueCharacterHints.map((v, i) => `${i + 1}. ${v}`).join("\n")}
+
+Rules:
+- show only 3 to 5 representative recurring characters
+- do not overcrowd the page
+- do not create duplicated clone-like people
+- if there are both boys and girls in the hints, reflect that
+- keep them looking like Korean high-school students
+- make them feel like the cast of the comic pages
+`
+        : `
+If specific character information is limited,
+show 3 to 5 Korean high-school students with clear visual variety,
+but avoid a generic crowd.
+`;
+
     const prompt = `
 Create a polished final back-cover page for a Korean educational comic PDF.
 
@@ -48,24 +81,26 @@ IMPORTANT:
 - print-friendly
 - clean and bright
 - no black full-page background
-- no dark poster mood
 - same overall series feeling as the front cover
 - suitable for printing and handout distribution
 
+${characterPrompt}
+
 SCENE:
 - warm final-page illustration
-- several Korean high-school students together
-- cheerful, supportive, encouraging mood
+- supportive and encouraging mood
 - high-school age appearance
-- not childish
 - refined and slightly lively
-- students can be smiling, cheering, or holding a simple supportive pose
-- clean composition with enough empty space for the main encouragement line
-- do not overcrowd with too many duplicated people
+- characters can smile, cheer, gesture supportively, or hold a simple banner
+- clean composition with enough empty space for the encouragement line
+- not too many people
 - avoid clone-like repeated faces
+- the characters should feel like they have just appeared throughout the comic pages
 
 TEXT:
-Show one short encouraging Korean phrase naturally in the artwork:
+Show one short encouraging Korean phrase naturally inside the image,
+for example on a banner, speech bubble, or sign:
+
 "${pickedMessage}"
 
 STYLE:
@@ -104,6 +139,7 @@ DO NOT:
     const logoFile = await fs.readFile(logoPath);
 
     const logoBuffer = await sharp(logoFile)
+      .trim()
       .resize({ width: 260 })
       .png()
       .toBuffer();
