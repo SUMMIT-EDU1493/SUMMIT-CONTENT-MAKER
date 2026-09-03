@@ -54,6 +54,12 @@ export default function HighSummaryTestPage() {
   const [makingPlan, setMakingPlan] =
     useState(false);
 
+  const [testImage, setTestImage] =
+    useState("");
+
+  const [makingTestImage, setMakingTestImage] =
+    useState(false);
+
   const extractPdfText = async (
     file: File
   ) => {
@@ -99,6 +105,7 @@ export default function HighSummaryTestPage() {
       );
 
       setResult(null);
+      setTestImage("");
     } catch (error) {
       console.error(
         "PDF EXTRACTION ERROR:",
@@ -122,6 +129,7 @@ export default function HighSummaryTestPage() {
     }
 
     setMakingPlan(true);
+    setTestImage("");
 
     try {
       const response =
@@ -168,6 +176,60 @@ export default function HighSummaryTestPage() {
     }
   };
 
+  const makeTestImage = async (
+    page: SummaryPage
+  ) => {
+    setMakingTestImage(true);
+    setTestImage("");
+
+    try {
+      const response =
+        await fetch(
+          "/api/test-high-summary-image",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify({
+              page,
+            }),
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            "테스트 이미지 생성 실패"
+        );
+      }
+
+      if (!data?.image) {
+        throw new Error(
+          "생성된 이미지가 없어."
+        );
+      }
+
+      setTestImage(data.image);
+    } catch (error: any) {
+      console.error(
+        "SUMMARY TEST IMAGE ERROR:",
+        error
+      );
+
+      alert(
+        error?.message ||
+          "요약집 테스트 이미지 생성 중 오류가 생겼어."
+      );
+    } finally {
+      setMakingTestImage(false);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-[#f5f4ef] px-6 py-10">
       <div className="mx-auto max-w-6xl">
@@ -182,7 +244,7 @@ export default function HighSummaryTestPage() {
           </h1>
 
           <p className="mt-2 text-sm text-gray-500">
-            PDF → 본문 추출 → 요약집 계획 확인
+            PDF → 본문 추출 → 요약집 계획 → 이미지 1장 테스트
           </p>
         </div>
 
@@ -298,7 +360,7 @@ export default function HighSummaryTestPage() {
               makingPlan ||
               !sourceText.trim()
             }
-            className="mt-6 w-full rounded-2xl bg-black px-6 py-4 font-black text-white disabled:opacity-40"
+            className="mt-6 w-full rounded-2xl bg-black px-6 py-4 font-black text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {makingPlan
               ? "요약집 계획 만드는 중..."
@@ -325,8 +387,7 @@ export default function HighSummaryTestPage() {
               </p>
 
               <div className="mt-3 text-sm font-bold text-gray-500">
-                예상 본문 페이지:
-                {" "}
+                예상 본문 페이지:{" "}
                 {result.pages.length}장
               </div>
 
@@ -389,9 +450,7 @@ export default function HighSummaryTestPage() {
                               pointIndex
                             ) => (
                               <li
-                                key={
-                                  pointIndex
-                                }
+                                key={pointIndex}
                                 className="rounded-xl bg-gray-50 px-4 py-3 text-sm"
                               >
                                 • {point}
@@ -413,9 +472,7 @@ export default function HighSummaryTestPage() {
                               wordIndex
                             ) => (
                               <span
-                                key={
-                                  wordIndex
-                                }
+                                key={wordIndex}
                                 className="rounded-full bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800"
                               >
                                 {word}
@@ -440,10 +497,37 @@ export default function HighSummaryTestPage() {
                     </div>
 
                     <div className="mt-4 text-xs text-gray-400">
-                      원문 범위:
-                      {" "}
+                      원문 범위:{" "}
                       {page.sourceRange}
                     </div>
+
+                    {index === 0 && (
+                      <div className="mt-6 border-t pt-6">
+
+                        <button
+                          onClick={() =>
+                            makeTestImage(page)
+                          }
+                          disabled={makingTestImage}
+                          className="w-full rounded-2xl bg-emerald-600 px-5 py-4 font-black text-white transition hover:bg-emerald-700 disabled:opacity-40"
+                        >
+                          {makingTestImage
+                            ? "테스트 이미지 만드는 중..."
+                            : "첫 페이지 테스트 이미지 만들기"}
+                        </button>
+
+                        {testImage && (
+                          <div className="mt-6 overflow-hidden rounded-3xl border bg-[#f5f4ef] p-3">
+                            <img
+                              src={testImage}
+                              alt="고등 요약집 테스트 이미지"
+                              className="w-full rounded-2xl"
+                            />
+                          </div>
+                        )}
+
+                      </div>
+                    )}
 
                   </article>
                 )
