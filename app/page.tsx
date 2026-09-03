@@ -66,7 +66,7 @@ export default function Home() {
   const [loadingComic, setLoadingComic] = useState(false);
   const [loadingAllComics, setLoadingAllComics] = useState(false);
   const [loadingAllImages, setLoadingAllImages] = useState(false);
-  const [loadingCheerPage, setLoadingCheerPage] = useState(false);
+  const [loadingBackCover, setLoadingBackCover] = useState(false);
 
   const [imageProgress, setImageProgress] = useState("");
   const [makingPdf, setMakingPdf] = useState(false);
@@ -77,8 +77,8 @@ export default function Home() {
   const [comicProjects, setComicProjects] = useState<ComicProject[]>([]);
   const [workItems, setWorkItems] = useState<WorkItem[]>([]);
 
-  const [cheerPageImage, setCheerPageImage] = useState("");
-  const [cheerText, setCheerText] = useState("");
+  const [backCoverImage, setBackCoverImage] = useState("");
+  const [backCoverText, setBackCoverText] = useState("");
 
   const makeId = () =>
     `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -90,8 +90,8 @@ export default function Home() {
       setPdfText("");
       setAnalysis(null);
       setComicProjects([]);
-      setCheerPageImage("");
-      setCheerText("");
+      setBackCoverImage("");
+      setBackCoverText("");
 
       const arrayBuffer = await file.arrayBuffer();
 
@@ -100,9 +100,14 @@ export default function Home() {
       });
 
       const pdf = await loadingTask.promise;
+
       let fullText = "";
 
-      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+      for (
+        let pageNumber = 1;
+        pageNumber <= pdf.numPages;
+        pageNumber++
+      ) {
         const page = await pdf.getPage(pageNumber);
         const content = await page.getTextContent();
 
@@ -143,8 +148,8 @@ export default function Home() {
       setErrorMessage("");
       setAnalysis(null);
       setComicProjects([]);
-      setCheerPageImage("");
-      setCheerText("");
+      setBackCoverImage("");
+      setBackCoverText("");
 
       const response = await fetch("/api/analyze", {
         method: "POST",
@@ -160,13 +165,18 @@ export default function Home() {
 
       if (!response.ok) {
         throw new Error(
-          data?.detail || data?.error || "교재 분석에 실패했습니다."
+          data?.detail ||
+            data?.error ||
+            "교재 분석에 실패했습니다."
         );
       }
 
       setAnalysis(data);
     } catch (error: any) {
-      setErrorMessage(error?.message || "교재 분석 중 오류가 발생했어.");
+      setErrorMessage(
+        error?.message ||
+          "교재 분석 중 오류가 발생했어."
+      );
     } finally {
       setLoadingAi(false);
     }
@@ -194,7 +204,10 @@ export default function Home() {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ title, content }),
+      body: JSON.stringify({
+        title,
+        content,
+      }),
     });
 
     const data = await response.json();
@@ -210,13 +223,19 @@ export default function Home() {
     return data;
   };
 
-  const makeComicPlan = async (title: string, content: string) => {
+  const makeComicPlan = async (
+    title: string,
+    content: string
+  ) => {
     try {
       setLoadingComic(true);
       setCurrentCreatingTitle(title);
       setErrorMessage("");
 
-      const plan = await requestComicPlan(title, content);
+      const plan = await requestComicPlan(
+        title,
+        content
+      );
 
       const newProject: ComicProject = {
         id: makeId(),
@@ -227,17 +246,23 @@ export default function Home() {
         loadingImage: false,
       };
 
-      setComicProjects((prev) => [...prev, newProject]);
+      setComicProjects((prev) => [
+        ...prev,
+        newProject,
+      ]);
 
       setTimeout(() => {
-        document.getElementById("comic-projects")?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
+        document
+          .getElementById("comic-projects")
+          ?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
       }, 100);
     } catch (error: any) {
       setErrorMessage(
-        error?.message || "써밋네컷 설계안 생성 중 오류가 발생했어."
+        error?.message ||
+          "써밋네컷 설계안 생성 중 오류가 발생했어."
       );
     } finally {
       setLoadingComic(false);
@@ -246,7 +271,8 @@ export default function Home() {
   };
 
   const makeAllComicPlans = async () => {
-    const dialogues = analysis?.dialogues || [];
+    const dialogues =
+      analysis?.dialogues || [];
 
     if (dialogues.length === 0) {
       alert("남아 있는 대화문이 없어.");
@@ -257,10 +283,16 @@ export default function Home() {
       setLoadingAllComics(true);
       setErrorMessage("");
       setComicProjects([]);
+      setBackCoverImage("");
+      setBackCoverText("");
 
       const newProjects: ComicProject[] = [];
 
-      for (let index = 0; index < dialogues.length; index++) {
+      for (
+        let index = 0;
+        index < dialogues.length;
+        index++
+      ) {
         const dialogue = dialogues[index];
 
         setCurrentCreatingTitle(
@@ -285,14 +317,17 @@ export default function Home() {
       }
 
       setTimeout(() => {
-        document.getElementById("comic-projects")?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
+        document
+          .getElementById("comic-projects")
+          ?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
       }, 100);
     } catch (error: any) {
       setErrorMessage(
-        error?.message || "전체 설계안 생성 중 오류가 발생했어."
+        error?.message ||
+          "전체 설계안 생성 중 오류가 발생했어."
       );
     } finally {
       setLoadingAllComics(false);
@@ -300,7 +335,10 @@ export default function Home() {
     }
   };
 
-  const updateSummary = (projectId: string, value: string) => {
+  const updateSummary = (
+    projectId: string,
+    value: string
+  ) => {
     setComicProjects((prev) =>
       prev.map((project) =>
         project.id === projectId
@@ -323,9 +361,13 @@ export default function Home() {
   ) => {
     setComicProjects((prev) =>
       prev.map((project) => {
-        if (project.id !== projectId) return project;
+        if (project.id !== projectId) {
+          return project;
+        }
 
-        const newPanels = [...project.plan.panels];
+        const newPanels = [
+          ...project.plan.panels,
+        ];
 
         newPanels[panelIndex] = {
           ...newPanels[panelIndex],
@@ -351,10 +393,17 @@ export default function Home() {
   ) => {
     setComicProjects((prev) =>
       prev.map((project) => {
-        if (project.id !== projectId) return project;
+        if (project.id !== projectId) {
+          return project;
+        }
 
-        const newPanels = [...project.plan.panels];
-        const newDialogue = [...newPanels[panelIndex].dialogue];
+        const newPanels = [
+          ...project.plan.panels,
+        ];
+
+        const newDialogue = [
+          ...newPanels[panelIndex].dialogue,
+        ];
 
         newDialogue[dialogueIndex] = {
           ...newDialogue[dialogueIndex],
@@ -385,10 +434,17 @@ export default function Home() {
   ) => {
     setComicProjects((prev) =>
       prev.map((project) => {
-        if (project.id !== projectId) return project;
+        if (project.id !== projectId) {
+          return project;
+        }
 
-        const newPanels = [...project.plan.panels];
-        const newDialogue = [...newPanels[panelIndex].dialogue];
+        const newPanels = [
+          ...project.plan.panels,
+        ];
+
+        const newDialogue = [
+          ...newPanels[panelIndex].dialogue,
+        ];
 
         newDialogue[dialogueIndex] = {
           ...newDialogue[dialogueIndex],
@@ -417,14 +473,19 @@ export default function Home() {
   ) => {
     setComicProjects((prev) =>
       prev.map((project) => {
-        if (project.id !== projectId) return project;
+        if (project.id !== projectId) {
+          return project;
+        }
 
-        const newPanels = [...project.plan.panels];
+        const newPanels = [
+          ...project.plan.panels,
+        ];
 
         newPanels[panelIndex] = {
           ...newPanels[panelIndex],
           dialogue: [
-            ...newPanels[panelIndex].dialogue,
+            ...newPanels[panelIndex]
+              .dialogue,
             {
               speaker: "",
               text: "",
@@ -450,15 +511,23 @@ export default function Home() {
   ) => {
     setComicProjects((prev) =>
       prev.map((project) => {
-        if (project.id !== projectId) return project;
+        if (project.id !== projectId) {
+          return project;
+        }
 
-        const newPanels = [...project.plan.panels];
+        const newPanels = [
+          ...project.plan.panels,
+        ];
 
         newPanels[panelIndex] = {
           ...newPanels[panelIndex],
-          dialogue: newPanels[panelIndex].dialogue.filter(
-            (_, index) => index !== dialogueIndex
-          ),
+          dialogue:
+            newPanels[
+              panelIndex
+            ].dialogue.filter(
+              (_, index) =>
+                index !== dialogueIndex
+            ),
         };
 
         return {
@@ -472,22 +541,34 @@ export default function Home() {
     );
   };
 
-  const removeComicProject = (projectId: string) => {
+  const removeComicProject = (
+    projectId: string
+  ) => {
     setComicProjects((prev) =>
-      prev.filter((project) => project.id !== projectId)
+      prev.filter(
+        (project) =>
+          project.id !== projectId
+      )
     );
+
+    setBackCoverImage("");
+    setBackCoverText("");
   };
 
   const requestComicImage = async (
     plan: ComicPlan
   ): Promise<string> => {
-    const response = await fetch("/api/generate-comic", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(plan),
-    });
+    const response = await fetch(
+      "/api/generate-comic",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+        body: JSON.stringify(plan),
+      }
+    );
 
     const data = await response.json();
 
@@ -500,7 +581,9 @@ export default function Home() {
     }
 
     if (!data.image) {
-      throw new Error("생성된 이미지가 없습니다.");
+      throw new Error(
+        "생성된 이미지가 없습니다."
+      );
     }
 
     return data.image;
@@ -530,7 +613,10 @@ export default function Home() {
         )
       );
 
-      const image = await requestComicImage(project.plan);
+      const image =
+        await requestComicImage(
+          project.plan
+        );
 
       setComicProjects((prev) =>
         prev.map((item) =>
@@ -556,102 +642,135 @@ export default function Home() {
       );
 
       setErrorMessage(
-        error?.message || "만화 이미지 생성 중 오류가 발생했어."
+        error?.message ||
+          "만화 이미지 생성 중 오류가 발생했어."
       );
     }
   };
 
-  const generateAllComicImages = async () => {
-    const targets = comicProjects.filter(
-      (project) => !project.image
-    );
-
-    if (comicProjects.length === 0) {
-      alert("먼저 설계안을 만들어줘.");
-      return;
-    }
-
-    if (targets.length === 0) {
-      alert("모든 설계안의 이미지가 이미 만들어져 있어.");
-      return;
-    }
-
-    try {
-      setLoadingAllImages(true);
-      setErrorMessage("");
-
-      for (let index = 0; index < targets.length; index++) {
-        const project = targets[index];
-
-        const originalIndex = comicProjects.findIndex(
-          (item) => item.id === project.id
+  const generateAllComicImages =
+    async () => {
+      const targets =
+        comicProjects.filter(
+          (project) => !project.image
         );
 
-        setImageProgress(
-          `${index + 1}/${targets.length} · 설계안 ${
-            originalIndex + 1
-          } · ${project.sourceTitle}`
+      if (
+        comicProjects.length === 0
+      ) {
+        alert(
+          "먼저 설계안을 만들어줘."
         );
-
-        setComicProjects((prev) =>
-          prev.map((item) =>
-            item.id === project.id
-              ? {
-                  ...item,
-                  loadingImage: true,
-                }
-              : item
-          )
-        );
-
-        const image = await requestComicImage(project.plan);
-
-        setComicProjects((prev) =>
-          prev.map((item) =>
-            item.id === project.id
-              ? {
-                  ...item,
-                  loadingImage: false,
-                  image,
-                }
-              : item
-          )
-        );
+        return;
       }
 
-      setImageProgress("전체 이미지 생성 완료!");
-    } catch (error: any) {
-      setErrorMessage(
-        error?.message || "전체 이미지 생성 중 오류가 발생했어."
+      if (targets.length === 0) {
+        alert(
+          "모든 설계안의 이미지가 이미 만들어져 있어."
+        );
+        return;
+      }
+
+      try {
+        setLoadingAllImages(true);
+        setErrorMessage("");
+
+        for (
+          let index = 0;
+          index < targets.length;
+          index++
+        ) {
+          const project =
+            targets[index];
+
+          const originalIndex =
+            comicProjects.findIndex(
+              (item) =>
+                item.id === project.id
+            );
+
+          setImageProgress(
+            `${index + 1}/${targets.length} · 설계안 ${
+              originalIndex + 1
+            } · ${project.sourceTitle}`
+          );
+
+          setComicProjects((prev) =>
+            prev.map((item) =>
+              item.id === project.id
+                ? {
+                    ...item,
+                    loadingImage: true,
+                  }
+                : item
+            )
+          );
+
+          const image =
+            await requestComicImage(
+              project.plan
+            );
+
+          setComicProjects((prev) =>
+            prev.map((item) =>
+              item.id === project.id
+                ? {
+                    ...item,
+                    loadingImage: false,
+                    image,
+                  }
+                : item
+            )
+          );
+        }
+
+        setImageProgress(
+          "전체 이미지 생성 완료!"
+        );
+      } catch (error: any) {
+        setErrorMessage(
+          error?.message ||
+            "전체 이미지 생성 중 오류가 발생했어."
+        );
+      } finally {
+        setLoadingAllImages(false);
+
+        setTimeout(() => {
+          setImageProgress("");
+        }, 2000);
+      }
+    };
+
+  const generateBackCover = async () => {
+    if (
+      comicProjects.length === 0
+    ) {
+      alert(
+        "먼저 써밋네컷 설계안을 만들어줘."
       );
-    } finally {
-      setLoadingAllImages(false);
-
-      setTimeout(() => {
-        setImageProgress("");
-      }, 2000);
-    }
-  };
-
-  const generateCheerPage = async () => {
-    if (comicProjects.length === 0) {
-      alert("먼저 써밋네컷 설계안을 만들어줘.");
       return;
     }
 
     try {
-      setLoadingCheerPage(true);
+      setLoadingBackCover(true);
       setErrorMessage("");
 
-      const response = await fetch("/api/generate-cheer-page", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          plans: comicProjects.map((project) => project.plan),
-        }),
-      });
+      const response = await fetch(
+        "/api/generate-cheer-page",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            plans: comicProjects.map(
+              (project) =>
+                project.plan
+            ),
+          }),
+        }
+      );
 
       const data = await response.json();
 
@@ -659,40 +778,56 @@ export default function Home() {
         throw new Error(
           data?.detail ||
             data?.error ||
-            "마지막 응원장 생성에 실패했습니다."
+            "뒷표지 생성에 실패했습니다."
         );
       }
 
       if (!data.image) {
-        throw new Error("응원장 이미지가 없습니다.");
+        throw new Error(
+          "뒷표지 이미지가 없습니다."
+        );
       }
 
-      setCheerPageImage(data.image);
-      setCheerText(data.cheerText || "");
+      setBackCoverImage(data.image);
+      setBackCoverText(
+        data.cheerText || ""
+      );
     } catch (error: any) {
       setErrorMessage(
-        error?.message || "마지막 응원장 생성 중 오류가 발생했어."
+        error?.message ||
+          "뒷표지 생성 중 오류가 발생했어."
       );
     } finally {
-      setLoadingCheerPage(false);
+      setLoadingBackCover(false);
     }
   };
 
-  const addToWorkBox = (projectId: string) => {
+  const addToWorkBox = (
+    projectId: string
+  ) => {
     const project = comicProjects.find(
       (item) => item.id === projectId
     );
 
-    if (!project || !project.image) return;
+    if (
+      !project ||
+      !project.image
+    ) {
+      return;
+    }
 
-    const alreadyAdded = workItems.some(
-      (item) =>
-        item.title === project.sourceTitle &&
-        item.image === project.image
-    );
+    const alreadyAdded =
+      workItems.some(
+        (item) =>
+          item.title ===
+            project.sourceTitle &&
+          item.image === project.image
+      );
 
     if (alreadyAdded) {
-      alert("이 이미지는 이미 한 과 작업함에 들어가 있어.");
+      alert(
+        "이 이미지는 이미 한 과 작업함에 들어가 있어."
+      );
       return;
     }
 
@@ -700,48 +835,75 @@ export default function Home() {
       ...prev,
       {
         id: makeId(),
-        title: project.sourceTitle,
-        summary: project.plan.summary,
+        title:
+          project.sourceTitle,
+        summary:
+          project.plan.summary,
         image: project.image,
       },
     ]);
   };
 
-  const addAllImagesToWorkBox = () => {
-    const imageProjects = comicProjects.filter(
-      (project) => Boolean(project.image)
-    );
+  const addAllImagesToWorkBox =
+    () => {
+      const imageProjects =
+        comicProjects.filter(
+          (project) =>
+            Boolean(project.image)
+        );
 
-    const newItems = imageProjects
-      .filter(
-        (project) =>
-          !workItems.some(
-            (item) =>
-              item.title === project.sourceTitle &&
-              item.image === project.image
+      const newItems =
+        imageProjects
+          .filter(
+            (project) =>
+              !workItems.some(
+                (item) =>
+                  item.title ===
+                    project.sourceTitle &&
+                  item.image ===
+                    project.image
+              )
           )
-      )
-      .map(
-        (project): WorkItem => ({
-          id: makeId(),
-          title: project.sourceTitle,
-          summary: project.plan.summary,
-          image: project.image,
-        })
+          .map(
+            (
+              project
+            ): WorkItem => ({
+              id: makeId(),
+              title:
+                project.sourceTitle,
+              summary:
+                project.plan.summary,
+              image:
+                project.image,
+            })
+          );
+
+      if (
+        newItems.length === 0
+      ) {
+        alert(
+          "새로 작업함에 넣을 이미지가 없어."
+        );
+        return;
+      }
+
+      setWorkItems((prev) => [
+        ...prev,
+        ...newItems,
+      ]);
+
+      alert(
+        `${newItems.length}장을 작업함에 추가했어.`
       );
+    };
 
-    if (newItems.length === 0) {
-      alert("새로 작업함에 넣을 이미지가 없어.");
-      return;
-    }
-
-    setWorkItems((prev) => [...prev, ...newItems]);
-    alert(`${newItems.length}장을 작업함에 추가했어.`);
-  };
-
-  const removeWorkItem = (id: string) => {
+  const removeWorkItem = (
+    id: string
+  ) => {
     setWorkItems((prev) =>
-      prev.filter((item) => item.id !== id)
+      prev.filter(
+        (item) => item.id !== id
+      )
     );
   };
 
@@ -749,21 +911,31 @@ export default function Home() {
     index: number,
     direction: "up" | "down"
   ) => {
-    const newItems = [...workItems];
+    const newItems = [
+      ...workItems,
+    ];
 
     const targetIndex =
-      direction === "up" ? index - 1 : index + 1;
+      direction === "up"
+        ? index - 1
+        : index + 1;
 
     if (
       targetIndex < 0 ||
-      targetIndex >= newItems.length
+      targetIndex >=
+        newItems.length
     ) {
       return;
     }
 
-    const temp = newItems[index];
-    newItems[index] = newItems[targetIndex];
-    newItems[targetIndex] = temp;
+    const temp =
+      newItems[index];
+
+    newItems[index] =
+      newItems[targetIndex];
+
+    newItems[targetIndex] =
+      temp;
 
     setWorkItems(newItems);
   };
@@ -771,257 +943,306 @@ export default function Home() {
   const loadImage = (
     src: string
   ): Promise<HTMLImageElement> => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
+    return new Promise(
+      (resolve, reject) => {
+        const img = new Image();
 
-      img.onload = () => resolve(img);
-      img.onerror = () =>
-        reject(
-          new Error("이미지를 불러오지 못했습니다.")
+        img.onload = () =>
+          resolve(img);
+
+        img.onerror = () =>
+          reject(
+            new Error(
+              "이미지를 불러오지 못했습니다."
+            )
+          );
+
+        img.src = src;
+      }
+    );
+  };
+
+  const createCoverImage =
+    async (): Promise<string> => {
+      if (document.fonts?.ready) {
+        await document.fonts.ready;
+      }
+
+      const canvas =
+        document.createElement(
+          "canvas"
         );
 
-      img.src = src;
-    });
-  };
+      canvas.width = 1600;
+      canvas.height = 1131;
 
-  const createCoverImage = async (): Promise<string> => {
-    if (document.fonts?.ready) {
-      await document.fonts.ready;
-    }
+      const ctx =
+        canvas.getContext("2d");
 
-    const canvas = document.createElement("canvas");
-    canvas.width = 1600;
-    canvas.height = 1131;
+      if (!ctx) {
+        throw new Error(
+          "표지 캔버스를 만들 수 없습니다."
+        );
+      }
 
-    const ctx = canvas.getContext("2d");
+      const bgColor = "#f8f7f3";
+      const black = "#111111";
+      const gray = "#505050";
+      const white = "#ffffff";
 
-    if (!ctx) {
-      throw new Error(
-        "표지 캔버스를 만들 수 없습니다."
-      );
-    }
-
-    const bgColor = "#f8f7f3";
-    const black = "#111111";
-    const gray = "#505050";
-    const white = "#ffffff";
-
-    ctx.fillStyle = bgColor;
-    ctx.fillRect(
-      0,
-      0,
-      canvas.width,
-      canvas.height
-    );
-
-    const filmX = 150;
-    const filmY = 330;
-    const filmWidth = 1300;
-    const filmHeight = 390;
-
-    const topLine = [
-      schoolName.trim(),
-      gradeName.trim(),
-    ]
-      .filter(Boolean)
-      .join("  ·  ");
-
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-
-    ctx.fillStyle = black;
-    ctx.font =
-      '700 36px "Noto Sans KR", "Malgun Gothic", sans-serif';
-
-    ctx.fillText(
-      topLine || gradeName || "SUMMIT EDU",
-      filmX,
-      145
-    );
-
-    ctx.fillStyle = gray;
-    ctx.font =
-      '700 42px "Noto Sans KR", "Malgun Gothic", sans-serif';
-
-    ctx.fillText(
-      `${lessonName.trim() || "Lesson"}  ·  ${contentType}`,
-      filmX,
-      205
-    );
-
-    ctx.fillStyle = black;
-    ctx.beginPath();
-
-    ctx.roundRect(
-      filmX,
-      filmY,
-      filmWidth,
-      filmHeight,
-      26
-    );
-
-    ctx.fill();
-
-    const holeWidth = 52;
-    const holeHeight = 24;
-    const holeGap = 30;
-
-    ctx.fillStyle = bgColor;
-
-    for (
-      let x = filmX + 35;
-      x <
-      filmX + filmWidth - holeWidth - 20;
-      x += holeWidth + holeGap
-    ) {
-      ctx.beginPath();
-
-      ctx.roundRect(
-        x,
-        filmY + 22,
-        holeWidth,
-        holeHeight,
-        8
-      );
-
-      ctx.fill();
-
-      ctx.beginPath();
-
-      ctx.roundRect(
-        x,
-        filmY +
-          filmHeight -
-          holeHeight -
-          22,
-        holeWidth,
-        holeHeight,
-        8
-      );
-
-      ctx.fill();
-    }
-
-    const letters = ["써", "밋", "네", "컷"];
-    const innerMarginX = 48;
-    const frameGap = 20;
-    const frameTop = filmY + 72;
-    const frameHeight = filmHeight - 144;
-
-    const totalInnerWidth =
-      filmWidth - innerMarginX * 2;
-
-    const frameWidth =
-      (totalInnerWidth - frameGap * 3) / 4;
-
-    letters.forEach((letter, index) => {
-      const x =
-        filmX +
-        innerMarginX +
-        index *
-          (frameWidth + frameGap);
-
-      ctx.fillStyle = white;
+      ctx.fillStyle = bgColor;
 
       ctx.fillRect(
-        x,
-        frameTop,
-        frameWidth,
-        frameHeight
+        0,
+        0,
+        canvas.width,
+        canvas.height
       );
 
-      ctx.strokeStyle = white;
-      ctx.lineWidth = 7;
+      const filmX = 150;
+      const filmY = 330;
+      const filmWidth = 1300;
+      const filmHeight = 390;
 
-      ctx.strokeRect(
-        x,
-        frameTop,
-        frameWidth,
-        frameHeight
-      );
+      const topLine = [
+        schoolName.trim(),
+        gradeName.trim(),
+      ]
+        .filter(Boolean)
+        .join("  ·  ");
 
-      ctx.fillStyle = black;
-      ctx.strokeStyle = black;
-      ctx.lineWidth = 2;
-
-      ctx.font =
-        '900 138px "Noto Sans KR", "Malgun Gothic", sans-serif';
-
-      ctx.textAlign = "center";
+      ctx.textAlign = "left";
       ctx.textBaseline = "middle";
 
-      const centerX =
-        x + frameWidth / 2;
+      ctx.fillStyle = black;
 
-      const centerY =
-        frameTop +
-        frameHeight / 2 +
-        3;
-
-      ctx.strokeText(
-        letter,
-        centerX,
-        centerY
-      );
+      ctx.font =
+        '700 36px "Noto Sans KR", "Malgun Gothic", sans-serif';
 
       ctx.fillText(
-        letter,
-        centerX,
-        centerY
-      );
-    });
-
-    try {
-      const logo = await loadImage(
-        "/summit-logo.png"
+        topLine ||
+          gradeName ||
+          "SUMMIT EDU",
+        filmX,
+        145
       );
 
-      const maxLogoWidth = 430;
-      const maxLogoHeight = 170;
+      ctx.fillStyle = gray;
 
-      const ratio = Math.min(
-        maxLogoWidth / logo.naturalWidth,
-        maxLogoHeight / logo.naturalHeight
-      );
+      ctx.font =
+        '700 42px "Noto Sans KR", "Malgun Gothic", sans-serif';
 
-      const logoWidth =
-        logo.naturalWidth * ratio;
-
-      const logoHeight =
-        logo.naturalHeight * ratio;
-
-      ctx.drawImage(
-        logo,
-        canvas.width / 2 -
-          logoWidth / 2,
-        860,
-        logoWidth,
-        logoHeight
-      );
-    } catch (error) {
-      console.error(
-        "COVER LOGO ERROR:",
-        error
+      ctx.fillText(
+        `${
+          lessonName.trim() ||
+          "Lesson"
+        }  ·  ${contentType}`,
+        filmX,
+        205
       );
 
       ctx.fillStyle = black;
-      ctx.textAlign = "center";
+      ctx.beginPath();
 
-      ctx.font =
-        '800 42px "Noto Sans KR", "Malgun Gothic", sans-serif';
-
-      ctx.fillText(
-        "SUMMIT EDU",
-        canvas.width / 2,
-        950
+      ctx.roundRect(
+        filmX,
+        filmY,
+        filmWidth,
+        filmHeight,
+        26
       );
-    }
 
-    return canvas.toDataURL(
-      "image/png",
-      1
-    );
-  };
+      ctx.fill();
+
+      const holeWidth = 52;
+      const holeHeight = 24;
+      const holeGap = 30;
+
+      ctx.fillStyle = bgColor;
+
+      for (
+        let x = filmX + 35;
+        x <
+        filmX +
+          filmWidth -
+          holeWidth -
+          20;
+        x += holeWidth + holeGap
+      ) {
+        ctx.beginPath();
+
+        ctx.roundRect(
+          x,
+          filmY + 22,
+          holeWidth,
+          holeHeight,
+          8
+        );
+
+        ctx.fill();
+
+        ctx.beginPath();
+
+        ctx.roundRect(
+          x,
+          filmY +
+            filmHeight -
+            holeHeight -
+            22,
+          holeWidth,
+          holeHeight,
+          8
+        );
+
+        ctx.fill();
+      }
+
+      const letters = [
+        "써",
+        "밋",
+        "네",
+        "컷",
+      ];
+
+      const innerMarginX = 48;
+      const frameGap = 20;
+      const frameTop =
+        filmY + 72;
+
+      const frameHeight =
+        filmHeight - 144;
+
+      const totalInnerWidth =
+        filmWidth -
+        innerMarginX * 2;
+
+      const frameWidth =
+        (totalInnerWidth -
+          frameGap * 3) /
+        4;
+
+      letters.forEach(
+        (letter, index) => {
+          const x =
+            filmX +
+            innerMarginX +
+            index *
+              (frameWidth +
+                frameGap);
+
+          ctx.fillStyle = white;
+
+          ctx.fillRect(
+            x,
+            frameTop,
+            frameWidth,
+            frameHeight
+          );
+
+          ctx.strokeStyle =
+            white;
+
+          ctx.lineWidth = 7;
+
+          ctx.strokeRect(
+            x,
+            frameTop,
+            frameWidth,
+            frameHeight
+          );
+
+          ctx.fillStyle = black;
+          ctx.strokeStyle = black;
+          ctx.lineWidth = 2;
+
+          ctx.font =
+            '900 138px "Noto Sans KR", "Malgun Gothic", sans-serif';
+
+          ctx.textAlign = "center";
+          ctx.textBaseline =
+            "middle";
+
+          const centerX =
+            x + frameWidth / 2;
+
+          const centerY =
+            frameTop +
+            frameHeight / 2 +
+            3;
+
+          ctx.strokeText(
+            letter,
+            centerX,
+            centerY
+          );
+
+          ctx.fillText(
+            letter,
+            centerX,
+            centerY
+          );
+        }
+      );
+
+      try {
+        const logo =
+          await loadImage(
+            "/summit-logo.png"
+          );
+
+        const maxLogoWidth =
+          430;
+
+        const maxLogoHeight =
+          170;
+
+        const ratio = Math.min(
+          maxLogoWidth /
+            logo.naturalWidth,
+          maxLogoHeight /
+            logo.naturalHeight
+        );
+
+        const logoWidth =
+          logo.naturalWidth *
+          ratio;
+
+        const logoHeight =
+          logo.naturalHeight *
+          ratio;
+
+        ctx.drawImage(
+          logo,
+          canvas.width / 2 -
+            logoWidth / 2,
+          860,
+          logoWidth,
+          logoHeight
+        );
+      } catch (error) {
+        console.error(
+          "COVER LOGO ERROR:",
+          error
+        );
+
+        ctx.fillStyle = black;
+        ctx.textAlign = "center";
+
+        ctx.font =
+          '800 42px "Noto Sans KR", "Malgun Gothic", sans-serif';
+
+        ctx.fillText(
+          "SUMMIT EDU",
+          canvas.width / 2,
+          950
+        );
+      }
+
+      return canvas.toDataURL(
+        "image/png",
+        1
+      );
+    };
 
   const addImagePageToPdf = (
     pdf: jsPDF,
@@ -1042,7 +1263,9 @@ export default function Home() {
       pageHeight - margin * 2;
 
     const imageProps =
-      pdf.getImageProperties(image);
+      pdf.getImageProperties(
+        image
+      );
 
     const imageRatio =
       imageProps.width /
@@ -1055,20 +1278,26 @@ export default function Home() {
       imageWidth / imageRatio;
 
     if (
-      imageHeight > availableHeight
+      imageHeight >
+      availableHeight
     ) {
       imageHeight =
         availableHeight;
 
       imageWidth =
-        imageHeight * imageRatio;
+        imageHeight *
+        imageRatio;
     }
 
     const x =
-      (pageWidth - imageWidth) / 2;
+      (pageWidth -
+        imageWidth) /
+      2;
 
     const y =
-      (pageHeight - imageHeight) / 2;
+      (pageHeight -
+        imageHeight) /
+      2;
 
     pdf.addImage(
       image,
@@ -1082,111 +1311,118 @@ export default function Home() {
     );
   };
 
-  const downloadLessonPdf = async () => {
-    if (workItems.length === 0) {
-      alert(
-        "먼저 한 과 작업함에 써밋네컷을 추가해줘."
-      );
-      return;
-    }
-
-    try {
-      setMakingPdf(true);
-
-      const coverImage =
-        await createCoverImage();
-
-      const pdf = new jsPDF({
-        orientation: "landscape",
-        unit: "mm",
-        format: "a4",
-        compress: true,
-      });
-
-      const pageWidth =
-        pdf.internal.pageSize.getWidth();
-
-      const pageHeight =
-        pdf.internal.pageSize.getHeight();
-
-      pdf.addImage(
-        coverImage,
-        "PNG",
-        0,
-        0,
-        pageWidth,
-        pageHeight,
-        undefined,
-        "FAST"
-      );
-
-      for (
-        let index = 0;
-        index < workItems.length;
-        index++
+  const downloadLessonPdf =
+    async () => {
+      if (
+        workItems.length === 0
       ) {
-        const item =
-          workItems[index];
-
-        pdf.addPage(
-          "a4",
-          "landscape"
+        alert(
+          "먼저 한 과 작업함에 써밋네컷을 추가해줘."
         );
 
-        addImagePageToPdf(
-          pdf,
-          item.image
-        );
+        return;
       }
 
-      if (cheerPageImage) {
-        pdf.addPage(
-          "a4",
-          "landscape"
+      try {
+        setMakingPdf(true);
+
+        const coverImage =
+          await createCoverImage();
+
+        const pdf = new jsPDF({
+          orientation:
+            "landscape",
+          unit: "mm",
+          format: "a4",
+          compress: true,
+        });
+
+        const pageWidth =
+          pdf.internal.pageSize.getWidth();
+
+        const pageHeight =
+          pdf.internal.pageSize.getHeight();
+
+        pdf.addImage(
+          coverImage,
+          "PNG",
+          0,
+          0,
+          pageWidth,
+          pageHeight,
+          undefined,
+          "FAST"
         );
 
-        addImagePageToPdf(
-          pdf,
-          cheerPageImage
+        for (
+          let index = 0;
+          index <
+          workItems.length;
+          index++
+        ) {
+          const item =
+            workItems[index];
+
+          pdf.addPage(
+            "a4",
+            "landscape"
+          );
+
+          addImagePageToPdf(
+            pdf,
+            item.image
+          );
+        }
+
+        if (backCoverImage) {
+          pdf.addPage(
+            "a4",
+            "landscape"
+          );
+
+          addImagePageToPdf(
+            pdf,
+            backCoverImage
+          );
+        }
+
+        const baseName =
+          [
+            schoolName.trim(),
+            gradeName.trim(),
+            lessonName.trim(),
+          ]
+            .filter(Boolean)
+            .join("-") ||
+          "summit-lesson";
+
+        pdf.save(
+          `${baseName}-써밋네컷.pdf`
         );
+      } catch (error) {
+        console.error(
+          "PDF ERROR:",
+          error
+        );
+
+        alert(
+          "PDF를 만드는 중 오류가 발생했어."
+        );
+      } finally {
+        setMakingPdf(false);
       }
-
-      const baseName =
-        [
-          schoolName.trim(),
-          gradeName.trim(),
-          lessonName.trim(),
-        ]
-          .filter(Boolean)
-          .join("-") ||
-        "summit-lesson";
-
-      pdf.save(
-        `${baseName}-써밋네컷.pdf`
-      );
-    } catch (error) {
-      console.error(
-        "PDF ERROR:",
-        error
-      );
-
-      alert(
-        "PDF를 만드는 중 오류가 발생했어."
-      );
-    } finally {
-      setMakingPdf(false);
-    }
-  };
+    };
 
   const generatedImageCount =
-    comicProjects.filter((project) =>
-      Boolean(project.image)
+    comicProjects.filter(
+      (project) =>
+        Boolean(project.image)
     ).length;
 
   const totalPdfPages =
     1 +
     workItems.length +
-    (cheerPageImage ? 1 : 0);
+    (backCoverImage ? 1 : 0);
 
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-10">
@@ -1358,28 +1594,33 @@ export default function Home() {
           </div>
         )}
 
-        {!loadingPdf && pdfText && (
-          <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-            <h2 className="text-xl font-bold">
-              2. 대화문 찾기
-            </h2>
+        {!loadingPdf &&
+          pdfText && (
+            <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+              <h2 className="text-xl font-bold">
+                2. 대화문 찾기
+              </h2>
 
-            <p className="mt-2 text-sm text-slate-500">
-              교재 안의 대화문을 모두 찾은 다음 필요한 것만 남기면 돼.
-            </p>
+              <p className="mt-2 text-sm text-slate-500">
+                교재 안의 대화문을 모두 찾은 다음 필요한 것만 남기면 돼.
+              </p>
 
-            <button
-              type="button"
-              onClick={analyzePdf}
-              disabled={loadingAi}
-              className="mt-5 w-full rounded-xl bg-blue-600 px-6 py-4 text-lg font-bold text-white disabled:opacity-50"
-            >
-              {loadingAi
-                ? "대화문 찾는 중..."
-                : "대화문 전체 찾기"}
-            </button>
-          </section>
-        )}
+              <button
+                type="button"
+                onClick={
+                  analyzePdf
+                }
+                disabled={
+                  loadingAi
+                }
+                className="mt-5 w-full rounded-xl bg-blue-600 px-6 py-4 text-lg font-bold text-white disabled:opacity-50"
+              >
+                {loadingAi
+                  ? "대화문 찾는 중..."
+                  : "대화문 전체 찾기"}
+              </button>
+            </section>
+          )}
 
         {errorMessage && (
           <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5 text-red-700">
@@ -1401,8 +1642,9 @@ export default function Home() {
               </div>
 
               <div className="rounded-full bg-blue-100 px-4 py-2 text-sm font-bold text-blue-700">
-                {analysis.dialogues?.length ||
-                  0}
+                {analysis
+                  .dialogues
+                  ?.length || 0}
                 개 남음
               </div>
             </div>
@@ -1476,7 +1718,8 @@ export default function Home() {
               )}
             </div>
 
-            {(analysis.dialogues
+            {(analysis
+              .dialogues
               ?.length || 0) >
               0 && (
               <div className="mt-8 rounded-2xl bg-purple-50 p-6 ring-1 ring-purple-200">
@@ -1831,51 +2074,52 @@ export default function Home() {
 
             <div className="mt-12 rounded-3xl bg-amber-50 p-6 ring-1 ring-amber-200">
               <p className="text-sm font-bold text-amber-600">
-                FINAL CHEER PAGE
+                BACK COVER
               </p>
 
               <h3 className="mt-1 text-2xl font-black text-slate-900">
-                마지막 응원장
+                뒷표지
               </h3>
 
               <p className="mt-2 text-sm text-slate-600">
-                이 Lesson에 등장한 캐릭터들을 모아 마지막 응원장을 만들어.
+                이 Lesson에 등장한 캐릭터들을 모아 마지막 뒷표지를 만들어.
               </p>
 
               <p className="mt-1 text-xs text-slate-500">
-                이 버튼은 AI 이미지를 생성하므로 이미지 생성 비용이 발생해.
+                뒷표지 생성은 AI 이미지 1장을 사용하므로 이미지 생성 비용이 발생해.
               </p>
 
               <button
                 type="button"
                 onClick={
-                  generateCheerPage
+                  generateBackCover
                 }
                 disabled={
-                  loadingCheerPage
+                  loadingBackCover
                 }
                 className="mt-5 w-full rounded-xl bg-amber-500 px-6 py-4 text-lg font-black text-white disabled:opacity-50"
               >
-                {loadingCheerPage
-                  ? "마지막 응원장 생성 중..."
-                  : cheerPageImage
-                  ? "마지막 응원장 다시 생성"
-                  : "마지막 응원장 생성"}
+                {loadingBackCover
+                  ? "뒷표지 생성 중..."
+                  : backCoverImage
+                  ? "뒷표지 다시 생성"
+                  : "뒷표지 생성"}
               </button>
 
-              {cheerPageImage && (
+              {backCoverImage && (
                 <div className="mt-6">
-                  {cheerText && (
-                    <p className="mb-3 text-center text-lg font-black text-slate-800">
-                      {cheerText}
+                  {backCoverText && (
+                    <p className="mb-3 text-center text-sm font-bold text-slate-500">
+                      사용된 응원 문구 ·{" "}
+                      {backCoverText}
                     </p>
                   )}
 
                   <img
                     src={
-                      cheerPageImage
+                      backCoverImage
                     }
-                    alt="마지막 응원장"
+                    alt="써밋네컷 뒷표지"
                     className="w-full rounded-2xl"
                   />
                 </div>
@@ -1996,23 +2240,21 @@ export default function Home() {
                 </p>
 
                 <h3 className="mt-1 text-2xl font-black">
-                  표지 포함 PDF 만들기
+                  최종 PDF 만들기
                 </h3>
 
                 <p className="mt-2 text-sm text-slate-300">
                   표지 1장 + 써밋네컷{" "}
-                  {
-                    workItems.length
-                  }
+                  {workItems.length}
                   장
-                  {cheerPageImage
-                    ? " + 마지막 응원장 1장"
+                  {backCoverImage
+                    ? " + 뒷표지 1장"
                     : ""}
                 </p>
 
-                {!cheerPageImage && (
+                {!backCoverImage && (
                   <p className="mt-2 text-xs text-amber-300">
-                    마지막 응원장을 아직 만들지 않았어. 지금 PDF를 만들면 응원장 없이 저장돼.
+                    뒷표지를 아직 만들지 않았어. 지금 PDF를 만들면 뒷표지 없이 저장돼.
                   </p>
                 )}
 
