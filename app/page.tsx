@@ -1784,45 +1784,7 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="mb-10 rounded-3xl bg-slate-900 p-6 text-white">
-              <h3 className="text-2xl font-black">
-                설계안 확인 다 했어?
-              </h3>
 
-              <button
-                type="button"
-                onClick={
-                  generateAllComicImages
-                }
-                disabled={
-                  loadingAllImages
-                }
-                className="mt-5 w-full rounded-xl bg-purple-500 px-6 py-4 text-lg font-black text-white disabled:opacity-50"
-              >
-                {loadingAllImages
-                  ? `전체 이미지 생성 중 · ${imageProgress}`
-                  : `확인한 설계안 전체 이미지 생성 · ${
-                      comicProjects.length -
-                      generatedImageCount
-                    }개 남음`}
-              </button>
-
-              {generatedImageCount >
-                0 && (
-                <button
-                  type="button"
-                  onClick={
-                    addAllImagesToWorkBox
-                  }
-                  disabled={
-                    loadingAllImages
-                  }
-                  className="mt-3 w-full rounded-xl border border-white/20 bg-white/10 px-6 py-4 font-bold text-white"
-                >
-                  생성된 이미지 전체 작업함에 추가
-                </button>
-              )}
-            </div>
 
             <div className="space-y-12">
               {comicProjects.map(
@@ -2069,6 +2031,44 @@ export default function Home() {
                     </div>
                   </div>
                 )
+              )}
+            </div>
+
+            <div className="mt-10 rounded-3xl bg-slate-900 p-6 text-white">
+              <p className="text-sm font-bold text-purple-300">
+                ALL COMIC PLANS CHECKED
+              </p>
+
+              <h3 className="mt-1 text-2xl font-black">
+                설계안 확인 다 했어?
+              </h3>
+
+              <p className="mt-2 text-sm text-slate-300">
+                모든 설계안을 확인한 뒤 여기서 한꺼번에 이미지를 생성하면 돼.
+              </p>
+
+              <button
+                type="button"
+                onClick={generateAllComicImages}
+                disabled={loadingAllImages}
+                className="mt-5 w-full rounded-xl bg-purple-500 px-6 py-4 text-lg font-black text-white disabled:opacity-50"
+              >
+                {loadingAllImages
+                  ? `전체 이미지 생성 중 · ${imageProgress}`
+                  : `확인한 설계안 전체 이미지 생성 · ${
+                      comicProjects.length - generatedImageCount
+                    }개 남음`}
+              </button>
+
+              {generatedImageCount > 0 && (
+                <button
+                  type="button"
+                  onClick={addAllImagesToWorkBox}
+                  disabled={loadingAllImages}
+                  className="mt-3 w-full rounded-xl border border-white/20 bg-white/10 px-6 py-4 font-bold text-white"
+                >
+                  생성된 이미지 전체 작업함에 추가
+                </button>
               )}
             </div>
 
