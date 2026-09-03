@@ -1593,16 +1593,9 @@ export default function Home() {
     return (
       <main className="min-h-screen bg-slate-50 px-5 py-12">
         <div className="mx-auto max-w-5xl">
-          <button
-            type="button"
-            onClick={() => {
-              setSchoolLevel("");
-              setWorkMode("");
-            }}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-600"
-          >
-            ← 중등 / 고등 선택으로
-          </button>
+          <div className="mb-6">
+            <HomeButton />
+          </div>
 
           <div className="mt-8">
             <p className="text-sm font-bold text-blue-600">

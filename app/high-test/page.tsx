@@ -1234,7 +1234,26 @@ ${pageText}
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-10">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-6">
+        
+      <div className="mb-6 flex flex-wrap gap-3">
+        <HomeButton />
+
+        <button
+          type="button"
+          onClick={() => {
+            if (window.history.length > 1) {
+              window.history.back();
+            } else {
+              window.location.href = "/";
+            }
+          }}
+          className="rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-md"
+        >
+          ← 콘텐츠 선택으로
+        </button>
+      </div>
+
+<div className="mb-6">
   <HomeButton />
 </div>
         <div>
