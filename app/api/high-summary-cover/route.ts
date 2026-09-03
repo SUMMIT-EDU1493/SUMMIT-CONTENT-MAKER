@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import sharp from "sharp";
 import fs from "fs/promises";
 import path from "path";
+import TextToSVG from "text-to-svg";
 
 export const runtime = "nodejs";
 
@@ -13,15 +14,6 @@ type RequestBody = {
 
 function toDataUri(buffer: Buffer) {
   return `data:image/png;base64,${buffer.toString("base64")}`;
-}
-
-function escapeXml(text: string) {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
 }
 
 export async function POST(request: Request) {
@@ -41,8 +33,10 @@ export async function POST(request: Request) {
 
     const schoolName =
       body.schoolName?.trim() || "";
+
     const gradeName =
       body.gradeName?.trim() || "";
+
     const lessonName =
       body.lessonName?.trim() || "";
 
@@ -104,11 +98,8 @@ The large central title must be:
 "요약.ZIP"
 
 The title should look naturally integrated into the stationery collage,
-for example on:
-- torn grid paper
-- memo paper
-- a notebook label
-- a taped study note
+for example on torn grid paper, memo paper,
+a notebook label, or a taped study note.
 
 ==================================================
 DECORATION
@@ -155,25 +146,27 @@ Software will later overlay:
 - grade
 - lesson name
 
-Reserve a calm area in the upper-left part of the page
-for those labels.
+Reserve a calm area in the upper-left part of the page.
 
 Approximate area:
-from x=90 to x=520,
-from y=70 to y=250.
+x = 70 to 520
+y = 55 to 245
 
-Inside this top-left info area:
+Inside this top-left area:
 - no major illustration
-- no notebook edge crossing the text area
-- no strong doodles
-- no large icons
+- no folder or notebook edge crossing it
+- no large doodles
+- no icons
 - no important decorative elements
-- no large text
+- no text
 
-Do NOT draw a placeholder box.
-Do NOT draw a dotted box.
-Do NOT label the area.
-Simply keep it visually calm.
+Do NOT draw:
+- a placeholder
+- a dotted rectangle
+- an empty label
+- a blank box
+
+Simply keep this corner visually calm.
 
 ==================================================
 BOTTOM LOGO SAFETY ZONE
@@ -182,10 +175,10 @@ BOTTOM LOGO SAFETY ZONE
 The official SUMMIT logo will be composited later by software.
 
 Reserve a clean horizontal zone
-across the bottom-center of the page,
+across the bottom-center,
 approximately 160 px high.
 
-Inside the bottom-center logo zone:
+Inside this bottom-center area:
 
 - no folder edge
 - no notebook edge
@@ -194,30 +187,19 @@ Inside the bottom-center logo zone:
 - no tape
 - no major doodle
 - no title
-- no important text
 - no important illustration
 
-IMPORTANT:
-
-Do NOT draw a rectangle.
-Do NOT draw a dotted placeholder.
-Do NOT label this space as a logo area.
-Do NOT make the empty zone look intentional.
-
-Simply keep the bottom-center visually calm
-and let the background continue naturally.
+Do NOT visibly mark this reserved area.
 
 ==================================================
 COMPOSITION
 ==================================================
 
-The main stationery collage should sit mostly
-in the center and slightly above center.
+Keep the main collage mostly in the center
+and slightly above center.
 
-Keep the top-left info area and bottom-center logo area unobstructed.
-
-The page should still feel complete and beautifully balanced
-before the official text and logo are added.
+The cover must still feel complete and balanced
+before the software overlays the labels and logo.
 
 Do NOT draw or invent a SUMMIT logo.
 `;
@@ -247,6 +229,10 @@ Do NOT draw or invent a SUMMIT logo.
         "base64"
       );
 
+    // --------------------------------
+    // 공식 로고
+    // --------------------------------
+
     const logoPath =
       path.join(
         process.cwd(),
@@ -259,22 +245,6 @@ Do NOT draw or invent a SUMMIT logo.
         logoPath
       );
 
-    const fontPath =
-      path.join(
-        process.cwd(),
-        "public",
-        "fonts",
-        "NotoSansKR-Bold.ttf"
-      );
-
-    const fontFile =
-      await fs.readFile(
-        fontPath
-      );
-
-    const fontBase64 =
-      fontFile.toString("base64");
-
     const logoBuffer =
       await sharp(logoFile)
         .trim()
@@ -284,66 +254,160 @@ Do NOT draw or invent a SUMMIT logo.
         .png()
         .toBuffer();
 
+    // --------------------------------
+    // 한글 폰트 → 실제 SVG PATH로 변환
+    // 중등에서 사용한 안전한 방식
+    // --------------------------------
+
+    const fontPath =
+      path.join(
+        process.cwd(),
+        "public",
+        "fonts",
+        "NotoSansKR-Bold.ttf"
+      );
+
+    const textToSVG =
+      TextToSVG.loadSync(
+        fontPath
+      );
+
     const schoolGradeText =
       [schoolName, gradeName]
         .filter(Boolean)
         .join(" · ");
 
-    const lessonText =
-      lessonName || "Lesson";
+    const schoolTextSvg =
+      textToSVG.getSVG(
+        schoolGradeText ||
+          "고등부",
+        {
+          x: 0,
+          y: 0,
+          fontSize: 31,
+          anchor: "top",
+          attributes: {
+            fill: "#111111",
+          },
+        }
+      );
 
-    const safeSchoolGrade =
-      escapeXml(schoolGradeText);
-    const safeLesson =
-      escapeXml(lessonText);
+    const lessonTextSvg =
+      textToSVG.getSVG(
+        lessonName ||
+          "Lesson",
+        {
+          x: 0,
+          y: 0,
+          fontSize: 40,
+          anchor: "top",
+          attributes: {
+            fill: "#111111",
+          },
+        }
+      );
 
-    const headerSvg = `
-<svg width="1536" height="1024" viewBox="0 0 1536 1024" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <style>
-      @font-face {
-        font-family: 'NotoSansKRCustom';
-        src: url("data:font/ttf;base64,${fontBase64}") format("truetype");
-        font-weight: 700;
-        font-style: normal;
-      }
-      .labelText {
-        font-family: 'NotoSansKRCustom', sans-serif;
-        fill: #111111;
-      }
-    </style>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="rgba(0,0,0,0.10)"/>
-    </filter>
-  </defs>
+    const schoolTextBuffer =
+      await sharp(
+        Buffer.from(
+          schoolTextSvg
+        )
+      )
+        .png()
+        .toBuffer();
 
-  <!-- 상단 왼쪽 라벨 배경 -->
-  <g filter="url(#shadow)">
-    <rect x="88" y="74" rx="20" ry="20" width="300" height="64" fill="#FFF4A8"/>
-    <rect x="88" y="152" rx="22" ry="22" width="250" height="74" fill="#D9F3E8"/>
-  </g>
+    const lessonTextBuffer =
+      await sharp(
+        Buffer.from(
+          lessonTextSvg
+        )
+      )
+        .png()
+        .toBuffer();
 
-  <!-- 마스킹테이프 느낌 -->
-  <g opacity="0.9">
-    <rect x="108" y="58" width="56" height="18" rx="4" ry="4" fill="#EBDDB0" transform="rotate(-8 108 58)"/>
-    <rect x="300" y="62" width="58" height="18" rx="4" ry="4" fill="#EBDDB0" transform="rotate(7 300 62)"/>
-    <rect x="104" y="140" width="52" height="18" rx="4" ry="4" fill="#EBDDB0" transform="rotate(-6 104 140)"/>
-    <rect x="282" y="143" width="56" height="18" rx="4" ry="4" fill="#EBDDB0" transform="rotate(6 282 143)"/>
-  </g>
+    // --------------------------------
+    // 라벨 배경
+    // 글자는 여기 넣지 않음
+    // --------------------------------
 
-  <!-- 텍스트 -->
-  <text x="114" y="117" class="labelText" font-size="31" font-weight="700">
-    ${safeSchoolGrade}
-  </text>
+    const labelBackgroundSvg = `
+<svg
+  width="1536"
+  height="1024"
+  xmlns="http://www.w3.org/2000/svg"
+>
+  <!-- 학교/학년 노란 메모 -->
+  <rect
+    x="82"
+    y="68"
+    width="365"
+    height="68"
+    rx="20"
+    fill="#FFF2A8"
+  />
 
-  <text x="114" y="201" class="labelText" font-size="40" font-weight="700">
-    ${safeLesson}
-  </text>
+  <!-- Lesson 민트 메모 -->
+  <rect
+    x="82"
+    y="151"
+    width="270"
+    height="78"
+    rx="21"
+    fill="#D8F1E7"
+  />
+
+  <!-- 위쪽 테이프 -->
+  <rect
+    x="105"
+    y="54"
+    width="60"
+    height="18"
+    rx="4"
+    fill="#E9DCB5"
+    transform="rotate(-7 105 54)"
+  />
+
+  <rect
+    x="365"
+    y="56"
+    width="58"
+    height="18"
+    rx="4"
+    fill="#E9DCB5"
+    transform="rotate(7 365 56)"
+  />
+
+  <!-- 아래쪽 테이프 -->
+  <rect
+    x="103"
+    y="140"
+    width="55"
+    height="17"
+    rx="4"
+    fill="#E9DCB5"
+    transform="rotate(-6 103 140)"
+  />
+
+  <rect
+    x="292"
+    y="142"
+    width="55"
+    height="17"
+    rx="4"
+    fill="#E9DCB5"
+    transform="rotate(6 292 142)"
+  />
 </svg>
 `;
 
-    const headerBuffer =
-      Buffer.from(headerSvg);
+    const labelBackgroundBuffer =
+      Buffer.from(
+        labelBackgroundSvg
+      );
+
+    // --------------------------------
+    // 최종 합성
+    // --------------------------------
 
     const finalImage =
       await sharp(
@@ -355,12 +419,31 @@ Do NOT draw or invent a SUMMIT logo.
           fit: "cover",
         })
         .composite([
+          // 메모지
           {
             input:
-              headerBuffer,
-            top: 0,
+              labelBackgroundBuffer,
             left: 0,
+            top: 0,
           },
+
+          // 학교 · 학년
+          {
+            input:
+              schoolTextBuffer,
+            left: 112,
+            top: 87,
+          },
+
+          // Lesson
+          {
+            input:
+              lessonTextBuffer,
+            left: 112,
+            top: 169,
+          },
+
+          // 공식 SUMMIT 로고
           {
             input:
               logoBuffer,
