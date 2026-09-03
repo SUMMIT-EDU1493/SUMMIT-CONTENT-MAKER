@@ -25,6 +25,12 @@ type RequestBody = {
   plans: ComicPlan[];
 };
 
+type UniqueCharacter = {
+  id?: string;
+  role?: string;
+  description?: string;
+};
+
 export async function POST(request: Request) {
   try {
     if (!process.env.OPENAI_API_KEY) {
@@ -52,6 +58,7 @@ export async function POST(request: Request) {
       apiKey: process.env.OPENAI_API_KEY,
     });
 
+    // 모든 컷에 반복되어 있는 캐릭터 설명 수집
     const characterDescriptions = plans
       .flatMap((plan) =>
         plan.panels
@@ -61,8 +68,121 @@ export async function POST(request: Request) {
       .filter(Boolean);
 
     const combinedCharacters =
-      characterDescriptions.join("\n");
+      characterDescriptions.join("\n\n");
 
+    // 1단계:
+    // 반복되는 캐릭터 설명을 고유 인물 목록으로 먼저 정리
+    const dedupResponse =
+      await openai.responses.create({
+        model: "gpt-5-mini",
+        input: `
+다음은 한 Lesson의 여러 영어 학습 만화 컷에서 등장한 캐릭터 설명들이다.
+
+같은 인물이 여러 컷에서 반복해서 설명되어 있을 수 있다.
+
+==============================
+원본 캐릭터 설명
+==============================
+
+${combinedCharacters}
+
+==============================
+해야 할 일
+==============================
+
+위 설명을 분석하여 "고유 인물"만 추려라.
+
+매우 중요:
+
+- 같은 사람이 여러 컷에서 반복 설명되어도 반드시 한 명으로 합칠 것.
+- 이름, 역할, 성별, 나이대, 머리모양, 옷, 관계 등을 이용해 동일 인물을 판단할 것.
+- 같은 사람을 여러 명으로 중복 계산하지 말 것.
+- 서로 다른 사람을 억지로 하나로 합치지 말 것.
+- 친구, 학생, 교사, 부모 등 관계가 다른 인물은 명확히 구분할 것.
+- 각 인물의 반복 묘사를 하나의 안정적인 외형 설명으로 통합할 것.
+- 뒷표지에는 원본 설명의 반복 횟수와 관계없이 고유 인물만 등장해야 한다.
+- 등장인물이 너무 많다면 이야기에서 반복적으로 등장한 주요 인물을 우선한다.
+- 최종 인물은 최대 6명까지만 선택한다.
+- 가능하면 핵심 학생 캐릭터를 우선한다.
+- 부모/교사 등 성인은 실제로 주요 등장인물일 때만 포함한다.
+
+학생 캐릭터:
+- 중학생 또래의 자연스러운 청소년 체격
+- 여자 학생을 남학생보다 지나치게 작거나 어린아이처럼 설정하지 말 것
+
+JSON만 출력:
+
+{
+  "characters": [
+    {
+      "id": "character_1",
+      "role": "중학생 남학생 / 친구",
+      "description": "짧은 검은 머리, 네이비 후드티, 중학생 또래 체격"
+    }
+  ]
+}
+`,
+      });
+
+    const dedupText =
+      dedupResponse.output_text?.trim();
+
+    if (!dedupText) {
+      throw new Error(
+        "고유 캐릭터 목록을 만들지 못했습니다."
+      );
+    }
+
+    let parsedCharacters: {
+      characters?: UniqueCharacter[];
+    };
+
+    try {
+      parsedCharacters = JSON.parse(
+        dedupText
+          .replace(/^```json\s*/i, "")
+          .replace(/^```\s*/i, "")
+          .replace(/\s*```$/, "")
+      );
+    } catch {
+      throw new Error(
+        "고유 캐릭터 JSON을 해석하지 못했습니다."
+      );
+    }
+
+    const uniqueCharacters =
+      Array.isArray(
+        parsedCharacters?.characters
+      )
+        ? parsedCharacters.characters.slice(0, 6)
+        : [];
+
+    if (uniqueCharacters.length === 0) {
+      throw new Error(
+        "뒷표지에 사용할 고유 캐릭터가 없습니다."
+      );
+    }
+
+    const characterGuide =
+      uniqueCharacters
+        .map(
+          (
+            character,
+            index
+          ) => `
+CHARACTER ${index + 1}
+
+ROLE:
+${character.role || ""}
+
+DESCRIPTION:
+${character.description || ""}
+`
+        )
+        .join("\n");
+
+    // 2단계:
+    // 뒷표지 응원 문구 생성
     const cheerTextResponse =
       await openai.responses.create({
         model: "gpt-5-mini",
@@ -74,7 +194,7 @@ export async function POST(request: Request) {
 - 한국어
 - 18~32자 정도
 - 학생에게 자연스럽게 말하듯 쓸 것
-- 밝고 힘을 주는 느낌
+- 밝고 자신감을 주는 느낌
 - 너무 감성적이거나 유치하지 않을 것
 - 특정 시험명은 사용하지 말 것
 - 중간고사, 기말고사라는 표현도 사용하지 말 것
@@ -92,89 +212,115 @@ export async function POST(request: Request) {
       cheerTextResponse.output_text?.trim() ||
       "차근차근 준비한 만큼 자신 있게 보여주자!";
 
+    // 3단계:
+    // 고유 인물만 사용해 뒷표지 생성
     const imagePrompt = `
 Create a polished LANDSCAPE back-cover illustration
 for a Korean middle-school English study workbook.
 
 This is the FINAL PAGE of a workbook called "써밋네컷".
 
---------------------------------------------------
-CHARACTERS
---------------------------------------------------
+==================================================
+UNIQUE CHARACTERS
+==================================================
 
-Use the recurring characters described below.
+The following character list has already been deduplicated.
 
-${combinedCharacters}
+There are EXACTLY ${uniqueCharacters.length} unique people.
 
-IMPORTANT CHARACTER RULES:
+${characterGuide}
 
-- Identify recurring characters across repeated descriptions.
-- If the same character appears repeatedly across multiple panels,
-  treat that person as ONE character, not several copies.
-- Do not duplicate or clone characters.
-- Do not merge different characters into identical-looking people.
-- Especially distinguish same-gender and similar-age characters clearly.
-- Use differences such as:
-  hairstyle,
-  hair length,
-  face shape,
-  glasses,
-  clothing,
-  backpack,
-  accessories,
-  height impression,
-  silhouette.
-- Keep the characters appropriate to their described relationships.
-- Parents and teachers should look clearly adult.
-- Students should look like Korean middle-school students.
-- Keep all characters visually natural and consistent.
+VERY IMPORTANT:
 
---------------------------------------------------
+- Show each listed character exactly ONCE.
+- Do NOT duplicate any listed character.
+- Do NOT create clones.
+- Do NOT repeat the same student on opposite sides of the group.
+- Do NOT create extra random students.
+- Do NOT interpret repeated clothing details as new people.
+- The total visible people should be approximately ${uniqueCharacters.length}.
+- Never double the character count.
+
+If there are:
+- 3 unique people -> show about 3 people.
+- 4 unique people -> show about 4 people.
+- 5 unique people -> show about 5 people.
+- 6 unique people -> show about 6 people.
+
+Different characters must look clearly different.
+
+Use clear visual differences such as:
+- hairstyle
+- hair length
+- face shape
+- glasses
+- clothing
+- backpack
+- accessories
+- silhouette
+
+==================================================
+AGE AND RELATIONSHIP
+==================================================
+
+Students:
+- should look like Korean middle-school students
+- should use natural teenage facial and body proportions
+- should not look preschool-like or elementary-school age
+
+Male and female classmates:
+- should look like same-age teenage peers
+- should have comparable adolescent body scale
+- female students must NOT automatically look much smaller or younger
+
+Parents:
+- clearly adult
+
+Teachers:
+- clearly adult
+
+Do not make an adult look like another teenage classmate.
+
+==================================================
 MAIN SCENE
---------------------------------------------------
+==================================================
 
-Show the recurring characters gathered together
-in a bright, celebratory final scene.
+Show the unique characters together
+in one warm celebratory final scene.
 
 They are encouraging the student
-after finishing this Lesson.
+after finishing the Lesson.
 
-Use natural varied poses.
-
-Possible actions:
-- raising fists
+Use natural varied poses such as:
 - smiling
 - waving
-- giving thumbs-up
+- thumbs-up
+- raised fists
 - holding notebooks
 - cheering together
-- holding a large banner together
+- holding a banner
 
-Do NOT line everyone up stiffly.
+Do NOT line everybody up stiffly.
 
-The illustration should feel like a satisfying
-"Lesson complete!" ending.
+The scene should feel satisfying and energetic,
+like finishing one Lesson successfully.
 
---------------------------------------------------
-IMPORTANT BANNER
---------------------------------------------------
+==================================================
+BANNER
+==================================================
 
 The encouragement sentence MUST BE PART OF THE ARTWORK.
 
-Do NOT leave a blank text area.
-Do NOT add the sentence later as a separate caption.
-
 Create a large natural celebratory banner,
-placard, hanging fabric sign, or similar object
-that is physically integrated into the scene.
+placard, hanging fabric sign,
+or similar physical object integrated into the scene.
 
 For example:
-- characters holding a large banner
+- characters holding a banner
 - a festive banner hanging behind them
-- a large hand-painted placard
-- a school-festival style sign
+- a large school-festival style placard
 
-Write ONLY this Korean sentence on the banner:
+Write ONLY this Korean sentence:
 
 "${cheerText}"
 
@@ -182,54 +328,72 @@ VERY IMPORTANT:
 
 - Korean spelling must be accurate.
 - The full sentence must be visible.
-- The Korean letters must be large, bold, clear and readable.
-- Do not cut off any letters.
+- Letters must be large, bold, clear and readable.
+- Do not cut off letters.
 - Do not add extra Korean or English words.
-- Do not add speech bubbles.
-- Do not add captions.
-- Do not add fake logos.
+- No speech bubbles.
+- No captions.
+- No fake logos.
 
-The banner should feel like a natural part of the illustration,
-not like a digital text box pasted onto the image.
+The banner must feel naturally integrated
+into the illustration.
 
---------------------------------------------------
+==================================================
 COMPOSITION
---------------------------------------------------
+==================================================
 
 LANDSCAPE format.
 
-Suggested layout:
+UPPER AREA:
+large celebratory banner containing the Korean sentence.
 
-TOP / UPPER MIDDLE:
-large celebratory banner containing the Korean sentence
-
-CENTER:
-the Lesson characters cheering naturally together
+MIDDLE:
+the unique Lesson characters cheering naturally together.
 
 BOTTOM:
-leave a calm, uncluttered space
+leave a calm, uncluttered area
 for the official SUMMIT EDU logo
 which will be composited afterward.
 
-Do not place faces or important objects
+Do not place faces
+or important objects
 inside the bottom logo area.
 
---------------------------------------------------
+==================================================
 STYLE
---------------------------------------------------
+==================================================
 
 - modern Korean educational webtoon
-- warm clean linework
-- polished workbook illustration
-- expressive faces
+- warm
+- clean
+- polished
+- expressive
 - natural proportions
-- energetic but not childish
+- visually engaging
 - suitable for middle-school students
-- visually cohesive
-- professional educational material finish
+- not childish
+- not preschool style
+- professional workbook finish
 - simple attractive background
 - no photorealism
-- no preschool style
+
+==================================================
+FINAL CHECK
+==================================================
+
+Before generating, verify:
+
+1. Use only the deduplicated unique character list.
+2. Each unique character appears once.
+3. No duplicated people.
+4. No clones.
+5. No extra random students.
+6. Total visible people approximately matches ${uniqueCharacters.length}.
+7. Adults look adult.
+8. Students look like teenagers.
+9. Male and female classmates look like same-age peers.
+10. Banner sentence is readable.
+11. No fake logo.
 `;
 
     const imageResponse =
@@ -245,55 +409,60 @@ STYLE
       imageResponse.data?.[0]?.b64_json;
 
     if (!imageBase64) {
-      return Response.json(
-        {
-          error: "뒷표지 이미지가 생성되지 않았습니다.",
-        },
-        { status: 500 }
+      throw new Error(
+        "뒷표지 이미지가 생성되지 않았습니다."
       );
     }
 
-    const aiImageBuffer = Buffer.from(
-      imageBase64,
-      "base64"
-    );
+    const aiImageBuffer =
+      Buffer.from(
+        imageBase64,
+        "base64"
+      );
 
+    // 공식 SUMMIT EDU 로고는 AI에게 만들게 하지 않고
+    // 실제 로고 파일을 마지막에 합성
     const logoPath = path.join(
       process.cwd(),
       "public",
       "summit-logo.png"
     );
 
-    const logoBuffer = await fs.readFile(logoPath);
+    const logoBuffer =
+      await fs.readFile(logoPath);
 
-    const resizedLogo = await sharp(logoBuffer)
-      .trim()
-      .resize({
-        width: 330,
-        withoutEnlargement: true,
-      })
-      .png()
-      .toBuffer();
+    const resizedLogo =
+      await sharp(logoBuffer)
+        .trim()
+        .resize({
+          width: 330,
+          withoutEnlargement: true,
+        })
+        .png()
+        .toBuffer();
 
-    const finalImage = await sharp(aiImageBuffer)
-      .resize(1536, 1024, {
-        fit: "cover",
-      })
-      .composite([
-        {
-          input: resizedLogo,
-          left: 603,
-          top: 855,
-        },
-      ])
-      .png()
-      .toBuffer();
+    const finalImage =
+      await sharp(aiImageBuffer)
+        .resize(1536, 1024, {
+          fit: "cover",
+        })
+        .composite([
+          {
+            input: resizedLogo,
+            left: 603,
+            top: 855,
+          },
+        ])
+        .png()
+        .toBuffer();
 
     return Response.json({
       image: `data:image/png;base64,${finalImage.toString(
         "base64"
       )}`,
       cheerText,
+      uniqueCharacterCount:
+        uniqueCharacters.length,
     });
   } catch (error: any) {
     console.error(
@@ -303,7 +472,8 @@ STYLE
 
     return Response.json(
       {
-        error: "뒷표지 생성 중 오류가 발생했습니다.",
+        error:
+          "뒷표지 생성 중 오류가 발생했습니다.",
         detail:
           error?.message ||
           "알 수 없는 오류",
