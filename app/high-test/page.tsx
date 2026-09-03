@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
+import { jsPDF } from "jspdf";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -53,11 +54,183 @@ export default function HighTestPage() {
 
   const [errorMessage, setErrorMessage] = useState("");
 
+  const updatePlanField = (
+    planIndex: number,
+    field: keyof HighComicPlan,
+    value: any
+  ) => {
+    setResult((prev) => {
+      if (!prev) return prev;
+
+      const plans = [...prev.plans];
+      plans[planIndex] = {
+        ...plans[planIndex],
+        [field]: value,
+      };
+
+      return {
+        ...prev,
+        plans,
+      };
+    });
+  };
+
+  const updatePanelField = (
+    planIndex: number,
+    panelIndex: number,
+    field: keyof ComicPanel,
+    value: any
+  ) => {
+    setResult((prev) => {
+      if (!prev) return prev;
+
+      const plans = [...prev.plans];
+      const panels = [...plans[planIndex].panels];
+
+      panels[panelIndex] = {
+        ...panels[panelIndex],
+        [field]: value,
+      };
+
+      plans[planIndex] = {
+        ...plans[planIndex],
+        panels,
+      };
+
+      return {
+        ...prev,
+        plans,
+      };
+    });
+  };
+
+  const updateDialogue = (
+    planIndex: number,
+    panelIndex: number,
+    dialogueIndex: number,
+    field: keyof ComicDialogue,
+    value: string
+  ) => {
+    setResult((prev) => {
+      if (!prev) return prev;
+
+      const plans = [...prev.plans];
+      const panels = [...plans[planIndex].panels];
+      const dialogue = [...panels[panelIndex].dialogue];
+
+      dialogue[dialogueIndex] = {
+        ...dialogue[dialogueIndex],
+        [field]: value,
+      };
+
+      panels[panelIndex] = {
+        ...panels[panelIndex],
+        dialogue,
+      };
+
+      plans[planIndex] = {
+        ...plans[planIndex],
+        panels,
+      };
+
+      return {
+        ...prev,
+        plans,
+      };
+    });
+  };
+
+  const addDialogue = (
+    planIndex: number,
+    panelIndex: number
+  ) => {
+    setResult((prev) => {
+      if (!prev) return prev;
+
+      const plans = [...prev.plans];
+      const panels = [...plans[planIndex].panels];
+      const dialogue = [
+        ...panels[panelIndex].dialogue,
+        {
+          speaker: "화자",
+          text: "",
+        },
+      ];
+
+      panels[panelIndex] = {
+        ...panels[panelIndex],
+        dialogue,
+      };
+
+      plans[planIndex] = {
+        ...plans[planIndex],
+        panels,
+      };
+
+      return {
+        ...prev,
+        plans,
+      };
+    });
+  };
+
+  const deleteDialogue = (
+    planIndex: number,
+    panelIndex: number,
+    dialogueIndex: number
+  ) => {
+    setResult((prev) => {
+      if (!prev) return prev;
+
+      const plans = [...prev.plans];
+      const panels = [...plans[planIndex].panels];
+
+      const dialogue =
+        panels[panelIndex].dialogue.filter(
+          (_, index) => index !== dialogueIndex
+        );
+
+      panels[panelIndex] = {
+        ...panels[panelIndex],
+        dialogue,
+      };
+
+      plans[planIndex] = {
+        ...plans[planIndex],
+        panels,
+      };
+
+      return {
+        ...prev,
+        plans,
+      };
+    });
+  };
+
   const [generatedImages, setGeneratedImages] =
     useState<Record<string, string>>({});
 
   const [generatingId, setGeneratingId] =
     useState<string>("");
+
+  const [generatingAll, setGeneratingAll] =
+    useState(false);
+
+  const [batchProgress, setBatchProgress] =
+    useState("");
+
+  const [workItems, setWorkItems] =
+    useState<
+      {
+        id: string;
+        title: string;
+        subtitle: string;
+        image: string;
+      }[]
+    >([]);
+
+  const [makingPdf, setMakingPdf] =
+    useState(false);
 
   const readPdf = async (file: File) => {
     try {
@@ -173,6 +346,41 @@ ${pageText}
     }
   };
 
+  const generateImageRequest = async (
+    plan: HighComicPlan
+  ) => {
+    const response = await fetch(
+      "/api/generate-high-comic",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          plan,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data?.detail ||
+          data?.error ||
+          "고등 써밋네컷 이미지 생성에 실패했습니다."
+      );
+    }
+
+    if (!data?.image) {
+      throw new Error(
+        "생성된 이미지가 없습니다."
+      );
+    }
+
+    return data.image as string;
+  };
+
   const generateImage = async (
     plan: HighComicPlan
   ) => {
@@ -184,38 +392,12 @@ ${pageText}
       setGeneratingId(plan.id);
       setErrorMessage("");
 
-      const response = await fetch(
-        "/api/generate-high-comic",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            plan,
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data?.detail ||
-            data?.error ||
-            "고등 써밋네컷 이미지 생성에 실패했습니다."
-        );
-      }
-
-      if (!data?.image) {
-        throw new Error(
-          "생성된 이미지가 없습니다."
-        );
-      }
+      const image =
+        await generateImageRequest(plan);
 
       setGeneratedImages((prev) => ({
         ...prev,
-        [plan.id]: data.image,
+        [plan.id]: image,
       }));
     } catch (error: any) {
       console.error(
@@ -229,6 +411,459 @@ ${pageText}
       );
     } finally {
       setGeneratingId("");
+    }
+  };
+
+  const addToWorkbox = (
+    plan: HighComicPlan
+  ) => {
+    const image =
+      generatedImages[plan.id];
+
+    if (!image) {
+      alert("먼저 이미지를 생성해줘.");
+      return;
+    }
+
+    setWorkItems((prev) => {
+      if (
+        prev.some(
+          (item) => item.id === plan.id
+        )
+      ) {
+        return prev;
+      }
+
+      return [
+        ...prev,
+        {
+          id: plan.id,
+          title: plan.englishTitle,
+          subtitle: plan.koreanSubtitle,
+          image,
+        },
+      ];
+    });
+  };
+
+  const addAllToWorkbox = () => {
+    if (!result) {
+      return;
+    }
+
+    const available =
+      result.plans.filter(
+        (plan) =>
+          Boolean(
+            generatedImages[plan.id]
+          )
+      );
+
+    if (available.length === 0) {
+      alert("생성된 이미지가 없어.");
+      return;
+    }
+
+    setWorkItems((prev) => {
+      const existingIds =
+        new Set(
+          prev.map((item) => item.id)
+        );
+
+      const newItems =
+        available
+          .filter(
+            (plan) =>
+              !existingIds.has(
+                plan.id
+              )
+          )
+          .map((plan) => ({
+            id: plan.id,
+            title:
+              plan.englishTitle,
+            subtitle:
+              plan.koreanSubtitle,
+            image:
+              generatedImages[
+                plan.id
+              ],
+          }));
+
+      return [
+        ...prev,
+        ...newItems,
+      ];
+    });
+  };
+
+  const removeWorkItem = (
+    id: string
+  ) => {
+    setWorkItems((prev) =>
+      prev.filter(
+        (item) => item.id !== id
+      )
+    );
+  };
+
+  const createHighCoverImage = async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1536;
+    canvas.height = 1024;
+
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) {
+      throw new Error("표지 캔버스를 만들 수 없어.");
+    }
+
+    ctx.fillStyle = "#F4F1EA";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = "#111827";
+    ctx.fillRect(120, 250, 1296, 420);
+
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(165, 295, 240, 330);
+    ctx.fillRect(445, 295, 240, 330);
+    ctx.fillRect(725, 295, 240, 330);
+    ctx.fillRect(1005, 295, 240, 330);
+
+    ctx.fillStyle = "#111827";
+    ctx.font = "700 42px sans-serif";
+    ctx.textAlign = "left";
+
+    const schoolLine =
+      [schoolName.trim(), gradeName.trim()]
+        .filter(Boolean)
+        .join(" · ");
+
+    ctx.fillText(
+      schoolLine || "HIGH SCHOOL",
+      150,
+      120
+    );
+
+    ctx.font = "800 50px sans-serif";
+    ctx.fillText(
+      lessonName || "Lesson",
+      150,
+      185
+    );
+
+    const letters = ["써", "밋", "네", "컷"];
+    const xValues = [285, 565, 845, 1125];
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "900 138px sans-serif";
+
+    letters.forEach((letter, index) => {
+      ctx.fillText(
+        letter,
+        xValues[index],
+        460
+      );
+    });
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "#374151";
+    ctx.font = "700 28px sans-serif";
+    ctx.fillText(
+      "SUMMIT HIGH SCHOOL FOUR-CUT",
+      768,
+      760
+    );
+
+    const logo = new Image();
+    logo.src = "/summit-logo.png";
+
+    await new Promise<void>(
+      (resolve, reject) => {
+        logo.onload = () => resolve();
+        logo.onerror = () =>
+          reject(
+            new Error(
+              "SUMMIT 로고를 불러오지 못했어."
+            )
+          );
+      }
+    );
+
+    const logoWidth = 430;
+    const logoHeight =
+      (logo.height / logo.width) *
+      logoWidth;
+
+    ctx.drawImage(
+      logo,
+      (1536 - logoWidth) / 2,
+      820,
+      logoWidth,
+      logoHeight
+    );
+
+    return canvas.toDataURL(
+      "image/png",
+      1
+    );
+  };
+
+  const createHighBackCoverImage = async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1536;
+    canvas.height = 1024;
+
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) {
+      throw new Error("뒷표지 캔버스를 만들 수 없어.");
+    }
+
+    ctx.fillStyle = "#111827";
+    ctx.fillRect(
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
+
+    ctx.fillStyle = "#FFFFFF";
+    ctx.textAlign = "center";
+
+    ctx.font = "900 64px sans-serif";
+    ctx.fillText(
+      "끝까지 읽었으면",
+      768,
+      360
+    );
+
+    ctx.font = "900 78px sans-serif";
+    ctx.fillText(
+      "이미 반은 끝난 거지.",
+      768,
+      460
+    );
+
+    ctx.fillStyle = "#C4B5FD";
+    ctx.font = "700 32px sans-serif";
+    ctx.fillText(
+      "SUMMIT EDU",
+      768,
+      550
+    );
+
+    const logo = new Image();
+    logo.src = "/summit-logo.png";
+
+    await new Promise<void>(
+      (resolve, reject) => {
+        logo.onload = () => resolve();
+        logo.onerror = () =>
+          reject(
+            new Error(
+              "SUMMIT 로고를 불러오지 못했어."
+            )
+          );
+      }
+    );
+
+    const logoWidth = 360;
+    const logoHeight =
+      (logo.height / logo.width) *
+      logoWidth;
+
+    ctx.drawImage(
+      logo,
+      (1536 - logoWidth) / 2,
+      690,
+      logoWidth,
+      logoHeight
+    );
+
+    return canvas.toDataURL(
+      "image/png",
+      1
+    );
+  };
+
+  const addImagePageToPdf = (
+    pdf: jsPDF,
+    image: string
+  ) => {
+    const pageWidth =
+      pdf.internal.pageSize.getWidth();
+
+    const pageHeight =
+      pdf.internal.pageSize.getHeight();
+
+    pdf.addImage(
+      image,
+      "PNG",
+      0,
+      0,
+      pageWidth,
+      pageHeight,
+      undefined,
+      "FAST"
+    );
+  };
+
+  const makeFinalPdf = async () => {
+    if (workItems.length === 0) {
+      alert(
+        "먼저 이미지를 작업함에 추가해줘."
+      );
+      return;
+    }
+
+    try {
+      setMakingPdf(true);
+
+      const coverImage =
+        await createHighCoverImage();
+
+      const backCoverImage =
+        await createHighBackCoverImage();
+
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+        compress: true,
+      });
+
+      addImagePageToPdf(
+        pdf,
+        coverImage
+      );
+
+      for (
+        let index = 0;
+        index < workItems.length;
+        index++
+      ) {
+        pdf.addPage(
+          "a4",
+          "landscape"
+        );
+
+        addImagePageToPdf(
+          pdf,
+          workItems[index].image
+        );
+      }
+
+      pdf.addPage(
+        "a4",
+        "landscape"
+      );
+
+      addImagePageToPdf(
+        pdf,
+        backCoverImage
+      );
+
+      const baseName =
+        [
+          schoolName.trim(),
+          gradeName.trim(),
+          lessonName.trim(),
+        ]
+          .filter(Boolean)
+          .join("-") ||
+        "summit-high";
+
+      pdf.save(
+        `${baseName}-고등-써밋네컷.pdf`
+      );
+    } catch (error) {
+      console.error(
+        "HIGH PDF ERROR:",
+        error
+      );
+
+      alert(
+        "고등 PDF를 만드는 중 오류가 발생했어."
+      );
+    } finally {
+      setMakingPdf(false);
+    }
+  };
+
+  const generateAllImages = async () => {
+    if (!result) {
+      return;
+    }
+
+    const remainingPlans =
+      result.plans.filter(
+        (plan) =>
+          !generatedImages[plan.id]
+      );
+
+    if (remainingPlans.length === 0) {
+      alert("이미 모든 이미지가 생성되어 있어.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `아직 생성되지 않은 이미지 ${remainingPlans.length}장을 순서대로 만들 거야. 이미지 생성 비용이 발생해. 계속할까?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setGeneratingAll(true);
+      setErrorMessage("");
+
+      for (
+        let index = 0;
+        index < remainingPlans.length;
+        index++
+      ) {
+        const plan =
+          remainingPlans[index];
+
+        setGeneratingId(plan.id);
+
+        setBatchProgress(
+          `${index + 1} / ${remainingPlans.length} 생성 중 · ${plan.englishTitle}`
+        );
+
+        const image =
+          await generateImageRequest(plan);
+
+        setGeneratedImages((prev) => ({
+          ...prev,
+          [plan.id]: image,
+        }));
+      }
+
+      setBatchProgress(
+        `완료 · ${remainingPlans.length}장 생성`
+      );
+    } catch (error: any) {
+      console.error(
+        "HIGH BATCH IMAGE ERROR:",
+        error
+      );
+
+      setErrorMessage(
+        error?.message ||
+          "전체 이미지 생성 중 오류가 발생했습니다."
+      );
+
+      setBatchProgress(
+        "중간에 오류가 발생했어. 이미 만들어진 이미지는 그대로 유지돼."
+      );
+    } finally {
+      setGeneratingId("");
+      setGeneratingAll(false);
     }
   };
 
@@ -391,6 +1026,103 @@ ${pageText}
           </section>
         )}
 
+        {workItems.length > 0 && (
+          <section className="mt-10 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-bold text-emerald-600">
+                  WORKBOX
+                </p>
+
+                <h2 className="mt-1 text-2xl font-black text-slate-900">
+                  고등 써밋네컷 작업함
+                </h2>
+
+                <p className="mt-2 text-sm text-slate-500">
+                  현재 {workItems.length}장
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-6 md:grid-cols-2">
+              {workItems.map(
+                (item, index) => (
+                  <div
+                    key={item.id}
+                    className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"
+                  >
+                    <img
+                      src={item.image}
+                      alt={item.title}
+                      className="w-full"
+                    />
+
+                    <div className="p-4">
+                      <p className="text-xs font-black text-emerald-600">
+                        PAGE {index + 1}
+                      </p>
+
+                      <p className="mt-1 font-black text-slate-900">
+                        {item.title}
+                      </p>
+
+                      <p className="mt-1 text-sm text-slate-600">
+                        {item.subtitle}
+                      </p>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          removeWorkItem(
+                            item.id
+                          )
+                        }
+                        className="mt-4 w-full rounded-xl bg-red-50 px-4 py-3 text-sm font-black text-red-600"
+                      >
+                        작업함에서 삭제
+                      </button>
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+          </section>
+        )}
+
+        {workItems.length > 0 && (
+          <section className="mt-8 rounded-3xl bg-slate-900 p-6 text-white">
+            <p className="text-sm font-bold text-purple-300">
+              FINAL PDF
+            </p>
+
+            <h2 className="mt-1 text-2xl font-black">
+              고등 써밋네컷 최종 PDF
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              앞표지 + 작업함 이미지 {workItems.length}장 + 뒷표지
+              순서로 PDF를 만들어.
+            </p>
+
+            <div className="mt-4 rounded-2xl bg-white/10 p-4">
+              <p className="text-sm font-bold text-slate-200">
+                총 {workItems.length + 2}페이지
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={makeFinalPdf}
+              disabled={makingPdf}
+              className="mt-5 w-full rounded-2xl bg-white px-6 py-4 text-lg font-black text-slate-900 disabled:opacity-50"
+            >
+              {makingPdf
+                ? "최종 PDF 만드는 중..."
+                : "앞표지 · 본문 · 뒷표지 PDF 저장"}
+            </button>
+          </section>
+        )}
+
         {result && (
           <section className="mt-10">
             <div className="rounded-3xl bg-slate-900 p-6 text-white">
@@ -414,6 +1146,68 @@ ${pageText}
               </div>
             </div>
 
+            <div className="mt-8 rounded-3xl bg-purple-50 p-6 ring-1 ring-purple-200">
+              <p className="text-sm font-bold text-purple-600">
+                전체 이미지 생성
+              </p>
+
+              <h3 className="mt-1 text-2xl font-black text-slate-900">
+                확인한 설계안 전체 이미지 생성
+              </h3>
+
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                이미 만들어진 이미지는 건너뛰고,
+                아직 없는 블록만 순서대로 생성해.
+              </p>
+
+              <button
+                type="button"
+                onClick={generateAllImages}
+                disabled={
+                  generatingAll ||
+                  Boolean(generatingId)
+                }
+                className="mt-5 w-full rounded-2xl bg-purple-600 px-6 py-4 text-lg font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {generatingAll
+                  ? "전체 이미지 생성 중..."
+                  : "확인한 설계안 전체 이미지 생성"}
+              </button>
+
+              {batchProgress && (
+                <div className="mt-4 rounded-xl bg-white p-4 text-sm font-bold text-slate-700 ring-1 ring-purple-200">
+                  {batchProgress}
+                </div>
+              )}
+
+              <p className="mt-3 text-center text-xs font-semibold text-slate-500">
+                ⚠️ 생성되는 이미지 수만큼 이미지 API 비용이 발생해.
+              </p>
+            </div>
+
+            <div className="mt-6 rounded-3xl bg-emerald-50 p-6 ring-1 ring-emerald-200">
+              <p className="text-sm font-bold text-emerald-600">
+                작업함
+              </p>
+
+              <h3 className="mt-1 text-2xl font-black text-slate-900">
+                생성된 이미지 전체 작업함에 추가
+              </h3>
+
+              <p className="mt-2 text-sm text-slate-600">
+                현재 생성되어 있는 이미지만 추가하고,
+                이미 작업함에 있는 이미지는 건너뛰어.
+              </p>
+
+              <button
+                type="button"
+                onClick={addAllToWorkbox}
+                className="mt-5 w-full rounded-2xl bg-emerald-600 px-6 py-4 text-lg font-black text-white"
+              >
+                생성된 이미지 전체 작업함에 추가
+              </button>
+            </div>
+
             <div className="mt-8 space-y-10">
               {result.plans.map(
                 (plan, planIndex) => (
@@ -428,13 +1222,29 @@ ${pageText}
                         BLOCK {planIndex + 1}
                       </p>
 
-                      <h3 className="mt-2 text-3xl font-black">
-                        {plan.englishTitle}
-                      </h3>
+                      <input
+                        value={plan.englishTitle}
+                        onChange={(e) =>
+                          updatePlanField(
+                            planIndex,
+                            "englishTitle",
+                            e.target.value
+                          )
+                        }
+                        className="mt-2 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-3xl font-black text-white outline-none"
+                      />
 
-                      <p className="mt-2 text-xl font-bold text-slate-200">
-                        {plan.koreanSubtitle}
-                      </p>
+                      <input
+                        value={plan.koreanSubtitle}
+                        onChange={(e) =>
+                          updatePlanField(
+                            planIndex,
+                            "koreanSubtitle",
+                            e.target.value
+                          )
+                        }
+                        className="mt-3 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-xl font-bold text-slate-100 outline-none"
+                      />
                     </div>
 
                     <div className="p-6">
@@ -454,9 +1264,18 @@ ${pageText}
                             BLOCK SUMMARY
                           </p>
 
-                          <p className="mt-2 leading-6 text-slate-700">
-                            {plan.blockSummary}
-                          </p>
+                          <textarea
+                            value={plan.blockSummary}
+                            onChange={(e) =>
+                              updatePlanField(
+                                planIndex,
+                                "blockSummary",
+                                e.target.value
+                              )
+                            }
+                            rows={4}
+                            className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 leading-6 text-slate-700"
+                          />
                         </div>
                       </div>
 
@@ -501,9 +1320,19 @@ ${pageText}
                                   장면
                                 </p>
 
-                                <p className="mt-1 leading-6 text-slate-700">
-                                  {panel.scene}
-                                </p>
+                                <textarea
+                                  value={panel.scene}
+                                  onChange={(e) =>
+                                    updatePanelField(
+                                      planIndex,
+                                      panelIndex,
+                                      "scene",
+                                      e.target.value
+                                    )
+                                  }
+                                  rows={4}
+                                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 leading-6 text-slate-700"
+                                />
                               </div>
 
                               <div className="mt-4">
@@ -511,11 +1340,19 @@ ${pageText}
                                   등장인물
                                 </p>
 
-                                <p className="mt-1 leading-6 text-slate-700">
-                                  {
-                                    panel.characters
+                                <textarea
+                                  value={panel.characters}
+                                  onChange={(e) =>
+                                    updatePanelField(
+                                      planIndex,
+                                      panelIndex,
+                                      "characters",
+                                      e.target.value
+                                    )
                                   }
-                                </p>
+                                  rows={3}
+                                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 leading-6 text-slate-700"
+                                />
                               </div>
 
                               <div className="mt-5 space-y-3">
@@ -530,21 +1367,65 @@ ${pageText}
                                       }
                                       className="rounded-xl bg-slate-50 p-4"
                                     >
-                                      <p className="text-xs font-black text-purple-600">
-                                        {
-                                          dialogue.speaker
+                                      <input
+                                        value={dialogue.speaker}
+                                        onChange={(e) =>
+                                          updateDialogue(
+                                            planIndex,
+                                            panelIndex,
+                                            dialogueIndex,
+                                            "speaker",
+                                            e.target.value
+                                          )
                                         }
-                                      </p>
+                                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-black text-purple-600"
+                                      />
 
-                                      <p className="mt-1 text-lg font-bold leading-7 text-slate-900">
-                                        {
-                                          dialogue.text
+                                      <textarea
+                                        value={dialogue.text}
+                                        onChange={(e) =>
+                                          updateDialogue(
+                                            planIndex,
+                                            panelIndex,
+                                            dialogueIndex,
+                                            "text",
+                                            e.target.value
+                                          )
                                         }
-                                      </p>
+                                        rows={3}
+                                        className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-lg font-bold leading-7 text-slate-900"
+                                      />
+
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          deleteDialogue(
+                                            planIndex,
+                                            panelIndex,
+                                            dialogueIndex
+                                          )
+                                        }
+                                        className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-black text-red-600"
+                                      >
+                                        대사 삭제
+                                      </button>
                                     </div>
                                   )
                                 )}
                               </div>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  addDialogue(
+                                    planIndex,
+                                    panelIndex
+                                  )
+                                }
+                                className="mt-4 w-full rounded-xl border-2 border-dashed border-purple-300 px-4 py-3 text-sm font-black text-purple-600"
+                              >
+                                + 대사 추가
+                              </button>
                             </div>
                           )
                         )}
@@ -583,16 +1464,41 @@ ${pageText}
                       {generatedImages[
                         plan.id
                       ] && (
-                        <div className="mt-6 overflow-hidden rounded-3xl bg-slate-100 p-3">
-                          <img
-                            src={
-                              generatedImages[
-                                plan.id
-                              ]
+                        <div className="mt-6">
+                          <div className="overflow-hidden rounded-3xl bg-slate-100 p-3">
+                            <img
+                              src={
+                                generatedImages[
+                                  plan.id
+                                ]
+                              }
+                              alt={`${plan.englishTitle} 써밋네컷`}
+                              className="w-full rounded-2xl"
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              addToWorkbox(
+                                plan
+                              )
                             }
-                            alt={`${plan.englishTitle} 써밋네컷`}
-                            className="w-full rounded-2xl"
-                          />
+                            disabled={workItems.some(
+                              (item) =>
+                                item.id ===
+                                plan.id
+                            )}
+                            className="mt-4 w-full rounded-2xl bg-emerald-600 px-6 py-4 font-black text-white disabled:bg-slate-300"
+                          >
+                            {workItems.some(
+                              (item) =>
+                                item.id ===
+                                plan.id
+                            )
+                              ? "작업함에 추가됨"
+                              : "이 이미지 작업함에 추가"}
+                          </button>
                         </div>
                       )}
                     </div>
