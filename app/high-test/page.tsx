@@ -1069,86 +1069,6 @@ ${pageText}
     return data.image as string;
   };
 
-  const compressReferenceImage = async (
-    dataUrl: string
-  ) => {
-    return new Promise<string>(
-      (resolve, reject) => {
-        const image = new Image();
-
-        image.onload = () => {
-          const maxWidth = 480;
-          const maxHeight = 320;
-
-          const scale = Math.min(
-            maxWidth / image.width,
-            maxHeight / image.height,
-            1
-          );
-
-          const width = Math.round(
-            image.width * scale
-          );
-
-          const height = Math.round(
-            image.height * scale
-          );
-
-          const canvas =
-            document.createElement("canvas");
-
-          canvas.width = width;
-          canvas.height = height;
-
-          const ctx =
-            canvas.getContext("2d");
-
-          if (!ctx) {
-            reject(
-              new Error(
-                "참조 이미지 압축에 실패했어."
-              )
-            );
-            return;
-          }
-
-          ctx.fillStyle = "#FFFFFF";
-          ctx.fillRect(
-            0,
-            0,
-            width,
-            height
-          );
-
-          ctx.drawImage(
-            image,
-            0,
-            0,
-            width,
-            height
-          );
-
-          resolve(
-            canvas.toDataURL(
-              "image/jpeg",
-              0.35
-            )
-          );
-        };
-
-        image.onerror = () => {
-          reject(
-            new Error(
-              "참조 이미지를 읽지 못했어."
-            )
-          );
-        };
-
-        image.src = dataUrl;
-      }
-    );
-  };
-
   const makeFinalPdf = async () => {
     if (workItems.length === 0) {
       alert(
@@ -1163,23 +1083,11 @@ ${pageText}
       const coverImage =
         await createHighCoverImage();
 
-      const referenceImages =
-        await Promise.all(
-          workItems
-            .slice(0, 1)
-            .map(
-              (item) =>
-                compressReferenceImage(
-                  item.image
-                )
-            )
-        );
-
       const backCoverImage =
         await fetchPdfPageImage(
           "/api/high-back-cover",
           {
-            referenceImages,
+            plans: result?.plans || [],
           }
         );
 
