@@ -54,10 +54,13 @@ export default function HighSummaryTestPage() {
   const [makingPlan, setMakingPlan] =
     useState(false);
 
-  const [testImage, setTestImage] =
-    useState("");
+  const [generatedImages, setGeneratedImages] =
+    useState<Record<string, string>>({});
 
-  const [makingTestImage, setMakingTestImage] =
+  const [generatingId, setGeneratingId] =
+    useState<string | null>(null);
+
+  const [generatingAll, setGeneratingAll] =
     useState(false);
 
   const extractPdfText = async (
@@ -105,7 +108,7 @@ export default function HighSummaryTestPage() {
       );
 
       setResult(null);
-      setTestImage("");
+      setGeneratedImages({});
     } catch (error) {
       console.error(
         "PDF EXTRACTION ERROR:",
@@ -129,7 +132,7 @@ export default function HighSummaryTestPage() {
     }
 
     setMakingPlan(true);
-    setTestImage("");
+    setGeneratedImages({});
 
     try {
       const response =
@@ -176,11 +179,14 @@ export default function HighSummaryTestPage() {
     }
   };
 
-  const makeTestImage = async (
+  const generateImage = async (
     page: SummaryPage
   ) => {
-    setMakingTestImage(true);
-    setTestImage("");
+    if (generatedImages[page.id]) {
+      return generatedImages[page.id];
+    }
+
+    setGeneratingId(page.id);
 
     try {
       const response =
@@ -204,7 +210,7 @@ export default function HighSummaryTestPage() {
       if (!response.ok) {
         throw new Error(
           data?.error ||
-            "테스트 이미지 생성 실패"
+            "이미지 생성 실패"
         );
       }
 
@@ -214,21 +220,78 @@ export default function HighSummaryTestPage() {
         );
       }
 
-      setTestImage(data.image);
+      setGeneratedImages(
+        (prev) => ({
+          ...prev,
+          [page.id]: data.image,
+        })
+      );
+
+      return data.image as string;
     } catch (error: any) {
       console.error(
-        "SUMMARY TEST IMAGE ERROR:",
+        "SUMMARY IMAGE ERROR:",
         error
       );
 
       alert(
         error?.message ||
-          "요약집 테스트 이미지 생성 중 오류가 생겼어."
+          "요약집 이미지 생성 중 오류가 생겼어."
       );
+
+      throw error;
     } finally {
-      setMakingTestImage(false);
+      setGeneratingId(null);
     }
   };
+
+  const generateAllImages = async () => {
+    if (!result) {
+      return;
+    }
+
+    const remaining =
+      result.pages.filter(
+        (page) =>
+          !generatedImages[page.id]
+      );
+
+    if (remaining.length === 0) {
+      alert(
+        "이미 모든 요약 이미지가 만들어졌어."
+      );
+      return;
+    }
+
+    setGeneratingAll(true);
+
+    try {
+      for (const page of remaining) {
+        await generateImage(page);
+      }
+
+      alert(
+        "전체 요약 이미지 생성 완료!"
+      );
+    } catch {
+      // 개별 함수에서 이미 알림 처리
+    } finally {
+      setGeneratingAll(false);
+      setGeneratingId(null);
+    }
+  };
+
+  const generatedCount =
+    result
+      ? result.pages.filter(
+          (page) =>
+            Boolean(
+              generatedImages[
+                page.id
+              ]
+            )
+        ).length
+      : 0;
 
   return (
     <main className="min-h-screen bg-[#f5f4ef] px-6 py-10">
@@ -244,7 +307,7 @@ export default function HighSummaryTestPage() {
           </h1>
 
           <p className="mt-2 text-sm text-gray-500">
-            PDF → 본문 추출 → 요약집 계획 → 이미지 1장 테스트
+            PDF → 본문 추출 → 요약집 계획 → 이미지 생성
           </p>
         </div>
 
@@ -391,146 +454,201 @@ export default function HighSummaryTestPage() {
                 {result.pages.length}장
               </div>
 
+              <div className="mt-1 text-sm font-bold text-gray-500">
+                생성 완료:{" "}
+                {generatedCount} /{" "}
+                {result.pages.length}
+              </div>
+
+              <button
+                onClick={
+                  generateAllImages
+                }
+                disabled={
+                  generatingAll ||
+                  generatingId !== null
+                }
+                className="mt-5 w-full rounded-2xl bg-emerald-600 px-5 py-4 font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {generatingAll
+                  ? `전체 이미지 생성 중... ${generatedCount}/${result.pages.length}`
+                  : "전체 이미지 만들기"}
+              </button>
+
             </div>
 
             <div className="space-y-6">
 
               {result.pages.map(
-                (page, index) => (
-                  <article
-                    key={page.id}
-                    className="rounded-3xl bg-white p-6 shadow-sm"
-                  >
+                (page, index) => {
+                  const image =
+                    generatedImages[
+                      page.id
+                    ];
 
-                    <div className="flex flex-wrap items-center justify-between gap-3">
+                  const isGenerating =
+                    generatingId ===
+                    page.id;
 
-                      <div>
-                        <div className="text-xs font-black text-emerald-600">
-                          PAGE {index + 1}
+                  return (
+                    <article
+                      key={page.id}
+                      className="rounded-3xl bg-white p-6 shadow-sm"
+                    >
+
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+
+                        <div>
+                          <div className="text-xs font-black text-emerald-600">
+                            PAGE{" "}
+                            {index + 1}
+                          </div>
+
+                          <h3 className="mt-1 text-xl font-black">
+                            {
+                              page.englishTitle
+                            }
+                          </h3>
+
+                          <div className="mt-1 font-bold text-gray-700">
+                            {
+                              page.koreanTitle
+                            }
+                          </div>
                         </div>
 
-                        <h3 className="mt-1 text-xl font-black">
-                          {page.englishTitle}
-                        </h3>
+                        <span className="rounded-full bg-yellow-200 px-4 py-2 text-xs font-black">
+                          {
+                            page.visualType
+                          }
+                        </span>
 
-                        <div className="mt-1 font-bold text-gray-700">
-                          {page.koreanTitle}
-                        </div>
                       </div>
 
-                      <span className="rounded-full bg-yellow-200 px-4 py-2 text-xs font-black">
-                        {page.visualType}
-                      </span>
+                      <div className="mt-5 rounded-2xl bg-yellow-50 p-4">
 
-                    </div>
-
-                    <div className="mt-5 rounded-2xl bg-yellow-50 p-4">
-
-                      <div className="text-xs font-bold text-gray-500">
-                        한 줄 핵심
-                      </div>
-
-                      <div className="mt-1 font-black">
-                        {page.oneLineSummary}
-                      </div>
-
-                    </div>
-
-                    <div className="mt-5 grid gap-5 md:grid-cols-2">
-
-                      <div>
-                        <div className="mb-2 font-black">
-                          핵심 내용
+                        <div className="text-xs font-bold text-gray-500">
+                          한 줄 핵심
                         </div>
 
-                        <ul className="space-y-2">
-                          {page.keyPoints.map(
-                            (
-                              point,
-                              pointIndex
-                            ) => (
-                              <li
-                                key={pointIndex}
-                                className="rounded-xl bg-gray-50 px-4 py-3 text-sm"
-                              >
-                                • {point}
-                              </li>
-                            )
-                          )}
-                        </ul>
-                      </div>
-
-                      <div>
-                        <div className="mb-2 font-black">
-                          핵심 어휘
+                        <div className="mt-1 font-black">
+                          {
+                            page.oneLineSummary
+                          }
                         </div>
 
-                        <div className="flex flex-wrap gap-2">
-                          {page.keyWords.map(
-                            (
-                              word,
-                              wordIndex
-                            ) => (
-                              <span
-                                key={wordIndex}
-                                className="rounded-full bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800"
-                              >
-                                {word}
-                              </span>
-                            )
-                          )}
+                      </div>
+
+                      <div className="mt-5 grid gap-5 md:grid-cols-2">
+
+                        <div>
+                          <div className="mb-2 font-black">
+                            핵심 내용
+                          </div>
+
+                          <ul className="space-y-2">
+                            {page.keyPoints.map(
+                              (
+                                point,
+                                pointIndex
+                              ) => (
+                                <li
+                                  key={
+                                    pointIndex
+                                  }
+                                  className="rounded-xl bg-gray-50 px-4 py-3 text-sm"
+                                >
+                                  • {point}
+                                </li>
+                              )
+                            )}
+                          </ul>
                         </div>
+
+                        <div>
+                          <div className="mb-2 font-black">
+                            핵심 어휘
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            {page.keyWords.map(
+                              (
+                                word,
+                                wordIndex
+                              ) => (
+                                <span
+                                  key={
+                                    wordIndex
+                                  }
+                                  className="rounded-full bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800"
+                                >
+                                  {word}
+                                </span>
+                              )
+                            )}
+                          </div>
+                        </div>
+
                       </div>
 
-                    </div>
+                      <div className="mt-5 rounded-2xl border border-dashed p-4">
 
-                    <div className="mt-5 rounded-2xl border border-dashed p-4">
+                        <div className="text-xs font-bold text-gray-500">
+                          시각화 아이디어
+                        </div>
 
-                      <div className="text-xs font-bold text-gray-500">
-                        시각화 아이디어
+                        <div className="mt-1 text-sm leading-6">
+                          {
+                            page.visualIdea
+                          }
+                        </div>
+
                       </div>
 
-                      <div className="mt-1 text-sm leading-6">
-                        {page.visualIdea}
+                      <div className="mt-4 text-xs text-gray-400">
+                        원문 범위:{" "}
+                        {
+                          page.sourceRange
+                        }
                       </div>
 
-                    </div>
-
-                    <div className="mt-4 text-xs text-gray-400">
-                      원문 범위:{" "}
-                      {page.sourceRange}
-                    </div>
-
-                    {index === 0 && (
                       <div className="mt-6 border-t pt-6">
 
                         <button
                           onClick={() =>
-                            makeTestImage(page)
+                            generateImage(
+                              page
+                            )
                           }
-                          disabled={makingTestImage}
-                          className="w-full rounded-2xl bg-emerald-600 px-5 py-4 font-black text-white transition hover:bg-emerald-700 disabled:opacity-40"
+                          disabled={
+                            Boolean(image) ||
+                            isGenerating ||
+                            generatingAll
+                          }
+                          className="w-full rounded-2xl bg-black px-5 py-4 font-black text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
                         >
-                          {makingTestImage
-                            ? "테스트 이미지 만드는 중..."
-                            : "첫 페이지 테스트 이미지 만들기"}
+                          {image
+                            ? "이미지 생성 완료"
+                            : isGenerating
+                              ? "이미지 만드는 중..."
+                              : "이미지 만들기"}
                         </button>
 
-                        {testImage && (
+                        {image && (
                           <div className="mt-6 overflow-hidden rounded-3xl border bg-[#f5f4ef] p-3">
                             <img
-                              src={testImage}
-                              alt="고등 요약집 테스트 이미지"
+                              src={image}
+                              alt={`${page.englishTitle} 요약 이미지`}
                               className="w-full rounded-2xl"
                             />
                           </div>
                         )}
 
                       </div>
-                    )}
 
-                  </article>
-                )
+                    </article>
+                  );
+                }
               )}
 
             </div>
