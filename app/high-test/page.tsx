@@ -1077,8 +1077,8 @@ ${pageText}
         const image = new Image();
 
         image.onload = () => {
-          const maxWidth = 700;
-          const maxHeight = 470;
+          const maxWidth = 480;
+          const maxHeight = 320;
 
           const scale = Math.min(
             maxWidth / image.width,
@@ -1131,7 +1131,7 @@ ${pageText}
           resolve(
             canvas.toDataURL(
               "image/jpeg",
-              0.58
+              0.35
             )
           );
         };
@@ -1166,7 +1166,7 @@ ${pageText}
       const referenceImages =
         await Promise.all(
           workItems
-            .slice(0, 2)
+            .slice(0, 1)
             .map(
               (item) =>
                 compressReferenceImage(
