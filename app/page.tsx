@@ -1578,7 +1578,9 @@ export default function Home() {
               <>
                 <button
                   type="button"
-                  onClick={() => setWorkMode("fourcut")}
+                  onClick={() => {
+                    window.location.href = "/high-test";
+                  }}
                   className="rounded-3xl bg-slate-900 p-8 text-left text-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
                 >
                   <p className="text-sm font-bold text-purple-300">
