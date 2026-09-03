@@ -1432,155 +1432,114 @@ export default function Home() {
 
    if (!schoolLevel) {
     return (
-      <main className="min-h-screen bg-[#f7f4ea] px-5 py-10">
+      <main className="min-h-screen bg-[#f7f4ea] px-5 py-7">
         <div className="mx-auto max-w-6xl">
 
-          {/* 상단 브랜드 영역 */}
-          <div className="relative overflow-hidden rounded-[32px] border border-slate-200 bg-white px-6 py-10 shadow-sm md:px-10 md:py-12">
+          {/* BRAND */}
+          <section className="rounded-[30px] bg-white px-6 py-6 text-center shadow-sm md:px-10 md:py-7">
+            <img
+              src="/summit-edu.png"
+              alt="SUMMIT EDU"
+              className="mx-auto w-[145px] md:w-[165px]"
+            />
 
-            {/* 두들 장식 */}
-            
+            <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-900 md:text-5xl">
+              SUMMIT CONTENT MAKER
+            </h1>
 
-            
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-3 text-xl font-black text-slate-700 md:gap-5 md:text-[27px]">
+              <span>교과서 &amp; 부교재</span>
 
-            
+              <span className="inline-flex h-11 min-w-16 items-center justify-center rounded-full bg-emerald-100 px-4 text-2xl font-black text-emerald-700 shadow-sm">
+                →
+              </span>
 
-            
-
-            <div className="text-center">
-
-              <img
-                src="/summit-edu.png"
-                alt="SUMMIT EDU"
-                className="mx-auto w-[220px] md:w-[260px]"
-              />
-
-              
-
-              <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-900 md:text-6xl">
-                SUMMIT CONTENT MAKER
-              </h1>
-
-              <p className="mx-auto mt-5 max-w-2xl text-base font-medium leading-7 text-slate-600 md:text-lg">
-                교과서와 부교재를 최적화된 VISUAL 학습자료로
-              </p>
-
+              <span>
+                최적화된 <span className="text-emerald-700">VISUAL</span> 학습자료
+              </span>
             </div>
+          </section>
 
-          </div>
+          {/* SCHOOL LEVEL */}
+          <section className="mt-7 grid gap-6 md:grid-cols-2">
 
-          {/* 학년군 선택 */}
-          <div className="mt-8 grid gap-6 md:grid-cols-2">
-
-            {/* 중등 */}
+            {/* MIDDLE */}
             <button
               type="button"
               onClick={() => {
                 setSchoolLevel("middle");
                 setWorkMode("");
               }}
-              className="group relative overflow-hidden rounded-[30px] border border-emerald-200 bg-[#ecf8f2] p-8 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
+              className="relative min-h-[300px] overflow-hidden rounded-[34px] border border-emerald-100 bg-[#dff5ec] p-8 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
             >
-              <div className="absolute right-6 top-5 text-5xl opacity-20 transition group-hover:rotate-6 group-hover:scale-110">
-                ✎
-              </div>
-
-              <div className="absolute bottom-6 right-8 text-4xl opacity-20">
-                ✦
-              </div>
-
               <img
                 src="/summit-bulb.png"
                 alt=""
-                className="absolute right-7 top-5 w-28 opacity-90"
+                className="absolute -right-4 top-4 w-[210px] opacity-95 md:w-[240px]"
               />
 
-              <div className="inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-black tracking-widest text-emerald-700 shadow-sm">
-                MIDDLE SCHOOL
-              </div>
+              <div className="relative z-10 max-w-[58%]">
+                <div className="inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-black tracking-widest text-emerald-700 shadow-sm">
+                  MIDDLE SCHOOL
+                </div>
 
-              <h2 className="mt-6 text-4xl font-black text-slate-900">
-                중등
-              </h2>
+                <h2 className="mt-5 text-5xl font-black text-slate-900">
+                  중등
+                </h2>
 
-              <p className="mt-3 text-lg font-bold text-slate-600">
-                대화문 · 본문
-              </p>
+                <p className="mt-3 text-lg font-bold text-slate-600">
+                  대화문 · 본문
+                </p>
 
-              <div className="mt-7 flex flex-wrap gap-2">
-                <span className="rounded-full bg-white px-3 py-2 text-sm font-bold text-slate-700">
-                  써밋네컷
-                </span>
-
-                
-              </div>
-
-              <div className="mt-8 text-sm font-black text-emerald-700">
-                중등 콘텐츠 만들기 →
+                <div className="mt-7">
+                  <span className="inline-flex rounded-full bg-white px-4 py-2 text-sm font-black text-slate-700 shadow-sm">
+                    써밋네컷
+                  </span>
+                </div>
               </div>
             </button>
 
-            {/* 고등 */}
+            {/* HIGH */}
             <button
               type="button"
               onClick={() => {
                 setSchoolLevel("high");
                 setWorkMode("");
               }}
-              className="group relative overflow-hidden rounded-[30px] border border-amber-200 bg-[#fff8df] p-8 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
+              className="relative min-h-[300px] overflow-hidden rounded-[34px] border border-amber-100 bg-[#fff0b8] p-8 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
             >
-              {/* 필름스트립 느낌 */}
-              <div className="absolute right-5 top-5 flex gap-1 opacity-20 transition group-hover:rotate-3 group-hover:scale-105">
-                <div className="h-20 w-5 rounded bg-slate-900" />
-                <div className="h-20 w-5 rounded bg-slate-900" />
-                <div className="h-20 w-5 rounded bg-slate-900" />
-                <div className="h-20 w-5 rounded bg-slate-900" />
-              </div>
-
-              <div className="absolute bottom-6 right-8 text-4xl opacity-20">
-                ✧
-              </div>
-
               <img
                 src="/summit-bulb.png"
                 alt=""
-                className="absolute right-7 top-5 w-28 opacity-90"
+                className="absolute -right-4 top-4 w-[210px] opacity-95 md:w-[240px]"
               />
 
-              <div className="inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-black tracking-widest text-amber-700 shadow-sm">
-                HIGH SCHOOL
-              </div>
+              <div className="relative z-10 max-w-[58%]">
+                <div className="inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-black tracking-widest text-amber-700 shadow-sm">
+                  HIGH SCHOOL
+                </div>
 
-              <h2 className="mt-6 text-4xl font-black text-slate-900">
-                고등
-              </h2>
+                <h2 className="mt-5 text-5xl font-black text-slate-900">
+                  고등
+                </h2>
 
-              <p className="mt-3 text-lg font-bold text-slate-600">
-                써밋네컷 · 요약집
-              </p>
+                <p className="mt-3 text-lg font-bold text-slate-600">
+                  써밋네컷 · 요약집
+                </p>
 
-              <div className="mt-7 flex flex-wrap gap-2">
-                <span className="rounded-full bg-white px-3 py-2 text-sm font-bold text-slate-700">
-                  써밋네컷
-                </span>
+                <div className="mt-7 flex flex-wrap gap-2">
+                  <span className="inline-flex rounded-full bg-white px-4 py-2 text-sm font-black text-slate-700 shadow-sm">
+                    써밋네컷
+                  </span>
 
-                <span className="rounded-full bg-white px-3 py-2 text-sm font-bold text-slate-700">
-                  요약.ZIP
-                </span>
-              </div>
-
-              <div className="mt-8 text-sm font-black text-amber-700">
-                고등 콘텐츠 만들기 →
+                  <span className="inline-flex rounded-full bg-white px-4 py-2 text-sm font-black text-slate-700 shadow-sm">
+                    요약.ZIP
+                  </span>
+                </div>
               </div>
             </button>
 
-          </div>
-
-          {/* 하단 한 줄 */}
-          <div className="mt-7 text-center text-xs font-bold text-slate-400">
-            SUMMIT EDU · CONTENT MAKER
-          </div>
-
+          </section>
         </div>
       </main>
     );
