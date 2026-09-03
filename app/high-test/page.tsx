@@ -524,6 +524,171 @@ ${pageText}
     ctx.fillStyle = "#F7F5ED";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    // --------------------------------
+    // 가벼운 두들 / 낙서 장식
+    // --------------------------------
+
+    ctx.save();
+
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    const drawSpark = (
+      x: number,
+      y: number,
+      size: number,
+      color: string
+    ) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 5;
+
+      ctx.beginPath();
+      ctx.moveTo(x, y - size);
+      ctx.lineTo(x, y + size);
+      ctx.moveTo(x - size, y);
+      ctx.lineTo(x + size, y);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(
+        x - size * 0.65,
+        y - size * 0.65
+      );
+      ctx.lineTo(
+        x + size * 0.65,
+        y + size * 0.65
+      );
+      ctx.moveTo(
+        x + size * 0.65,
+        y - size * 0.65
+      );
+      ctx.lineTo(
+        x - size * 0.65,
+        y + size * 0.65
+      );
+      ctx.stroke();
+    };
+
+    const drawStar = (
+      cx: number,
+      cy: number,
+      radius: number,
+      color: string
+    ) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 5;
+
+      ctx.beginPath();
+
+      for (let i = 0; i < 10; i++) {
+        const angle =
+          -Math.PI / 2 +
+          (Math.PI * i) / 5;
+
+        const r =
+          i % 2 === 0
+            ? radius
+            : radius * 0.42;
+
+        const x =
+          cx + Math.cos(angle) * r;
+
+        const y =
+          cy + Math.sin(angle) * r;
+
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+
+      ctx.closePath();
+      ctx.stroke();
+    };
+
+    // 왼쪽 위 작은 강조선
+    ctx.strokeStyle = "#F59E0B";
+    ctx.lineWidth = 6;
+
+    ctx.beginPath();
+    ctx.moveTo(105, 300);
+    ctx.lineTo(75, 275);
+    ctx.moveTo(125, 280);
+    ctx.lineTo(112, 245);
+    ctx.moveTo(92, 330);
+    ctx.lineTo(52, 325);
+    ctx.stroke();
+
+    // 별 / 반짝임
+    drawStar(
+      1390,
+      250,
+      28,
+      "#FBBF24"
+    );
+
+    drawSpark(
+      1430,
+      360,
+      20,
+      "#60A5FA"
+    );
+
+    drawSpark(
+      105,
+      760,
+      17,
+      "#34D399"
+    );
+
+    drawStar(
+      1360,
+      760,
+      22,
+      "#F472B6"
+    );
+
+    // 오른쪽 아래 느슨한 곡선
+    ctx.strokeStyle = "#818CF8";
+    ctx.lineWidth = 5;
+
+    ctx.beginPath();
+    ctx.moveTo(1320, 690);
+    ctx.bezierCurveTo(
+      1390,
+      720,
+      1435,
+      690,
+      1410,
+      650
+    );
+    ctx.bezierCurveTo(
+      1390,
+      620,
+      1435,
+      610,
+      1450,
+      640
+    );
+    ctx.stroke();
+
+    // 작은 동그라미
+    ctx.strokeStyle = "#38BDF8";
+    ctx.lineWidth = 4;
+
+    ctx.beginPath();
+    ctx.arc(
+      135,
+      820,
+      10,
+      0,
+      Math.PI * 2
+    );
+    ctx.stroke();
+
+    ctx.restore();
+
     const loadImage = (src: string) =>
       new Promise<HTMLImageElement>(
         (resolve, reject) => {
@@ -573,7 +738,7 @@ ${pageText}
       '800 42px "Noto Sans KR", "Malgun Gothic", sans-serif';
 
     const lessonText =
-      `${lessonName.trim() || "Lesson"} · 써밋네컷`;
+      lessonName.trim() || "Lesson";
 
     ctx.fillText(
       lessonText,
@@ -716,11 +881,11 @@ ${pageText}
     try {
       const logo =
         await loadImage(
-          "/summit-logo.png"
+          "/summit-logo-trimmed.png"
         );
 
-      const maxLogoWidth = 430;
-      const maxLogoHeight = 125;
+      const maxLogoWidth = 250;
+      const maxLogoHeight = 160;
 
       const ratio = Math.min(
         maxLogoWidth /
@@ -741,7 +906,7 @@ ${pageText}
         logo,
         canvas.width / 2 -
           logoWidth / 2,
-        815,
+        805,
         logoWidth,
         logoHeight
       );
