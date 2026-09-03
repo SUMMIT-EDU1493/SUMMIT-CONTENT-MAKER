@@ -65,10 +65,8 @@ export default function Home() {
   const [loadingAi, setLoadingAi] = useState(false);
   const [loadingComic, setLoadingComic] = useState(false);
   const [loadingAllComics, setLoadingAllComics] = useState(false);
-
   const [loadingAllImages, setLoadingAllImages] = useState(false);
   const [imageProgress, setImageProgress] = useState("");
-
   const [makingPdf, setMakingPdf] = useState(false);
   const [currentCreatingTitle, setCurrentCreatingTitle] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -711,7 +709,7 @@ export default function Home() {
 
     const bgColor = "#f8f7f3";
     const black = "#111111";
-    const darkGray = "#505050";
+    const gray = "#505050";
     const white = "#ffffff";
 
     ctx.fillStyle = bgColor;
@@ -722,7 +720,6 @@ export default function Home() {
     const filmWidth = 1300;
     const filmHeight = 390;
 
-    const textLeft = filmX;
     const topLine = [schoolName.trim(), gradeName.trim()]
       .filter(Boolean)
       .join("  ·  ");
@@ -730,21 +727,21 @@ export default function Home() {
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
 
-    // 학교 · 학년 : 조금 작게
+    // 학교 · 학년
     ctx.fillStyle = black;
-    ctx.font = '700 42px "Noto Sans KR", "Malgun Gothic", sans-serif';
-    ctx.fillText(topLine || gradeName || "SUMMIT EDU", textLeft, 145);
+    ctx.font = '700 36px "Noto Sans KR", "Malgun Gothic", sans-serif';
+    ctx.fillText(topLine || gradeName || "SUMMIT EDU", filmX, 145);
 
-    // Lesson · 대화문 : 조금 크게
-    ctx.fillStyle = darkGray;
-    ctx.font = '700 50px "Noto Sans KR", "Malgun Gothic", sans-serif';
+    // Lesson · 대화문
+    ctx.fillStyle = gray;
+    ctx.font = '700 42px "Noto Sans KR", "Malgun Gothic", sans-serif';
     ctx.fillText(
       `${lessonName.trim() || "Lesson"}  ·  ${contentType}`,
-      textLeft,
-      215
+      filmX,
+      205
     );
 
-    // 필름 바깥 검정
+    // 필름 바깥
     ctx.fillStyle = black;
     ctx.beginPath();
     ctx.roundRect(filmX, filmY, filmWidth, filmHeight, 26);
@@ -777,7 +774,7 @@ export default function Home() {
       ctx.fill();
     }
 
-    // 안쪽 네 칸: 흰색
+    // 안쪽 흰 네 칸
     const letters = ["써", "밋", "네", "컷"];
     const innerMarginX = 48;
     const frameGap = 20;
@@ -796,14 +793,22 @@ export default function Home() {
       ctx.lineWidth = 7;
       ctx.strokeRect(x, frameTop, frameWidth, frameHeight);
 
+      // 더 굵고 크게
       ctx.fillStyle = black;
-      ctx.font = '900 120px "Noto Sans KR", "Malgun Gothic", sans-serif';
+      ctx.strokeStyle = black;
+      ctx.lineWidth = 2;
+      ctx.font = '900 138px "Noto Sans KR", "Malgun Gothic", sans-serif';
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(letter, x + frameWidth / 2, frameTop + frameHeight / 2 + 3);
+
+      const centerX = x + frameWidth / 2;
+      const centerY = frameTop + frameHeight / 2 + 3;
+
+      ctx.strokeText(letter, centerX, centerY);
+      ctx.fillText(letter, centerX, centerY);
     });
 
-    // 로고 더 크게
+    // 로고 크게
     try {
       const logo = await loadImage("/summit-logo.png");
 
@@ -949,9 +954,7 @@ export default function Home() {
 
         <section className="mt-10 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <p className="text-sm font-bold text-purple-600">COVER INFORMATION</p>
-
           <h2 className="mt-1 text-2xl font-black">표지 정보</h2>
-
           <p className="mt-2 text-sm text-slate-500">
             여기 입력한 내용이 PDF 첫 장 표지에 들어가.
           </p>
