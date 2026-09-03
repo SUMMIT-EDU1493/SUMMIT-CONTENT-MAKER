@@ -52,7 +52,12 @@ type WorkItem = {
   image: string;
 };
 
+type SchoolLevel = "" | "middle" | "high";
+type WorkMode = "" | "dialogue" | "passage" | "fourcut" | "summary";
+
 export default function Home() {
+  const [schoolLevel, setSchoolLevel] = useState<SchoolLevel>("");
+  const [workMode, setWorkMode] = useState<WorkMode>("");
   const [schoolName, setSchoolName] = useState("");
   const [gradeName, setGradeName] = useState("중3");
   const [lessonName, setLessonName] = useState("Lesson 1");
@@ -1424,9 +1429,255 @@ export default function Home() {
     workItems.length +
     (backCoverImage ? 1 : 0);
 
+  if (!schoolLevel) {
+    return (
+      <main className="min-h-screen bg-slate-50 px-5 py-12">
+        <div className="mx-auto max-w-5xl">
+          <div className="text-center">
+            <p className="text-sm font-bold text-blue-600">
+              SUMMIT EDU
+            </p>
+
+            <h1 className="mt-2 text-4xl font-black text-slate-900 md:text-5xl">
+              SUMMIT CONTENT MAKER
+            </h1>
+
+            <p className="mt-4 text-slate-600">
+              만들 콘텐츠의 학년군을 먼저 선택해줘.
+            </p>
+          </div>
+
+          <div className="mt-12 grid gap-6 md:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => {
+                setSchoolLevel("middle");
+                setWorkMode("");
+              }}
+              className="rounded-3xl bg-white p-8 text-left shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-1 hover:shadow-lg"
+            >
+              <p className="text-sm font-bold text-purple-600">
+                MIDDLE SCHOOL
+              </p>
+
+              <h2 className="mt-2 text-3xl font-black text-slate-900">
+                중등
+              </h2>
+
+              <p className="mt-3 text-slate-500">
+                대화문 · 본문
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSchoolLevel("high");
+                setWorkMode("");
+              }}
+              className="rounded-3xl bg-slate-900 p-8 text-left text-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+            >
+              <p className="text-sm font-bold text-purple-300">
+                HIGH SCHOOL
+              </p>
+
+              <h2 className="mt-2 text-3xl font-black">
+                고등
+              </h2>
+
+              <p className="mt-3 text-slate-300">
+                써밋네컷 · 요약집
+              </p>
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (!workMode) {
+    const isMiddle = schoolLevel === "middle";
+
+    return (
+      <main className="min-h-screen bg-slate-50 px-5 py-12">
+        <div className="mx-auto max-w-5xl">
+          <button
+            type="button"
+            onClick={() => {
+              setSchoolLevel("");
+              setWorkMode("");
+            }}
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-600"
+          >
+            ← 중등 / 고등 선택으로
+          </button>
+
+          <div className="mt-8">
+            <p className="text-sm font-bold text-blue-600">
+              SUMMIT CONTENT MAKER
+            </p>
+
+            <h1 className="mt-2 text-4xl font-black text-slate-900">
+              {isMiddle ? "중등" : "고등"} 콘텐츠 선택
+            </h1>
+
+            <p className="mt-3 text-slate-600">
+              {isMiddle
+                ? "대화문 또는 본문 작업을 선택해줘."
+                : "써밋네컷 또는 요약집 작업을 선택해줘."}
+            </p>
+          </div>
+
+          <div className="mt-10 grid gap-6 md:grid-cols-2">
+            {isMiddle ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWorkMode("dialogue");
+                    setContentType("대화문");
+                    setGradeName("중3");
+                  }}
+                  className="rounded-3xl bg-purple-600 p-8 text-left text-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+                >
+                  <p className="text-sm font-bold text-purple-200">
+                    DIALOGUE
+                  </p>
+
+                  <h2 className="mt-2 text-3xl font-black">
+                    대화문
+                  </h2>
+
+                  <p className="mt-3 text-purple-100">
+                    중등 대화문 써밋네컷
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWorkMode("passage");
+                    setContentType("본문");
+                  }}
+                  className="rounded-3xl bg-white p-8 text-left shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-1 hover:shadow-lg"
+                >
+                  <p className="text-sm font-bold text-blue-600">
+                    PASSAGE
+                  </p>
+
+                  <h2 className="mt-2 text-3xl font-black text-slate-900">
+                    본문
+                  </h2>
+
+                  <p className="mt-3 text-slate-500">
+                    중등 본문 작업
+                  </p>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setWorkMode("fourcut")}
+                  className="rounded-3xl bg-slate-900 p-8 text-left text-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+                >
+                  <p className="text-sm font-bold text-purple-300">
+                    SUMMIT FOUR-CUT
+                  </p>
+
+                  <h2 className="mt-2 text-3xl font-black">
+                    써밋네컷
+                  </h2>
+
+                  <p className="mt-3 text-slate-300">
+                    긴 본문을 흐름대로 나눠 여러 개의 4컷으로
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setWorkMode("summary")}
+                  className="rounded-3xl bg-white p-8 text-left shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-1 hover:shadow-lg"
+                >
+                  <p className="text-sm font-bold text-amber-600">
+                    SUMMARY BOOK
+                  </p>
+
+                  <h2 className="mt-2 text-3xl font-black text-slate-900">
+                    요약집
+                  </h2>
+
+                  <p className="mt-3 text-slate-500">
+                    고등 본문 핵심 요약 자료
+                  </p>
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (!(schoolLevel === "middle" && workMode === "dialogue")) {
+    const modeTitle =
+      workMode === "passage"
+        ? "중등 · 본문"
+        : workMode === "fourcut"
+        ? "고등 · 써밋네컷"
+        : "고등 · 요약집";
+
+    return (
+      <main className="min-h-screen bg-slate-50 px-5 py-12">
+        <div className="mx-auto max-w-5xl">
+          <button
+            type="button"
+            onClick={() => setWorkMode("")}
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-600"
+          >
+            ← 콘텐츠 선택으로
+          </button>
+
+          <section className="mt-8 rounded-3xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
+            <p className="text-sm font-bold text-purple-600">
+              NEXT WORKSPACE
+            </p>
+
+            <h1 className="mt-2 text-4xl font-black text-slate-900">
+              {modeTitle}
+            </h1>
+
+            <p className="mt-4 text-slate-600">
+              메뉴 연결 완료. 이 화면부터 다음 기능을 개발하면 돼.
+            </p>
+
+            {workMode === "fourcut" && (
+              <div className="mt-6 rounded-2xl bg-slate-900 p-6 text-white">
+                <p className="text-sm font-bold text-purple-300">
+                  다음 개발
+                </p>
+
+                <p className="mt-2 text-xl font-black">
+                  고등 긴 본문 → 흐름 순서대로 여러 개의 써밋네컷
+                </p>
+              </div>
+            )}
+          </section>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-10">
       <div className="mx-auto max-w-6xl">
+        <button
+          type="button"
+          onClick={() => setWorkMode("")}
+          className="mb-6 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-600"
+        >
+          ← 콘텐츠 선택으로
+        </button>
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>
             <p className="text-sm font-bold text-blue-600">
