@@ -242,22 +242,27 @@ export default function HighSummaryTestPage() {
 
           <div className="mt-6">
 
-            <div className="mb-2 text-sm font-bold">
+            <div className="mb-3 text-sm font-bold">
               PDF 업로드
             </div>
 
-            <input
-              type="file"
-              accept="application/pdf"
-              onChange={(e) => {
-                const file =
-                  e.target.files?.[0];
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 font-black text-white shadow-sm transition hover:bg-emerald-700">
+              PDF 업로드
 
-                if (file) {
-                  extractPdfText(file);
-                }
-              }}
-            />
+              <input
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const file =
+                    e.target.files?.[0];
+
+                  if (file) {
+                    extractPdfText(file);
+                  }
+                }}
+              />
+            </label>
 
             {loadingPdf && (
               <div className="mt-3 text-sm font-bold text-emerald-600">
@@ -293,7 +298,7 @@ export default function HighSummaryTestPage() {
               makingPlan ||
               !sourceText.trim()
             }
-            className="mt-6 w-full rounded-2xl bg-black px-6 py-4 font-black text-white disabled:opacity-40"
+            className="mt-6 w-full rounded-2xl bg-black px-6 py-4 font-black text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {makingPlan
               ? "요약집 계획 만드는 중..."
@@ -320,8 +325,7 @@ export default function HighSummaryTestPage() {
               </p>
 
               <div className="mt-3 text-sm font-bold text-gray-500">
-                예상 본문 페이지:
-                {" "}
+                예상 본문 페이지:{" "}
                 {result.pages.length}장
               </div>
 
@@ -435,8 +439,7 @@ export default function HighSummaryTestPage() {
                     </div>
 
                     <div className="mt-4 text-xs text-gray-400">
-                      원문 범위:
-                      {" "}
+                      원문 범위:{" "}
                       {page.sourceRange}
                     </div>
 
