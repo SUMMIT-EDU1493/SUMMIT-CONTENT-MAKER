@@ -66,6 +66,8 @@ export default function Home() {
   const [loadingComic, setLoadingComic] = useState(false);
   const [loadingAllComics, setLoadingAllComics] = useState(false);
   const [loadingAllImages, setLoadingAllImages] = useState(false);
+  const [loadingCheerPage, setLoadingCheerPage] = useState(false);
+
   const [imageProgress, setImageProgress] = useState("");
   const [makingPdf, setMakingPdf] = useState(false);
   const [currentCreatingTitle, setCurrentCreatingTitle] = useState("");
@@ -74,6 +76,9 @@ export default function Home() {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [comicProjects, setComicProjects] = useState<ComicProject[]>([]);
   const [workItems, setWorkItems] = useState<WorkItem[]>([]);
+
+  const [cheerPageImage, setCheerPageImage] = useState("");
+  const [cheerText, setCheerText] = useState("");
 
   const makeId = () =>
     `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -85,6 +90,8 @@ export default function Home() {
       setPdfText("");
       setAnalysis(null);
       setComicProjects([]);
+      setCheerPageImage("");
+      setCheerText("");
 
       const arrayBuffer = await file.arrayBuffer();
 
@@ -136,6 +143,8 @@ export default function Home() {
       setErrorMessage("");
       setAnalysis(null);
       setComicProjects([]);
+      setCheerPageImage("");
+      setCheerText("");
 
       const response = await fetch("/api/analyze", {
         method: "POST",
@@ -258,7 +267,10 @@ export default function Home() {
           `${index + 1}/${dialogues.length} · ${dialogue.title}`
         );
 
-        const plan = await requestComicPlan(dialogue.title, dialogue.content);
+        const plan = await requestComicPlan(
+          dialogue.title,
+          dialogue.content
+        );
 
         newProjects.push({
           id: makeId(),
@@ -314,6 +326,7 @@ export default function Home() {
         if (project.id !== projectId) return project;
 
         const newPanels = [...project.plan.panels];
+
         newPanels[panelIndex] = {
           ...newPanels[panelIndex],
           scene: value,
@@ -398,12 +411,16 @@ export default function Home() {
     );
   };
 
-  const addDialogue = (projectId: string, panelIndex: number) => {
+  const addDialogue = (
+    projectId: string,
+    panelIndex: number
+  ) => {
     setComicProjects((prev) =>
       prev.map((project) => {
         if (project.id !== projectId) return project;
 
         const newPanels = [...project.plan.panels];
+
         newPanels[panelIndex] = {
           ...newPanels[panelIndex],
           dialogue: [
@@ -436,6 +453,7 @@ export default function Home() {
         if (project.id !== projectId) return project;
 
         const newPanels = [...project.plan.panels];
+
         newPanels[panelIndex] = {
           ...newPanels[panelIndex],
           dialogue: newPanels[panelIndex].dialogue.filter(
@@ -460,7 +478,9 @@ export default function Home() {
     );
   };
 
-  const requestComicImage = async (plan: ComicPlan): Promise<string> => {
+  const requestComicImage = async (
+    plan: ComicPlan
+  ): Promise<string> => {
     const response = await fetch("/api/generate-comic", {
       method: "POST",
       headers: {
@@ -486,8 +506,13 @@ export default function Home() {
     return data.image;
   };
 
-  const generateComicImage = async (projectId: string) => {
-    const project = comicProjects.find((item) => item.id === projectId);
+  const generateComicImage = async (
+    projectId: string
+  ) => {
+    const project = comicProjects.find(
+      (item) => item.id === projectId
+    );
+
     if (!project) return;
 
     try {
@@ -537,7 +562,9 @@ export default function Home() {
   };
 
   const generateAllComicImages = async () => {
-    const targets = comicProjects.filter((project) => !project.image);
+    const targets = comicProjects.filter(
+      (project) => !project.image
+    );
 
     if (comicProjects.length === 0) {
       alert("먼저 설계안을 만들어줘.");
@@ -606,14 +633,62 @@ export default function Home() {
     }
   };
 
+  const generateCheerPage = async () => {
+    if (comicProjects.length === 0) {
+      alert("먼저 써밋네컷 설계안을 만들어줘.");
+      return;
+    }
+
+    try {
+      setLoadingCheerPage(true);
+      setErrorMessage("");
+
+      const response = await fetch("/api/generate-cheer-page", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          plans: comicProjects.map((project) => project.plan),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.detail ||
+            data?.error ||
+            "마지막 응원장 생성에 실패했습니다."
+        );
+      }
+
+      if (!data.image) {
+        throw new Error("응원장 이미지가 없습니다.");
+      }
+
+      setCheerPageImage(data.image);
+      setCheerText(data.cheerText || "");
+    } catch (error: any) {
+      setErrorMessage(
+        error?.message || "마지막 응원장 생성 중 오류가 발생했어."
+      );
+    } finally {
+      setLoadingCheerPage(false);
+    }
+  };
+
   const addToWorkBox = (projectId: string) => {
-    const project = comicProjects.find((item) => item.id === projectId);
+    const project = comicProjects.find(
+      (item) => item.id === projectId
+    );
 
     if (!project || !project.image) return;
 
     const alreadyAdded = workItems.some(
       (item) =>
-        item.title === project.sourceTitle && item.image === project.image
+        item.title === project.sourceTitle &&
+        item.image === project.image
     );
 
     if (alreadyAdded) {
@@ -633,8 +708,8 @@ export default function Home() {
   };
 
   const addAllImagesToWorkBox = () => {
-    const imageProjects = comicProjects.filter((project) =>
-      Boolean(project.image)
+    const imageProjects = comicProjects.filter(
+      (project) => Boolean(project.image)
     );
 
     const newItems = imageProjects
@@ -642,7 +717,8 @@ export default function Home() {
         (project) =>
           !workItems.some(
             (item) =>
-              item.title === project.sourceTitle && item.image === project.image
+              item.title === project.sourceTitle &&
+              item.image === project.image
           )
       )
       .map(
@@ -664,14 +740,26 @@ export default function Home() {
   };
 
   const removeWorkItem = (id: string) => {
-    setWorkItems((prev) => prev.filter((item) => item.id !== id));
+    setWorkItems((prev) =>
+      prev.filter((item) => item.id !== id)
+    );
   };
 
-  const moveWorkItem = (index: number, direction: "up" | "down") => {
+  const moveWorkItem = (
+    index: number,
+    direction: "up" | "down"
+  ) => {
     const newItems = [...workItems];
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
 
-    if (targetIndex < 0 || targetIndex >= newItems.length) return;
+    const targetIndex =
+      direction === "up" ? index - 1 : index + 1;
+
+    if (
+      targetIndex < 0 ||
+      targetIndex >= newItems.length
+    ) {
+      return;
+    }
 
     const temp = newItems[index];
     newItems[index] = newItems[targetIndex];
@@ -680,13 +768,17 @@ export default function Home() {
     setWorkItems(newItems);
   };
 
-  const loadImage = (src: string): Promise<HTMLImageElement> => {
+  const loadImage = (
+    src: string
+  ): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
 
       img.onload = () => resolve(img);
       img.onerror = () =>
-        reject(new Error("이미지를 불러오지 못했습니다."));
+        reject(
+          new Error("이미지를 불러오지 못했습니다.")
+        );
 
       img.src = src;
     });
@@ -704,7 +796,9 @@ export default function Home() {
     const ctx = canvas.getContext("2d");
 
     if (!ctx) {
-      throw new Error("표지 캔버스를 만들 수 없습니다.");
+      throw new Error(
+        "표지 캔버스를 만들 수 없습니다."
+      );
     }
 
     const bgColor = "#f8f7f3";
@@ -713,41 +807,61 @@ export default function Home() {
     const white = "#ffffff";
 
     ctx.fillStyle = bgColor;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
 
     const filmX = 150;
     const filmY = 330;
     const filmWidth = 1300;
     const filmHeight = 390;
 
-    const topLine = [schoolName.trim(), gradeName.trim()]
+    const topLine = [
+      schoolName.trim(),
+      gradeName.trim(),
+    ]
       .filter(Boolean)
       .join("  ·  ");
 
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
 
-    // 학교 · 학년
     ctx.fillStyle = black;
-    ctx.font = '700 36px "Noto Sans KR", "Malgun Gothic", sans-serif';
-    ctx.fillText(topLine || gradeName || "SUMMIT EDU", filmX, 145);
+    ctx.font =
+      '700 36px "Noto Sans KR", "Malgun Gothic", sans-serif';
 
-    // Lesson · 대화문
+    ctx.fillText(
+      topLine || gradeName || "SUMMIT EDU",
+      filmX,
+      145
+    );
+
     ctx.fillStyle = gray;
-    ctx.font = '700 42px "Noto Sans KR", "Malgun Gothic", sans-serif';
+    ctx.font =
+      '700 42px "Noto Sans KR", "Malgun Gothic", sans-serif';
+
     ctx.fillText(
       `${lessonName.trim() || "Lesson"}  ·  ${contentType}`,
       filmX,
       205
     );
 
-    // 필름 바깥
     ctx.fillStyle = black;
     ctx.beginPath();
-    ctx.roundRect(filmX, filmY, filmWidth, filmHeight, 26);
+
+    ctx.roundRect(
+      filmX,
+      filmY,
+      filmWidth,
+      filmHeight,
+      26
+    );
+
     ctx.fill();
 
-    // 필름 구멍
     const holeWidth = 52;
     const holeHeight = 24;
     const holeGap = 30;
@@ -756,61 +870,111 @@ export default function Home() {
 
     for (
       let x = filmX + 35;
-      x < filmX + filmWidth - holeWidth - 20;
+      x <
+      filmX + filmWidth - holeWidth - 20;
       x += holeWidth + holeGap
     ) {
       ctx.beginPath();
-      ctx.roundRect(x, filmY + 22, holeWidth, holeHeight, 8);
-      ctx.fill();
 
-      ctx.beginPath();
       ctx.roundRect(
         x,
-        filmY + filmHeight - holeHeight - 22,
+        filmY + 22,
         holeWidth,
         holeHeight,
         8
       );
+
+      ctx.fill();
+
+      ctx.beginPath();
+
+      ctx.roundRect(
+        x,
+        filmY +
+          filmHeight -
+          holeHeight -
+          22,
+        holeWidth,
+        holeHeight,
+        8
+      );
+
       ctx.fill();
     }
 
-    // 안쪽 흰 네 칸
     const letters = ["써", "밋", "네", "컷"];
     const innerMarginX = 48;
     const frameGap = 20;
     const frameTop = filmY + 72;
     const frameHeight = filmHeight - 144;
-    const totalInnerWidth = filmWidth - innerMarginX * 2;
-    const frameWidth = (totalInnerWidth - frameGap * 3) / 4;
+
+    const totalInnerWidth =
+      filmWidth - innerMarginX * 2;
+
+    const frameWidth =
+      (totalInnerWidth - frameGap * 3) / 4;
 
     letters.forEach((letter, index) => {
-      const x = filmX + innerMarginX + index * (frameWidth + frameGap);
+      const x =
+        filmX +
+        innerMarginX +
+        index *
+          (frameWidth + frameGap);
 
       ctx.fillStyle = white;
-      ctx.fillRect(x, frameTop, frameWidth, frameHeight);
+
+      ctx.fillRect(
+        x,
+        frameTop,
+        frameWidth,
+        frameHeight
+      );
 
       ctx.strokeStyle = white;
       ctx.lineWidth = 7;
-      ctx.strokeRect(x, frameTop, frameWidth, frameHeight);
 
-      // 더 굵고 크게
+      ctx.strokeRect(
+        x,
+        frameTop,
+        frameWidth,
+        frameHeight
+      );
+
       ctx.fillStyle = black;
       ctx.strokeStyle = black;
       ctx.lineWidth = 2;
-      ctx.font = '900 138px "Noto Sans KR", "Malgun Gothic", sans-serif';
+
+      ctx.font =
+        '900 138px "Noto Sans KR", "Malgun Gothic", sans-serif';
+
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
-      const centerX = x + frameWidth / 2;
-      const centerY = frameTop + frameHeight / 2 + 3;
+      const centerX =
+        x + frameWidth / 2;
 
-      ctx.strokeText(letter, centerX, centerY);
-      ctx.fillText(letter, centerX, centerY);
+      const centerY =
+        frameTop +
+        frameHeight / 2 +
+        3;
+
+      ctx.strokeText(
+        letter,
+        centerX,
+        centerY
+      );
+
+      ctx.fillText(
+        letter,
+        centerX,
+        centerY
+      );
     });
 
-    // 로고 크게
     try {
-      const logo = await loadImage("/summit-logo.png");
+      const logo = await loadImage(
+        "/summit-logo.png"
+      );
 
       const maxLogoWidth = 430;
       const maxLogoHeight = 170;
@@ -820,38 +984,117 @@ export default function Home() {
         maxLogoHeight / logo.naturalHeight
       );
 
-      const logoWidth = logo.naturalWidth * ratio;
-      const logoHeight = logo.naturalHeight * ratio;
+      const logoWidth =
+        logo.naturalWidth * ratio;
+
+      const logoHeight =
+        logo.naturalHeight * ratio;
 
       ctx.drawImage(
         logo,
-        canvas.width / 2 - logoWidth / 2,
+        canvas.width / 2 -
+          logoWidth / 2,
         860,
         logoWidth,
         logoHeight
       );
     } catch (error) {
-      console.error("COVER LOGO ERROR:", error);
+      console.error(
+        "COVER LOGO ERROR:",
+        error
+      );
 
       ctx.fillStyle = black;
       ctx.textAlign = "center";
-      ctx.font = '800 42px "Noto Sans KR", "Malgun Gothic", sans-serif';
-      ctx.fillText("SUMMIT EDU", canvas.width / 2, 950);
+
+      ctx.font =
+        '800 42px "Noto Sans KR", "Malgun Gothic", sans-serif';
+
+      ctx.fillText(
+        "SUMMIT EDU",
+        canvas.width / 2,
+        950
+      );
     }
 
-    return canvas.toDataURL("image/png", 1);
+    return canvas.toDataURL(
+      "image/png",
+      1
+    );
+  };
+
+  const addImagePageToPdf = (
+    pdf: jsPDF,
+    image: string
+  ) => {
+    const pageWidth =
+      pdf.internal.pageSize.getWidth();
+
+    const pageHeight =
+      pdf.internal.pageSize.getHeight();
+
+    const margin = 10;
+
+    const availableWidth =
+      pageWidth - margin * 2;
+
+    const availableHeight =
+      pageHeight - margin * 2;
+
+    const imageProps =
+      pdf.getImageProperties(image);
+
+    const imageRatio =
+      imageProps.width /
+      imageProps.height;
+
+    let imageWidth =
+      availableWidth;
+
+    let imageHeight =
+      imageWidth / imageRatio;
+
+    if (
+      imageHeight > availableHeight
+    ) {
+      imageHeight =
+        availableHeight;
+
+      imageWidth =
+        imageHeight * imageRatio;
+    }
+
+    const x =
+      (pageWidth - imageWidth) / 2;
+
+    const y =
+      (pageHeight - imageHeight) / 2;
+
+    pdf.addImage(
+      image,
+      "PNG",
+      x,
+      y,
+      imageWidth,
+      imageHeight,
+      undefined,
+      "FAST"
+    );
   };
 
   const downloadLessonPdf = async () => {
     if (workItems.length === 0) {
-      alert("먼저 한 과 작업함에 써밋네컷을 추가해줘.");
+      alert(
+        "먼저 한 과 작업함에 써밋네컷을 추가해줘."
+      );
       return;
     }
 
     try {
       setMakingPdf(true);
 
-      const coverImage = await createCoverImage();
+      const coverImage =
+        await createCoverImage();
 
       const pdf = new jsPDF({
         orientation: "landscape",
@@ -860,8 +1103,11 @@ export default function Home() {
         compress: true,
       });
 
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
+      const pageWidth =
+        pdf.internal.pageSize.getWidth();
+
+      const pageHeight =
+        pdf.internal.pageSize.getHeight();
 
       pdf.addImage(
         coverImage,
@@ -874,65 +1120,82 @@ export default function Home() {
         "FAST"
       );
 
-      for (let index = 0; index < workItems.length; index++) {
-        const item = workItems[index];
+      for (
+        let index = 0;
+        index < workItems.length;
+        index++
+      ) {
+        const item =
+          workItems[index];
 
-        pdf.addPage("a4", "landscape");
+        pdf.addPage(
+          "a4",
+          "landscape"
+        );
 
-        const margin = 10;
-        const availableWidth = pageWidth - margin * 2;
-        const availableHeight = pageHeight - margin * 2;
+        addImagePageToPdf(
+          pdf,
+          item.image
+        );
+      }
 
-        const imageProps = pdf.getImageProperties(item.image);
-        const imageRatio = imageProps.width / imageProps.height;
+      if (cheerPageImage) {
+        pdf.addPage(
+          "a4",
+          "landscape"
+        );
 
-        let imageWidth = availableWidth;
-        let imageHeight = imageWidth / imageRatio;
-
-        if (imageHeight > availableHeight) {
-          imageHeight = availableHeight;
-          imageWidth = imageHeight * imageRatio;
-        }
-
-        const x = (pageWidth - imageWidth) / 2;
-        const y = (pageHeight - imageHeight) / 2;
-
-        pdf.addImage(
-          item.image,
-          "PNG",
-          x,
-          y,
-          imageWidth,
-          imageHeight,
-          undefined,
-          "FAST"
+        addImagePageToPdf(
+          pdf,
+          cheerPageImage
         );
       }
 
       const baseName =
-        [schoolName.trim(), gradeName.trim(), lessonName.trim()]
+        [
+          schoolName.trim(),
+          gradeName.trim(),
+          lessonName.trim(),
+        ]
           .filter(Boolean)
-          .join("-") || "summit-lesson";
+          .join("-") ||
+        "summit-lesson";
 
-      pdf.save(`${baseName}-써밋네컷.pdf`);
+      pdf.save(
+        `${baseName}-써밋네컷.pdf`
+      );
     } catch (error) {
-      console.error("PDF ERROR:", error);
-      alert("PDF를 만드는 중 오류가 발생했어.");
+      console.error(
+        "PDF ERROR:",
+        error
+      );
+
+      alert(
+        "PDF를 만드는 중 오류가 발생했어."
+      );
     } finally {
       setMakingPdf(false);
     }
   };
 
-  const generatedImageCount = comicProjects.filter((project) =>
-    Boolean(project.image)
-  ).length;
+  const generatedImageCount =
+    comicProjects.filter((project) =>
+      Boolean(project.image)
+    ).length;
+
+  const totalPdfPages =
+    1 +
+    workItems.length +
+    (cheerPageImage ? 1 : 0);
 
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-10">
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>
-            <p className="text-sm font-bold text-blue-600">SUMMIT EDU</p>
+            <p className="text-sm font-bold text-blue-600">
+              SUMMIT EDU
+            </p>
 
             <h1 className="mt-2 text-4xl font-black text-slate-900">
               SUMMIT CONTENT MAKER
@@ -944,88 +1207,133 @@ export default function Home() {
           </div>
 
           <div className="rounded-2xl bg-purple-100 px-5 py-4 text-center ring-1 ring-purple-200">
-            <p className="text-xs font-bold text-purple-600">한 과 작업함</p>
+            <p className="text-xs font-bold text-purple-600">
+              한 과 작업함
+            </p>
+
             <p className="mt-1 text-3xl font-black text-purple-900">
               {workItems.length}
             </p>
-            <p className="text-xs text-purple-600">장 저장됨</p>
+
+            <p className="text-xs text-purple-600">
+              장 저장됨
+            </p>
           </div>
         </div>
 
         <section className="mt-10 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-          <p className="text-sm font-bold text-purple-600">COVER INFORMATION</p>
-          <h2 className="mt-1 text-2xl font-black">표지 정보</h2>
+          <p className="text-sm font-bold text-purple-600">
+            COVER INFORMATION
+          </p>
+
+          <h2 className="mt-1 text-2xl font-black">
+            표지 정보
+          </h2>
+
           <p className="mt-2 text-sm text-slate-500">
             여기 입력한 내용이 PDF 첫 장 표지에 들어가.
           </p>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             <div>
-              <label className="text-sm font-bold text-slate-700">학교</label>
+              <label className="text-sm font-bold text-slate-700">
+                학교
+              </label>
+
               <input
                 value={schoolName}
-                onChange={(e) => setSchoolName(e.target.value)}
+                onChange={(e) =>
+                  setSchoolName(
+                    e.target.value
+                  )
+                }
                 placeholder="예: 발안중"
                 className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3"
               />
             </div>
 
             <div>
-              <label className="text-sm font-bold text-slate-700">학년</label>
+              <label className="text-sm font-bold text-slate-700">
+                학년
+              </label>
+
               <input
                 value={gradeName}
-                onChange={(e) => setGradeName(e.target.value)}
+                onChange={(e) =>
+                  setGradeName(
+                    e.target.value
+                  )
+                }
                 placeholder="예: 3"
                 className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3"
               />
             </div>
 
             <div>
-              <label className="text-sm font-bold text-slate-700">Lesson</label>
+              <label className="text-sm font-bold text-slate-700">
+                Lesson
+              </label>
+
               <input
                 value={lessonName}
-                onChange={(e) => setLessonName(e.target.value)}
+                onChange={(e) =>
+                  setLessonName(
+                    e.target.value
+                  )
+                }
                 placeholder="예: Lesson 5"
                 className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3"
               />
             </div>
 
             <div>
-              <label className="text-sm font-bold text-slate-700">내용 구분</label>
+              <label className="text-sm font-bold text-slate-700">
+                내용 구분
+              </label>
+
               <select
                 value={contentType}
-                onChange={(e) => setContentType(e.target.value)}
+                onChange={(e) =>
+                  setContentType(
+                    e.target.value
+                  )
+                }
                 className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3"
               >
-                <option value="대화문">대화문</option>
-                <option value="본문">본문</option>
+                <option value="대화문">
+                  대화문
+                </option>
+
+                <option value="본문">
+                  본문
+                </option>
               </select>
             </div>
-          </div>
-
-          <div className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-            표지 미리보기 정보:{" "}
-            <strong>
-              {schoolName || "학교명"} · {gradeName || "학년"} /{" "}
-              {lessonName || "Lesson"} · {contentType}
-            </strong>
           </div>
         </section>
 
         <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-          <h2 className="text-xl font-bold">1. 중3 교재 PDF 업로드</h2>
+          <h2 className="text-xl font-bold">
+            1. 중3 교재 PDF 업로드
+          </h2>
 
           <label className="mt-5 inline-block cursor-pointer rounded-xl bg-slate-900 px-6 py-3 font-semibold text-white">
             PDF 선택
+
             <input
               type="file"
               accept=".pdf,application/pdf"
               className="hidden"
               onChange={(e) => {
-                const file = e.target.files?.[0];
+                const file =
+                  e.target.files?.[0];
+
                 if (!file) return;
 
-                setFileName(file.name);
+                setFileName(
+                  file.name
+                );
+
                 readPdf(file);
               }}
             />
@@ -1033,8 +1341,13 @@ export default function Home() {
 
           {fileName && (
             <div className="mt-5 rounded-xl bg-slate-100 p-4">
-              <p className="text-xs text-slate-500">선택된 파일</p>
-              <p className="mt-1 font-semibold">{fileName}</p>
+              <p className="text-xs text-slate-500">
+                선택된 파일
+              </p>
+
+              <p className="mt-1 font-semibold">
+                {fileName}
+              </p>
             </div>
           )}
         </section>
@@ -1047,7 +1360,9 @@ export default function Home() {
 
         {!loadingPdf && pdfText && (
           <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-            <h2 className="text-xl font-bold">2. 대화문 찾기</h2>
+            <h2 className="text-xl font-bold">
+              2. 대화문 찾기
+            </h2>
 
             <p className="mt-2 text-sm text-slate-500">
               교재 안의 대화문을 모두 찾은 다음 필요한 것만 남기면 돼.
@@ -1059,7 +1374,9 @@ export default function Home() {
               disabled={loadingAi}
               className="mt-5 w-full rounded-xl bg-blue-600 px-6 py-4 text-lg font-bold text-white disabled:opacity-50"
             >
-              {loadingAi ? "대화문 찾는 중..." : "대화문 전체 찾기"}
+              {loadingAi
+                ? "대화문 찾는 중..."
+                : "대화문 전체 찾기"}
             </button>
           </section>
         )}
@@ -1074,63 +1391,98 @@ export default function Home() {
           <section className="mt-8 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
-                <h2 className="text-2xl font-bold">발견된 대화문</h2>
+                <h2 className="text-2xl font-bold">
+                  발견된 대화문
+                </h2>
+
                 <p className="mt-2 text-sm text-slate-500">
                   필요 없는 것은 삭제하고 사용할 대화문만 남겨줘.
                 </p>
               </div>
 
               <div className="rounded-full bg-blue-100 px-4 py-2 text-sm font-bold text-blue-700">
-                {analysis.dialogues?.length || 0}개 남음
+                {analysis.dialogues?.length ||
+                  0}
+                개 남음
               </div>
             </div>
 
             <div className="mt-6 space-y-4">
-              {analysis.dialogues?.map((dialogue, index) => (
-                <div
-                  key={`${dialogue.title}-${index}`}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 p-5"
-                >
-                  <p className="text-sm font-bold text-blue-600">
-                    대화문 {index + 1}
-                  </p>
+              {analysis.dialogues?.map(
+                (
+                  dialogue,
+                  index
+                ) => (
+                  <div
+                    key={`${dialogue.title}-${index}`}
+                    className="rounded-2xl border border-slate-200 bg-slate-50 p-5"
+                  >
+                    <p className="text-sm font-bold text-blue-600">
+                      대화문{" "}
+                      {index + 1}
+                    </p>
 
-                  <p className="mt-1 text-lg font-bold">{dialogue.title}</p>
-
-                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">
-                    {dialogue.content}
-                  </p>
-
-                  <div className="mt-5 flex flex-wrap gap-3">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        makeComicPlan(dialogue.title, dialogue.content)
+                    <p className="mt-1 text-lg font-bold">
+                      {
+                        dialogue.title
                       }
-                      disabled={loadingComic || loadingAllComics}
-                      className="rounded-xl bg-slate-900 px-5 py-3 font-bold text-white disabled:opacity-40"
-                    >
-                      {loadingComic && currentCreatingTitle === dialogue.title
-                        ? "설계안 만드는 중..."
-                        : "이 대화문만 설계안 만들기"}
-                    </button>
+                    </p>
 
-                    <button
-                      type="button"
-                      onClick={() => deleteDialogue(index)}
-                      disabled={loadingAllComics}
-                      className="rounded-xl border border-red-200 bg-red-50 px-5 py-3 font-bold text-red-600 disabled:opacity-40"
-                    >
-                      필요 없는 대화문 삭제
-                    </button>
+                    <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">
+                      {
+                        dialogue.content
+                      }
+                    </p>
+
+                    <div className="mt-5 flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          makeComicPlan(
+                            dialogue.title,
+                            dialogue.content
+                          )
+                        }
+                        disabled={
+                          loadingComic ||
+                          loadingAllComics
+                        }
+                        className="rounded-xl bg-slate-900 px-5 py-3 font-bold text-white disabled:opacity-40"
+                      >
+                        {loadingComic &&
+                        currentCreatingTitle ===
+                          dialogue.title
+                          ? "설계안 만드는 중..."
+                          : "이 대화문만 설계안 만들기"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          deleteDialogue(
+                            index
+                          )
+                        }
+                        disabled={
+                          loadingAllComics
+                        }
+                        className="rounded-xl border border-red-200 bg-red-50 px-5 py-3 font-bold text-red-600 disabled:opacity-40"
+                      >
+                        필요 없는 대화문 삭제
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              )}
             </div>
 
-            {(analysis.dialogues?.length || 0) > 0 && (
+            {(analysis.dialogues
+              ?.length || 0) >
+              0 && (
               <div className="mt-8 rounded-2xl bg-purple-50 p-6 ring-1 ring-purple-200">
-                <p className="text-sm font-bold text-purple-600">STEP 3</p>
+                <p className="text-sm font-bold text-purple-600">
+                  STEP 3
+                </p>
 
                 <h3 className="mt-1 text-2xl font-black text-slate-900">
                   남은 대화문 전체 설계안 만들기
@@ -1138,55 +1490,90 @@ export default function Home() {
 
                 <button
                   type="button"
-                  onClick={makeAllComicPlans}
-                  disabled={loadingAllComics || loadingComic}
+                  onClick={
+                    makeAllComicPlans
+                  }
+                  disabled={
+                    loadingAllComics ||
+                    loadingComic
+                  }
                   className="mt-5 w-full rounded-xl bg-purple-600 px-6 py-4 text-lg font-black text-white disabled:opacity-50"
                 >
                   {loadingAllComics
                     ? `전체 설계안 만드는 중 · ${currentCreatingTitle}`
-                    : `남은 ${analysis.dialogues?.length || 0}개 전체 설계안 만들기`}
+                    : `남은 ${
+                        analysis
+                          .dialogues
+                          ?.length ||
+                        0
+                      }개 전체 설계안 만들기`}
                 </button>
               </div>
             )}
           </section>
         )}
 
-        {comicProjects.length > 0 && (
-          <section id="comic-projects" className="mt-10">
+        {comicProjects.length >
+          0 && (
+          <section
+            id="comic-projects"
+            className="mt-10"
+          >
             <div className="mb-6">
               <p className="text-sm font-bold text-purple-600">
                 SUMMIT FOUR-CUT EDITOR
               </p>
 
-              <h2 className="mt-1 text-3xl font-black">써밋네컷 설계안</h2>
+              <h2 className="mt-1 text-3xl font-black">
+                써밋네컷 설계안
+              </h2>
 
               <p className="mt-2 text-slate-600">
-                현재 {comicProjects.length}개 설계안 · 이미지{" "}
-                {generatedImageCount}개 생성됨
+                현재{" "}
+                {
+                  comicProjects.length
+                }
+                개 설계안 · 이미지{" "}
+                {
+                  generatedImageCount
+                }
+                개 생성됨
               </p>
             </div>
 
             <div className="mb-10 rounded-3xl bg-slate-900 p-6 text-white">
-              <h3 className="text-2xl font-black">설계안 확인 다 했어?</h3>
+              <h3 className="text-2xl font-black">
+                설계안 확인 다 했어?
+              </h3>
 
               <button
                 type="button"
-                onClick={generateAllComicImages}
-                disabled={loadingAllImages}
+                onClick={
+                  generateAllComicImages
+                }
+                disabled={
+                  loadingAllImages
+                }
                 className="mt-5 w-full rounded-xl bg-purple-500 px-6 py-4 text-lg font-black text-white disabled:opacity-50"
               >
                 {loadingAllImages
                   ? `전체 이미지 생성 중 · ${imageProgress}`
                   : `확인한 설계안 전체 이미지 생성 · ${
-                      comicProjects.length - generatedImageCount
+                      comicProjects.length -
+                      generatedImageCount
                     }개 남음`}
               </button>
 
-              {generatedImageCount > 0 && (
+              {generatedImageCount >
+                0 && (
                 <button
                   type="button"
-                  onClick={addAllImagesToWorkBox}
-                  disabled={loadingAllImages}
+                  onClick={
+                    addAllImagesToWorkBox
+                  }
+                  disabled={
+                    loadingAllImages
+                  }
                   className="mt-3 w-full rounded-xl border border-white/20 bg-white/10 px-6 py-4 font-bold text-white"
                 >
                   생성된 이미지 전체 작업함에 추가
@@ -1195,165 +1582,304 @@ export default function Home() {
             </div>
 
             <div className="space-y-12">
-              {comicProjects.map((project, projectIndex) => (
-                <div
-                  key={project.id}
-                  className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
-                >
-                  <div className="bg-slate-900 p-6 text-white">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-bold text-purple-300">
-                          설계안 {projectIndex + 1}
-                        </p>
-                        <h3 className="mt-1 text-2xl font-black">
-                          {project.sourceTitle}
-                        </h3>
+              {comicProjects.map(
+                (
+                  project,
+                  projectIndex
+                ) => (
+                  <div
+                    key={project.id}
+                    className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
+                  >
+                    <div className="bg-slate-900 p-6 text-white">
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-bold text-purple-300">
+                            설계안{" "}
+                            {projectIndex +
+                              1}
+                          </p>
+
+                          <h3 className="mt-1 text-2xl font-black">
+                            {
+                              project.sourceTitle
+                            }
+                          </h3>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            removeComicProject(
+                              project.id
+                            )
+                          }
+                          disabled={
+                            loadingAllImages
+                          }
+                          className="rounded-xl bg-white/10 px-4 py-2 text-sm font-bold text-white disabled:opacity-30"
+                        >
+                          이 설계안 삭제
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-6">
+                      <label className="text-sm font-bold">
+                        만화 상단 한줄 제목
+                      </label>
+
+                      <input
+                        value={
+                          project.plan
+                            .summary
+                        }
+                        onChange={(e) =>
+                          updateSummary(
+                            project.id,
+                            e.target
+                              .value
+                          )
+                        }
+                        className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-xl font-bold"
+                      />
+
+                      <div className="mt-6 grid gap-6 md:grid-cols-2">
+                        {project.plan.panels.map(
+                          (
+                            panel,
+                            panelIndex
+                          ) => (
+                            <div
+                              key={
+                                panelIndex
+                              }
+                              className="rounded-2xl border border-slate-200 p-5"
+                            >
+                              <h4 className="text-xl font-bold">
+                                {
+                                  panel.cut
+                                }
+                              </h4>
+
+                              <label className="mt-4 block text-sm font-bold">
+                                장면 설명
+                              </label>
+
+                              <textarea
+                                value={
+                                  panel.scene
+                                }
+                                onChange={(
+                                  e
+                                ) =>
+                                  updatePanelScene(
+                                    project.id,
+                                    panelIndex,
+                                    e.target
+                                      .value
+                                  )
+                                }
+                                rows={4}
+                                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3"
+                              />
+
+                              <div className="mt-5 space-y-4">
+                                {panel.dialogue.map(
+                                  (
+                                    dialogue,
+                                    dialogueIndex
+                                  ) => (
+                                    <div
+                                      key={
+                                        dialogueIndex
+                                      }
+                                      className="rounded-xl bg-purple-50 p-4"
+                                    >
+                                      <input
+                                        value={
+                                          dialogue.speaker
+                                        }
+                                        onChange={(
+                                          e
+                                        ) =>
+                                          updateSpeaker(
+                                            project.id,
+                                            panelIndex,
+                                            dialogueIndex,
+                                            e
+                                              .target
+                                              .value
+                                          )
+                                        }
+                                        className="w-full rounded-lg border border-purple-200 bg-white px-3 py-2"
+                                      />
+
+                                      <textarea
+                                        value={
+                                          dialogue.text
+                                        }
+                                        onChange={(
+                                          e
+                                        ) =>
+                                          updateDialogueText(
+                                            project.id,
+                                            panelIndex,
+                                            dialogueIndex,
+                                            e
+                                              .target
+                                              .value
+                                          )
+                                        }
+                                        rows={
+                                          3
+                                        }
+                                        className="mt-3 w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-lg font-semibold"
+                                      />
+
+                                      {panel
+                                        .dialogue
+                                        .length >
+                                        1 && (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            removeDialogue(
+                                              project.id,
+                                              panelIndex,
+                                              dialogueIndex
+                                            )
+                                          }
+                                          className="mt-2 text-sm font-bold text-red-500"
+                                        >
+                                          이 대사 삭제
+                                        </button>
+                                      )}
+                                    </div>
+                                  )
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    addDialogue(
+                                      project.id,
+                                      panelIndex
+                                    )
+                                  }
+                                  className="w-full rounded-xl border-2 border-dashed border-purple-300 py-3 font-bold text-purple-600"
+                                >
+                                  + 대사 추가
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        )}
                       </div>
 
                       <button
                         type="button"
-                        onClick={() => removeComicProject(project.id)}
-                        disabled={loadingAllImages}
-                        className="rounded-xl bg-white/10 px-4 py-2 text-sm font-bold text-white disabled:opacity-30"
+                        onClick={() =>
+                          generateComicImage(
+                            project.id
+                          )
+                        }
+                        disabled={
+                          project.loadingImage ||
+                          loadingAllImages
+                        }
+                        className="mt-6 w-full rounded-xl bg-purple-600 px-6 py-4 text-lg font-black text-white disabled:opacity-50"
                       >
-                        이 설계안 삭제
+                        {project.loadingImage
+                          ? "이미지 생성 중..."
+                          : project.image
+                          ? "이 이미지 다시 생성"
+                          : `설계안 ${
+                              projectIndex +
+                              1
+                            } 이미지 생성`}
                       </button>
-                    </div>
-                  </div>
 
-                  <div className="p-6">
-                    <label className="text-sm font-bold">만화 상단 한줄 제목</label>
-
-                    <input
-                      value={project.plan.summary}
-                      onChange={(e) =>
-                        updateSummary(project.id, e.target.value)
-                      }
-                      className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-xl font-bold"
-                    />
-
-                    <div className="mt-6 grid gap-6 md:grid-cols-2">
-                      {project.plan.panels.map((panel, panelIndex) => (
-                        <div
-                          key={panelIndex}
-                          className="rounded-2xl border border-slate-200 p-5"
-                        >
-                          <h4 className="text-xl font-bold">{panel.cut}</h4>
-
-                          <label className="mt-4 block text-sm font-bold">
-                            장면 설명
-                          </label>
-
-                          <textarea
-                            value={panel.scene}
-                            onChange={(e) =>
-                              updatePanelScene(
-                                project.id,
-                                panelIndex,
-                                e.target.value
-                              )
+                      {project.image && (
+                        <div className="mt-6">
+                          <img
+                            src={
+                              project.image
                             }
-                            rows={4}
-                            className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3"
+                            alt="써밋네컷"
+                            className="w-full rounded-xl"
                           />
 
-                          <div className="mt-5 space-y-4">
-                            {panel.dialogue.map((dialogue, dialogueIndex) => (
-                              <div
-                                key={dialogueIndex}
-                                className="rounded-xl bg-purple-50 p-4"
-                              >
-                                <input
-                                  value={dialogue.speaker}
-                                  onChange={(e) =>
-                                    updateSpeaker(
-                                      project.id,
-                                      panelIndex,
-                                      dialogueIndex,
-                                      e.target.value
-                                    )
-                                  }
-                                  className="w-full rounded-lg border border-purple-200 bg-white px-3 py-2"
-                                />
-
-                                <textarea
-                                  value={dialogue.text}
-                                  onChange={(e) =>
-                                    updateDialogueText(
-                                      project.id,
-                                      panelIndex,
-                                      dialogueIndex,
-                                      e.target.value
-                                    )
-                                  }
-                                  rows={3}
-                                  className="mt-3 w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-lg font-semibold"
-                                />
-
-                                {panel.dialogue.length > 1 && (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      removeDialogue(
-                                        project.id,
-                                        panelIndex,
-                                        dialogueIndex
-                                      )
-                                    }
-                                    className="mt-2 text-sm font-bold text-red-500"
-                                  >
-                                    이 대사 삭제
-                                  </button>
-                                )}
-                              </div>
-                            ))}
-
-                            <button
-                              type="button"
-                              onClick={() => addDialogue(project.id, panelIndex)}
-                              className="w-full rounded-xl border-2 border-dashed border-purple-300 py-3 font-bold text-purple-600"
-                            >
-                              + 대사 추가
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              addToWorkBox(
+                                project.id
+                              )
+                            }
+                            className="mt-4 rounded-xl bg-slate-900 px-5 py-3 font-bold text-white"
+                          >
+                            한 과 작업함에 추가
+                          </button>
                         </div>
-                      ))}
+                      )}
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => generateComicImage(project.id)}
-                      disabled={project.loadingImage || loadingAllImages}
-                      className="mt-6 w-full rounded-xl bg-purple-600 px-6 py-4 text-lg font-black text-white disabled:opacity-50"
-                    >
-                      {project.loadingImage
-                        ? "이미지 생성 중..."
-                        : project.image
-                        ? "이 이미지 다시 생성"
-                        : `설계안 ${projectIndex + 1} 이미지 생성`}
-                    </button>
-
-                    {project.image && (
-                      <div className="mt-6">
-                        <img
-                          src={project.image}
-                          alt="써밋네컷"
-                          className="w-full rounded-xl"
-                        />
-
-                        <button
-                          type="button"
-                          onClick={() => addToWorkBox(project.id)}
-                          className="mt-4 rounded-xl bg-slate-900 px-5 py-3 font-bold text-white"
-                        >
-                          한 과 작업함에 추가
-                        </button>
-                      </div>
-                    )}
                   </div>
+                )
+              )}
+            </div>
+
+            <div className="mt-12 rounded-3xl bg-amber-50 p-6 ring-1 ring-amber-200">
+              <p className="text-sm font-bold text-amber-600">
+                FINAL CHEER PAGE
+              </p>
+
+              <h3 className="mt-1 text-2xl font-black text-slate-900">
+                마지막 응원장
+              </h3>
+
+              <p className="mt-2 text-sm text-slate-600">
+                이 Lesson에 등장한 캐릭터들을 모아 마지막 응원장을 만들어.
+              </p>
+
+              <p className="mt-1 text-xs text-slate-500">
+                이 버튼은 AI 이미지를 생성하므로 이미지 생성 비용이 발생해.
+              </p>
+
+              <button
+                type="button"
+                onClick={
+                  generateCheerPage
+                }
+                disabled={
+                  loadingCheerPage
+                }
+                className="mt-5 w-full rounded-xl bg-amber-500 px-6 py-4 text-lg font-black text-white disabled:opacity-50"
+              >
+                {loadingCheerPage
+                  ? "마지막 응원장 생성 중..."
+                  : cheerPageImage
+                  ? "마지막 응원장 다시 생성"
+                  : "마지막 응원장 생성"}
+              </button>
+
+              {cheerPageImage && (
+                <div className="mt-6">
+                  {cheerText && (
+                    <p className="mb-3 text-center text-lg font-black text-slate-800">
+                      {cheerText}
+                    </p>
+                  )}
+
+                  <img
+                    src={
+                      cheerPageImage
+                    }
+                    alt="마지막 응원장"
+                    className="w-full rounded-2xl"
+                  />
                 </div>
-              ))}
+              )}
             </div>
           </section>
         )}
@@ -1364,84 +1890,145 @@ export default function Home() {
               <p className="text-sm font-bold text-purple-300">
                 LESSON WORKBOX
               </p>
-              <h2 className="text-3xl font-black">한 과 작업함</h2>
+
+              <h2 className="text-3xl font-black">
+                한 과 작업함
+              </h2>
             </div>
 
-            <p className="text-3xl font-black">{workItems.length}</p>
+            <p className="text-3xl font-black">
+              {workItems.length}
+            </p>
           </div>
 
-          {workItems.length === 0 ? (
+          {workItems.length ===
+          0 ? (
             <p className="mt-6 rounded-xl border border-dashed border-slate-600 p-8 text-center text-slate-400">
               아직 작업함에 넣은 이미지가 없어.
             </p>
           ) : (
             <>
               <div className="mt-6 space-y-5">
-                {workItems.map((item, index) => (
-                  <div
-                    key={item.id}
-                    className="rounded-2xl bg-white p-5 text-slate-900"
-                  >
-                    <div className="flex justify-between gap-4">
-                      <h3 className="text-xl font-black">
-                        페이지 {index + 1} · {item.summary}
-                      </h3>
+                {workItems.map(
+                  (
+                    item,
+                    index
+                  ) => (
+                    <div
+                      key={
+                        item.id
+                      }
+                      className="rounded-2xl bg-white p-5 text-slate-900"
+                    >
+                      <div className="flex justify-between gap-4">
+                        <h3 className="text-xl font-black">
+                          페이지{" "}
+                          {index +
+                            1}{" "}
+                          ·{" "}
+                          {
+                            item.summary
+                          }
+                        </h3>
 
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => moveWorkItem(index, "up")}
-                          disabled={index === 0}
-                          className="rounded-lg bg-slate-100 px-3 py-2 disabled:opacity-30"
-                        >
-                          ↑
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() =>
+                              moveWorkItem(
+                                index,
+                                "up"
+                              )
+                            }
+                            disabled={
+                              index ===
+                              0
+                            }
+                            className="rounded-lg bg-slate-100 px-3 py-2 disabled:opacity-30"
+                          >
+                            ↑
+                          </button>
 
-                        <button
-                          onClick={() => moveWorkItem(index, "down")}
-                          disabled={index === workItems.length - 1}
-                          className="rounded-lg bg-slate-100 px-3 py-2 disabled:opacity-30"
-                        >
-                          ↓
-                        </button>
+                          <button
+                            onClick={() =>
+                              moveWorkItem(
+                                index,
+                                "down"
+                              )
+                            }
+                            disabled={
+                              index ===
+                              workItems.length -
+                                1
+                            }
+                            className="rounded-lg bg-slate-100 px-3 py-2 disabled:opacity-30"
+                          >
+                            ↓
+                          </button>
 
-                        <button
-                          onClick={() => removeWorkItem(item.id)}
-                          className="rounded-lg bg-red-50 px-3 py-2 text-red-600"
-                        >
-                          삭제
-                        </button>
+                          <button
+                            onClick={() =>
+                              removeWorkItem(
+                                item.id
+                              )
+                            }
+                            className="rounded-lg bg-red-50 px-3 py-2 text-red-600"
+                          >
+                            삭제
+                          </button>
+                        </div>
                       </div>
-                    </div>
 
-                    <img
-                      src={item.image}
-                      alt="써밋네컷"
-                      className="mt-4 w-full rounded-xl"
-                    />
-                  </div>
-                ))}
+                      <img
+                        src={
+                          item.image
+                        }
+                        alt="써밋네컷"
+                        className="mt-4 w-full rounded-xl"
+                      />
+                    </div>
+                  )
+                )}
               </div>
 
               <div className="mt-8 rounded-2xl bg-purple-500/20 p-6">
-                <p className="text-sm font-bold text-purple-200">FINAL STEP</p>
+                <p className="text-sm font-bold text-purple-200">
+                  FINAL STEP
+                </p>
 
                 <h3 className="mt-1 text-2xl font-black">
                   표지 포함 PDF 만들기
                 </h3>
 
                 <p className="mt-2 text-sm text-slate-300">
-                  1페이지 표지 + 써밋네컷 {workItems.length}페이지
+                  표지 1장 + 써밋네컷{" "}
+                  {
+                    workItems.length
+                  }
+                  장
+                  {cheerPageImage
+                    ? " + 마지막 응원장 1장"
+                    : ""}
                 </p>
+
+                {!cheerPageImage && (
+                  <p className="mt-2 text-xs text-amber-300">
+                    마지막 응원장을 아직 만들지 않았어. 지금 PDF를 만들면 응원장 없이 저장돼.
+                  </p>
+                )}
 
                 <button
                   type="button"
-                  onClick={downloadLessonPdf}
-                  disabled={makingPdf}
+                  onClick={
+                    downloadLessonPdf
+                  }
+                  disabled={
+                    makingPdf
+                  }
                   className="mt-5 w-full rounded-xl bg-purple-500 px-6 py-4 text-lg font-black text-white disabled:opacity-50"
                 >
                   {makingPdf
                     ? "PDF 만드는 중..."
-                    : `PDF 다운로드 · 총 ${workItems.length + 1}페이지`}
+                    : `PDF 다운로드 · 총 ${totalPdfPages}페이지`}
                 </button>
               </div>
             </>
