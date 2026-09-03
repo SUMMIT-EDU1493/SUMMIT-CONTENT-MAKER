@@ -217,6 +217,57 @@ Do not merely change shirt color while keeping
 the exact same face and hair.
 
 ==================================================
+VERY IMPORTANT: STUDENT AGE AND BODY PROPORTIONS
+==================================================
+
+Unless the source clearly says otherwise,
+student characters should be treated as middle-school classmates
+of approximately the same age.
+
+Male and female classmates should have comparable
+teenage age impression, body scale and adolescent proportions.
+
+VERY IMPORTANT:
+- Do NOT automatically make a female student much shorter,
+  much smaller-bodied or younger-looking simply because she is female.
+- Do NOT make a female classmate look like an elementary-school child
+  standing next to a male classmate.
+- Female students should look like teenagers,
+  not little girls.
+- Male students should also look like teenagers,
+  not adult men.
+
+Natural individual height differences are allowed,
+but classmates should still clearly look like peers
+from the same general age group.
+
+Use:
+- teenage facial proportions
+- teenage body proportions
+- age-appropriate middle-school styling
+- natural adolescent height and build
+
+Avoid:
+- chibi proportions
+- preschool proportions
+- oversized childlike heads
+- extremely tiny female bodies
+- toddler-like facial features
+- exaggerated adult male proportions
+
+If a boy and a girl are friends or classmates,
+their visual scale should communicate:
+"same-age middle-school peers."
+
+Only show a clearly larger age or body difference
+when the source explicitly describes:
+- parent and child
+- teacher and student
+- adult and student
+- siblings of different ages
+or another genuine age difference.
+
+==================================================
 CHARACTER CONSISTENCY
 ==================================================
 
@@ -407,6 +458,8 @@ Before generating, verify:
 11. Backgrounds and camera angles are not monotonously repeated.
 12. Korean(English) learning expressions remain intact.
 13. Parent/teacher/adult roles are visually distinguishable from students.
+14. Male and female classmates look like same-age middle-school peers.
+15. Female students do NOT look like small elementary-school children.
 
 Produce only the comic artwork.
 `;
