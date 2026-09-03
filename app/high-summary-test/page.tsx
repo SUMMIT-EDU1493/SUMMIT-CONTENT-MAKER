@@ -498,335 +498,47 @@ export default function HighSummaryTestPage() {
     );
   };
 
+  const fetchSummaryPageImage = async (
+    url: string
+  ) => {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        schoolName,
+        gradeName,
+        lessonName,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data?.error ||
+          "페이지 이미지 생성 실패"
+      );
+    }
+
+    if (!data?.image) {
+      throw new Error(
+        "생성된 페이지 이미지가 없어."
+      );
+    }
+
+    return data.image as string;
+  };
+
   // -----------------------------
   // 앞표지
   // -----------------------------
 
   const createFrontCover =
     async () => {
-      const canvas =
-        document.createElement(
-          "canvas"
-        );
-
-      canvas.width = 1536;
-      canvas.height = 1024;
-
-      const ctx =
-        canvas.getContext(
-          "2d"
-        );
-
-      if (!ctx) {
-        throw new Error(
-          "앞표지 생성 실패"
-        );
-      }
-
-      // 배경
-      ctx.fillStyle =
-        "#F7F3E8";
-
-      ctx.fillRect(
-        0,
-        0,
-        canvas.width,
-        canvas.height
-      );
-
-      // 얇은 모눈
-      ctx.strokeStyle =
-        "rgba(60,60,60,0.07)";
-
-      ctx.lineWidth = 1;
-
-      for (
-        let x = 0;
-        x <=
-        canvas.width;
-        x += 48
-      ) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(
-          x,
-          canvas.height
-        );
-        ctx.stroke();
-      }
-
-      for (
-        let y = 0;
-        y <=
-        canvas.height;
-        y += 48
-      ) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(
-          canvas.width,
-          y
-        );
-        ctx.stroke();
-      }
-
-      // 학교/학년
-      ctx.fillStyle =
-        "#111111";
-
-      ctx.textAlign =
-        "left";
-
-      ctx.font =
-        '700 38px "Noto Sans KR", "Malgun Gothic", sans-serif';
-
-      ctx.fillText(
-        [
-          schoolName.trim(),
-          gradeName.trim(),
-        ]
-          .filter(Boolean)
-          .join(" "),
-        150,
-        145
-      );
-
-      ctx.font =
-        '800 44px "Noto Sans KR", "Malgun Gothic", sans-serif';
-
-      ctx.fillText(
-        lessonName.trim() ||
-          "Lesson",
-        150,
-        210
-      );
-
-      // 폴더 그림
-      const folderX = 330;
-      const folderY = 300;
-      const folderW = 880;
-      const folderH = 430;
-
-      ctx.fillStyle =
-        "#E7C96A";
-
-      ctx.beginPath();
-
-      ctx.roundRect(
-        folderX,
-        folderY,
-        folderW,
-        folderH,
-        35
-      );
-
-      ctx.fill();
-
-      // 폴더 탭
-      ctx.fillStyle =
-        "#DAB94F";
-
-      ctx.beginPath();
-
-      ctx.roundRect(
-        folderX + 65,
-        folderY - 70,
-        330,
-        110,
-        28
-      );
-
-      ctx.fill();
-
-      // 포인트 형광펜
-      ctx.fillStyle =
-        "#FFF176";
-
-      ctx.fillRect(
-        folderX + 230,
-        folderY + 180,
-        430,
-        72
-      );
-
-      // 요약.ZIP
-      ctx.fillStyle =
-        "#111111";
-
-      ctx.textAlign =
-        "center";
-
-      ctx.font =
-        '900 118px "Noto Sans KR", "Malgun Gothic", sans-serif';
-
-      ctx.fillText(
-        "요약.ZIP",
-        canvas.width / 2,
-        folderY + 265
-      );
-
-      ctx.font =
-        '700 31px "Noto Sans KR", "Malgun Gothic", sans-serif';
-
-      ctx.fillText(
-        "시험 직전, 한눈에 끝내는 핵심 정리",
-        canvas.width / 2,
-        folderY + 345
-      );
-
-      // 두들
-      ctx.strokeStyle =
-        "#111111";
-
-      ctx.lineWidth = 6;
-
-      // 별
-      const star = (
-        cx: number,
-        cy: number,
-        r: number
-      ) => {
-        ctx.beginPath();
-
-        for (
-          let i = 0;
-          i < 10;
-          i++
-        ) {
-          const angle =
-            -Math.PI / 2 +
-            (Math.PI *
-              i) /
-              5;
-
-          const rr =
-            i % 2 === 0
-              ? r
-              : r * 0.42;
-
-          const x =
-            cx +
-            Math.cos(
-              angle
-            ) *
-              rr;
-
-          const y =
-            cy +
-            Math.sin(
-              angle
-            ) *
-              rr;
-
-          if (i === 0) {
-            ctx.moveTo(
-              x,
-              y
-            );
-          } else {
-            ctx.lineTo(
-              x,
-              y
-            );
-          }
-        }
-
-        ctx.closePath();
-        ctx.stroke();
-      };
-
-      star(
-        220,
-        360,
-        34
-      );
-
-      star(
-        1320,
-        320,
-        42
-      );
-
-      // 화살표
-      ctx.beginPath();
-
-      ctx.moveTo(
-        175,
-        560
-      );
-
-      ctx.bezierCurveTo(
-        210,
-        515,
-        245,
-        520,
-        275,
-        555
-      );
-
-      ctx.stroke();
-
-      ctx.beginPath();
-
-      ctx.moveTo(
-        266,
-        535
-      );
-
-      ctx.lineTo(
-        278,
-        556
-      );
-
-      ctx.lineTo(
-        252,
-        556
-      );
-
-      ctx.stroke();
-
-      // 공식 로고
-      try {
-        const logo =
-          await loadImage(
-            "/summit-logo-trimmed.png"
-          );
-
-        const maxWidth =
-          270;
-
-        const ratio =
-          maxWidth /
-          logo.naturalWidth;
-
-        const width =
-          logo.naturalWidth *
-          ratio;
-
-        const height =
-          logo.naturalHeight *
-          ratio;
-
-        ctx.drawImage(
-          logo,
-          canvas.width / 2 -
-            width / 2,
-          835,
-          width,
-          height
-        );
-      } catch (
-        error
-      ) {
-        console.error(
-          "SUMMARY COVER LOGO ERROR:",
-          error
-        );
-      }
-
-      return canvas.toDataURL(
-        "image/png",
-        1
+      return await fetchSummaryPageImage(
+        "/api/high-summary-cover"
       );
     };
 
@@ -836,241 +548,8 @@ export default function HighSummaryTestPage() {
 
   const createBackCover =
     async () => {
-      const canvas =
-        document.createElement(
-          "canvas"
-        );
-
-      canvas.width = 1536;
-      canvas.height = 1024;
-
-      const ctx =
-        canvas.getContext(
-          "2d"
-        );
-
-      if (!ctx) {
-        throw new Error(
-          "마지막장 생성 실패"
-        );
-      }
-
-      ctx.fillStyle =
-        "#F7F3E8";
-
-      ctx.fillRect(
-        0,
-        0,
-        canvas.width,
-        canvas.height
-      );
-
-      // 은은한 종이 선
-      ctx.strokeStyle =
-        "rgba(0,0,0,0.06)";
-
-      ctx.lineWidth = 1;
-
-      for (
-        let y = 80;
-        y < 950;
-        y += 52
-      ) {
-        ctx.beginPath();
-
-        ctx.moveTo(
-          110,
-          y
-        );
-
-        ctx.lineTo(
-          1425,
-          y
-        );
-
-        ctx.stroke();
-      }
-
-      // 큰 A+
-      ctx.strokeStyle =
-        "#D61F2C";
-
-      ctx.fillStyle =
-        "#D61F2C";
-
-      ctx.lineWidth = 9;
-
-      ctx.font =
-        '900 240px Arial, sans-serif';
-
-      ctx.textAlign =
-        "center";
-
-      ctx.fillText(
-        "A+",
-        600,
-        420
-      );
-
-      ctx.beginPath();
-
-      ctx.arc(
-        600,
-        340,
-        255,
-        0,
-        Math.PI * 2
-      );
-
-      ctx.stroke();
-
-      // 포스트잇
-      ctx.save();
-
-      ctx.translate(
-        1010,
-        520
-      );
-
-      ctx.rotate(
-        -0.055
-      );
-
-      ctx.fillStyle =
-        "#FFE77A";
-
-      ctx.shadowColor =
-        "rgba(0,0,0,0.15)";
-
-      ctx.shadowBlur =
-        20;
-
-      ctx.fillRect(
-        -285,
-        -185,
-        570,
-        370
-      );
-
-      ctx.shadowBlur = 0;
-
-      ctx.fillStyle =
-        "#111111";
-
-      ctx.textAlign =
-        "left";
-
-      ctx.font =
-        '800 37px "Noto Sans KR", "Malgun Gothic", sans-serif';
-
-      const lines = [
-        `${schoolName.trim()} ${gradeName.trim()},`,
-        `${lessonName.trim()} 핵심정리 완료!`,
-        "",
-        "시험 직전 한 번 더 보고,",
-        "흐름까지 완벽하게 잡자.",
-        "",
-        "써밋에듀가 응원할게!",
-      ];
-
-      let lineY = -115;
-
-      for (
-        const line of lines
-      ) {
-        ctx.fillText(
-          line,
-          -230,
-          lineY
-        );
-
-        lineY += 56;
-      }
-
-      ctx.restore();
-
-      // 두들
-      ctx.strokeStyle =
-        "#111111";
-
-      ctx.lineWidth = 5;
-
-      ctx.beginPath();
-
-      ctx.moveTo(
-        175,
-        745
-      );
-
-      ctx.lineTo(
-        150,
-        705
-      );
-
-      ctx.moveTo(
-        205,
-        730
-      );
-
-      ctx.lineTo(
-        200,
-        680
-      );
-
-      ctx.moveTo(
-        235,
-        750
-      );
-
-      ctx.lineTo(
-        260,
-        710
-      );
-
-      ctx.stroke();
-
-      // 로고
-      try {
-        const logo =
-          await loadImage(
-            "/summit-logo-trimmed.png"
-          );
-
-        const maxWidth =
-          300;
-
-        const ratio =
-          maxWidth /
-          logo.naturalWidth;
-
-        const width =
-          logo.naturalWidth *
-          ratio;
-
-        const height =
-          logo.naturalHeight *
-          ratio;
-
-        ctx.drawImage(
-          logo,
-          canvas.width / 2 -
-            width / 2,
-          840,
-          width,
-          height
-        );
-      } catch (
-        error
-      ) {
-        console.error(
-          "SUMMARY BACK LOGO ERROR:",
-          error
-        );
-      }
-
-      return canvas.toDataURL(
-        "image/png",
-        1
+      return await fetchSummaryPageImage(
+        "/api/high-summary-back"
       );
     };
 
@@ -1395,15 +874,6 @@ export default function HighSummaryTestPage() {
                   : "전체 이미지 만들기"}
               </button>
 
-              <button
-                onClick={
-                  addAllToWorkbox
-                }
-                className="mt-3 w-full rounded-2xl border-2 border-black bg-white px-5 py-4 font-black"
-              >
-                생성된 이미지 전체 작업함 추가
-              </button>
-
             </div>
 
             <div className="mt-6 space-y-6">
@@ -1524,6 +994,14 @@ export default function HighSummaryTestPage() {
               )}
 
             </div>
+
+            <button
+              onClick={addAllToWorkbox}
+              disabled={generatedCount === 0}
+              className="mt-6 w-full rounded-2xl border-2 border-black bg-white px-5 py-4 font-black transition hover:bg-gray-50 disabled:opacity-40"
+            >
+              이미지 확인 완료 → 전체 작업함 추가
+            </button>
 
             <div className="mt-10 rounded-3xl bg-white p-6 shadow-sm">
 
