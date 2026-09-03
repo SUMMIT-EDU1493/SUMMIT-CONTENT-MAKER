@@ -1602,11 +1602,6 @@ export default function Home() {
                     window.location.href = "/high-summary-test";
                   }}
                   className="rounded-3xl border border-slate-200 bg-white p-7 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
-                > {
-                    window.location.href = "/high-summary-test";
-                  }}
-                > setWorkMode("summary")}
-                  className="rounded-3xl bg-white p-8 text-left shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-1 hover:shadow-lg"
                 >
                   <p className="text-sm font-bold text-amber-600">
                     SUMMARY BOOK
