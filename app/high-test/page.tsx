@@ -3,6 +3,7 @@
 import { useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import { jsPDF } from "jspdf";
+import HomeButton from "../components/HomeButton";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -1233,6 +1234,9 @@ ${pageText}
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-10">
       <div className="mx-auto max-w-6xl">
+        <div className="mb-6">
+  <HomeButton />
+</div>
         <div>
           <p className="text-sm font-bold text-purple-600">
             HIGH SCHOOL TEST

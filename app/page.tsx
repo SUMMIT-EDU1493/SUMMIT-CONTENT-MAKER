@@ -3,6 +3,7 @@
 import { useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import { jsPDF } from "jspdf";
+import HomeButton from "./components/HomeButton";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -1429,67 +1430,158 @@ export default function Home() {
     workItems.length +
     (backCoverImage ? 1 : 0);
 
-  if (!schoolLevel) {
+   if (!schoolLevel) {
     return (
-      <main className="min-h-screen bg-slate-50 px-5 py-12">
-        <div className="mx-auto max-w-5xl">
-          <div className="text-center">
-            <p className="text-sm font-bold text-blue-600">
-              SUMMIT EDU
-            </p>
+      <main className="min-h-screen bg-[#f7f4ea] px-5 py-10">
+        <div className="mx-auto max-w-6xl">
 
-            <h1 className="mt-2 text-4xl font-black text-slate-900 md:text-5xl">
-              SUMMIT CONTENT MAKER
-            </h1>
+          {/* 상단 브랜드 영역 */}
+          <div className="relative overflow-hidden rounded-[32px] border border-slate-200 bg-white px-6 py-10 shadow-sm md:px-10 md:py-12">
 
-            <p className="mt-4 text-slate-600">
-              만들 콘텐츠의 학년군을 먼저 선택해줘.
-            </p>
+            {/* 두들 장식 */}
+            <div className="pointer-events-none absolute left-8 top-8 text-3xl">
+              ✦
+            </div>
+
+            <div className="pointer-events-none absolute right-10 top-10 rotate-12 text-4xl">
+              ✎
+            </div>
+
+            <div className="pointer-events-none absolute bottom-8 left-14 -rotate-12 text-3xl">
+              ✧
+            </div>
+
+            <div className="pointer-events-none absolute bottom-8 right-14 text-4xl">
+              ⌁
+            </div>
+
+            <div className="text-center">
+
+              <img
+                src="/summit-logo-trimmed.png"
+                alt="SUMMIT EDU"
+                className="mx-auto w-[220px] md:w-[260px]"
+              />
+
+              <p className="mt-6 text-sm font-black tracking-[0.2em] text-emerald-600">
+                SUMMIT EDU
+              </p>
+
+              <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-900 md:text-6xl">
+                SUMMIT CONTENT MAKER
+              </h1>
+
+              <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-slate-600 md:text-lg">
+                교재 PDF를 올리면,
+                수업용 콘텐츠를 써밋 스타일로 만들어줘.
+              </p>
+
+            </div>
+
           </div>
 
-          <div className="mt-12 grid gap-6 md:grid-cols-2">
+          {/* 학년군 선택 */}
+          <div className="mt-8 grid gap-6 md:grid-cols-2">
+
+            {/* 중등 */}
             <button
               type="button"
               onClick={() => {
                 setSchoolLevel("middle");
                 setWorkMode("");
               }}
-              className="rounded-3xl bg-white p-8 text-left shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-1 hover:shadow-lg"
+              className="group relative overflow-hidden rounded-[30px] border border-emerald-200 bg-[#ecf8f2] p-8 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
             >
-              <p className="text-sm font-bold text-purple-600">
-                MIDDLE SCHOOL
-              </p>
+              <div className="absolute right-6 top-5 text-5xl opacity-20 transition group-hover:rotate-6 group-hover:scale-110">
+                ✎
+              </div>
 
-              <h2 className="mt-2 text-3xl font-black text-slate-900">
+              <div className="absolute bottom-6 right-8 text-4xl opacity-20">
+                ✦
+              </div>
+
+              <div className="inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-black tracking-widest text-emerald-700 shadow-sm">
+                MIDDLE SCHOOL
+              </div>
+
+              <h2 className="mt-6 text-4xl font-black text-slate-900">
                 중등
               </h2>
 
-              <p className="mt-3 text-slate-500">
+              <p className="mt-3 text-lg font-bold text-slate-600">
                 대화문 · 본문
               </p>
+
+              <div className="mt-7 flex flex-wrap gap-2">
+                <span className="rounded-full bg-white px-3 py-2 text-sm font-bold text-slate-700">
+                  써밋네컷
+                </span>
+
+                <span className="rounded-full bg-white px-3 py-2 text-sm font-bold text-slate-700">
+                  학습자료
+                </span>
+              </div>
+
+              <div className="mt-8 text-sm font-black text-emerald-700">
+                중등 콘텐츠 만들기 →
+              </div>
             </button>
 
+            {/* 고등 */}
             <button
               type="button"
               onClick={() => {
                 setSchoolLevel("high");
                 setWorkMode("");
               }}
-              className="rounded-3xl bg-slate-900 p-8 text-left text-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+              className="group relative overflow-hidden rounded-[30px] border border-amber-200 bg-[#fff8df] p-8 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
             >
-              <p className="text-sm font-bold text-purple-300">
-                HIGH SCHOOL
-              </p>
+              {/* 필름스트립 느낌 */}
+              <div className="absolute right-5 top-5 flex gap-1 opacity-20 transition group-hover:rotate-3 group-hover:scale-105">
+                <div className="h-20 w-5 rounded bg-slate-900" />
+                <div className="h-20 w-5 rounded bg-slate-900" />
+                <div className="h-20 w-5 rounded bg-slate-900" />
+                <div className="h-20 w-5 rounded bg-slate-900" />
+              </div>
 
-              <h2 className="mt-2 text-3xl font-black">
+              <div className="absolute bottom-6 right-8 text-4xl opacity-20">
+                ✧
+              </div>
+
+              <div className="inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-black tracking-widest text-amber-700 shadow-sm">
+                HIGH SCHOOL
+              </div>
+
+              <h2 className="mt-6 text-4xl font-black text-slate-900">
                 고등
               </h2>
 
-              <p className="mt-3 text-slate-300">
+              <p className="mt-3 text-lg font-bold text-slate-600">
                 써밋네컷 · 요약집
               </p>
+
+              <div className="mt-7 flex flex-wrap gap-2">
+                <span className="rounded-full bg-white px-3 py-2 text-sm font-bold text-slate-700">
+                  써밋네컷
+                </span>
+
+                <span className="rounded-full bg-white px-3 py-2 text-sm font-bold text-slate-700">
+                  요약.ZIP
+                </span>
+              </div>
+
+              <div className="mt-8 text-sm font-black text-amber-700">
+                고등 콘텐츠 만들기 →
+              </div>
             </button>
+
           </div>
+
+          {/* 하단 한 줄 */}
+          <div className="mt-7 text-center text-xs font-bold text-slate-400">
+            SUMMIT EDU · CONTENT MAKER
+          </div>
+
         </div>
       </main>
     );
@@ -1633,14 +1725,19 @@ export default function Home() {
 
     return (
       <main className="min-h-screen bg-slate-50 px-5 py-12">
-        <div className="mx-auto max-w-5xl">
-          <button
-            type="button"
-            onClick={() => setWorkMode("")}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-600"
-          >
-            ← 콘텐츠 선택으로
-          </button>
+  <div className="mx-auto max-w-5xl">
+
+    <div className="mb-4">
+      <HomeButton />
+    </div>
+
+    <button
+      type="button"
+      onClick={() => setWorkMode("")}
+      className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-600"
+    >
+      ← 콘텐츠 선택으로
+    </button>
 
           <section className="mt-8 rounded-3xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
             <p className="text-sm font-bold text-purple-600">
