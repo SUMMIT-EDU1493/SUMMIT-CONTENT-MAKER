@@ -24,6 +24,8 @@ type GeneratedQuestion = {
   difficulty: string;
   stem: string;
   passage: string;
+  boxTitle: string;
+  boxText: string;
   choices: string[];
   supplementaryItems: string[];
   answer: string;
@@ -376,6 +378,14 @@ export default function EnglishTestMakerPage() {
       setReadingPdf(false);
       setAnalyzingPdf(false);
     }
+  };
+
+  const selectAllSavedPassages = () => {
+    setSelectedPassageIds(savedPassages.map((passage) => passage.id));
+  };
+
+  const clearAllSavedPassages = () => {
+    setSelectedPassageIds([]);
   };
 
   const selectAllQuestionTypes = () => {
@@ -1239,6 +1249,33 @@ export default function EnglishTestMakerPage() {
                           className="w-full rounded-2xl border border-slate-300 p-4 font-serif leading-8"
                         />
 
+                        <input
+                          value={question.boxTitle || ""}
+                          onChange={(e) =>
+                            updateQuestion(
+                              question.id,
+                              "boxTitle",
+                              e.target.value
+                            )
+                          }
+                          placeholder="보기 박스 제목"
+                          className="w-full rounded-xl border border-slate-300 px-4 py-3"
+                        />
+
+                        <textarea
+                          value={question.boxText || ""}
+                          onChange={(e) =>
+                            updateQuestion(
+                              question.id,
+                              "boxText",
+                              e.target.value
+                            )
+                          }
+                          rows={4}
+                          placeholder="보기 박스 내용"
+                          className="w-full rounded-2xl border border-slate-300 p-4"
+                        />
+
                         {question.choices.map((choice, choiceIndex) => (
                           <input
                             key={choiceIndex}
@@ -1305,7 +1342,7 @@ export default function EnglishTestMakerPage() {
                           </div>
                         )}
 
-                        <div className="mt-6 grid gap-3 md:grid-cols-[160px_1fr]">
+                        <div className="mt-6 grid gap-3 md:grid-cols-[minmax(220px,0.8fr)_1.7fr]">
                           <div className="rounded-2xl bg-emerald-50 p-4">
                             <p className="text-xs font-black text-emerald-600">
                               정답

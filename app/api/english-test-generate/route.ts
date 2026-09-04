@@ -22,6 +22,7 @@ type PreviousQuestion = {
 type QuestionPlan = {
   passageId: string;
   passageTitle: string;
+  source: string;
   type: string;
   difficulty: string;
 };
@@ -31,25 +32,592 @@ type GeneratedQuestion = {
   passageTitle: string;
   type: string;
   difficulty: string;
+
   stem: string;
   passage: string;
-  choices: string[];
+
+  boxTitle: string;
+  boxText: string;
+
   supplementaryItems: string[];
+  choices: string[];
+
   answer: string;
   explanation: string;
   keyPoint: string;
 };
 
-function shuffle<T>(items: T[]): T[] {
-  const copied = [...items];
+const OBJECTIVE_TYPES = new Set([
+  "주제·제목",
+  "내용 일치·불일치",
+  "빈칸 추론",
+  "어휘",
+  "어법",
+  "요약문 완성",
+  "문장 삽입",
+  "글의 순서",
+  "학교시험형 종합",
+]);
 
-  for (let i = copied.length - 1; i > 0; i -= 1) {
+const BANNED_META_PHRASES = [
+  "영어 선택지 우선",
+  "영어 선지를 우선",
+  "영어 선택지를 우선",
+  "본문에 표시된 [①]",
+  "본문에 표시된 ①",
+  "아래 형식으로",
+  "다음 단계",
+  "출제 지침",
+  "제작 지침",
+];
+
+function shuffle<T>(items: T[]) {
+  const copy = [...items];
+
+  for (let i = copy.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-
-    [copied[i], copied[j]] = [copied[j], copied[i]];
+    [copy[i], copy[j]] = [copy[j], copy[i]];
   }
 
-  return copied;
+  return copy;
+}
+
+function stripCodeFence(raw: string) {
+  return raw
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+}
+
+function normalizeQuestion(
+  raw: Partial<GeneratedQuestion>,
+  plan: QuestionPlan
+): GeneratedQuestion {
+  return {
+    passageId: plan.passageId,
+    passageTitle: plan.passageTitle,
+    type:
+      typeof raw.type === "string" && raw.type.trim()
+        ? raw.type.trim()
+        : plan.type,
+    difficulty:
+      typeof raw.difficulty === "string" && raw.difficulty.trim()
+        ? raw.difficulty.trim()
+        : plan.difficulty,
+
+    stem: typeof raw.stem === "string" ? raw.stem.trim() : "",
+    passage:
+      typeof raw.passage === "string" && raw.passage.trim()
+        ? raw.passage.trim()
+        : plan.source,
+
+    boxTitle:
+      typeof raw.boxTitle === "string" ? raw.boxTitle.trim() : "",
+    boxText:
+      typeof raw.boxText === "string" ? raw.boxText.trim() : "",
+
+    supplementaryItems: Array.isArray(raw.supplementaryItems)
+      ? raw.supplementaryItems
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => item.trim())
+          .filter(Boolean)
+      : [],
+
+    choices: Array.isArray(raw.choices)
+      ? raw.choices
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => item.trim())
+          .filter(Boolean)
+      : [],
+
+    answer: typeof raw.answer === "string" ? raw.answer.trim() : "",
+    explanation:
+      typeof raw.explanation === "string"
+        ? raw.explanation.trim()
+        : "",
+    keyPoint:
+      typeof raw.keyPoint === "string" ? raw.keyPoint.trim() : "",
+  };
+}
+
+function containsBannedMeta(question: GeneratedQuestion) {
+  const combined = [
+    question.stem,
+    question.boxTitle,
+    question.boxText,
+    ...question.supplementaryItems,
+    ...question.choices,
+  ].join(" ");
+
+  return BANNED_META_PHRASES.some((phrase) =>
+    combined.includes(phrase)
+  );
+}
+
+function hasInsertionPositions(text: string) {
+  return ["①", "②", "③", "④", "⑤"].every((mark) =>
+    text.includes(mark)
+  );
+}
+
+function hasABC(items: string[]) {
+  const text = items.join(" ");
+
+  return (
+    (text.includes("(A)") || text.includes("A)")) &&
+    (text.includes("(B)") || text.includes("B)")) &&
+    (text.includes("(C)") || text.includes("C)"))
+  );
+}
+
+function hasABBlank(text: string) {
+  const upper = text.toUpperCase();
+
+  return (
+    (upper.includes("(A)") || upper.includes("A)")) &&
+    (upper.includes("(B)") || upper.includes("B)"))
+  );
+}
+
+function hasBlank(text: string) {
+  return (
+    text.includes("_____") ||
+    text.includes("______") ||
+    text.includes("________") ||
+    text.includes("빈칸")
+  );
+}
+
+function englishWordCount(text: string) {
+  return text
+    .replace(/[^\w'-]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+}
+
+function validateQuestion(question: GeneratedQuestion) {
+  const errors: string[] = [];
+
+  if (!question.stem) errors.push("발문 없음");
+  if (!question.passage) errors.push("본문 없음");
+  if (!question.answer) errors.push("정답 없음");
+  if (!question.explanation) errors.push("해설 없음");
+
+  if (containsBannedMeta(question)) {
+    errors.push("제작 지침 문구 노출");
+  }
+
+  if (
+    OBJECTIVE_TYPES.has(question.type) &&
+    question.choices.length !== 5
+  ) {
+    errors.push("객관식 선택지가 5개가 아님");
+  }
+
+  switch (question.type) {
+    case "주제·제목": {
+      if (question.choices.length !== 5) {
+        errors.push("주제·제목 선택지 부족");
+      }
+      break;
+    }
+
+    case "빈칸 추론": {
+      if (!hasBlank(question.passage)) {
+        errors.push("본문에 실제 빈칸 없음");
+      }
+      break;
+    }
+
+    case "문장 삽입": {
+      if (!question.boxText) {
+        errors.push("삽입할 문장 없음");
+      }
+
+      if (!hasInsertionPositions(question.passage)) {
+        errors.push("본문에 ①~⑤ 삽입 위치 없음");
+      }
+      break;
+    }
+
+    case "글의 순서": {
+      if (
+        question.supplementaryItems.length < 3 ||
+        !hasABC(question.supplementaryItems)
+      ) {
+        errors.push("(A)(B)(C) 순서 구간 없음");
+      }
+      break;
+    }
+
+    case "요약문 완성": {
+      if (!question.boxText) {
+        errors.push("요약문 없음");
+      }
+
+      if (!hasABBlank(question.boxText)) {
+        errors.push("요약문에 (A)(B) 없음");
+      }
+      break;
+    }
+
+    case "학교시험형 종합": {
+      if (question.supplementaryItems.length < 4) {
+        errors.push("학교시험형 별도 보기 없음");
+      }
+      break;
+    }
+
+    case "서술형": {
+      if (question.choices.length > 0) {
+        errors.push("서술형에 객관식 선택지 존재");
+      }
+
+      const words = englishWordCount(question.answer);
+
+      if (words > 30) {
+        errors.push("서술형 모범답안이 너무 김");
+      }
+
+      break;
+    }
+  }
+
+  return errors;
+}
+
+function makePlans(
+  passages: Passage[],
+  requests: QuestionRequest[],
+  difficulties: string[]
+) {
+  const expandedTypes: string[] = [];
+
+  for (const request of requests) {
+    const count = Math.max(
+      0,
+      Math.min(Number(request.count) || 0, 20)
+    );
+
+    for (let i = 0; i < count; i++) {
+      expandedTypes.push(request.type);
+    }
+  }
+
+  const shuffledTypes = shuffle(expandedTypes).slice(0, 40);
+  const shuffledPassages = shuffle(passages);
+  const levelPool =
+    difficulties.length > 0 ? difficulties : ["중상"];
+
+  return shuffledTypes.map((type, index): QuestionPlan => {
+    const passage =
+      shuffledPassages[index % shuffledPassages.length];
+
+    return {
+      passageId: passage.id,
+      passageTitle: passage.title,
+      source: passage.source,
+      type,
+      difficulty:
+        levelPool[
+          Math.floor(Math.random() * levelPool.length)
+        ],
+    };
+  });
+}
+
+function chunk<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+
+  return chunks;
+}
+
+function buildPrompt(
+  plans: QuestionPlan[],
+  previousQuestions: PreviousQuestion[],
+  retryReasons?: string[]
+) {
+  const retryText =
+    retryReasons && retryReasons.length
+      ? `
+이전 생성 결과가 아래 이유로 검수에서 탈락했습니다.
+이번에는 반드시 수정하세요.
+
+${retryReasons.map((item) => `- ${item}`).join("\n")}
+`
+      : "";
+
+  return `
+당신은 대한민국 고등학교 영어 내신 및 모의고사 전문 출제자입니다.
+
+아래의 정확한 출제 계획에 따라 문제를 제작하세요.
+
+${retryText}
+
+[출제 계획]
+${JSON.stringify(plans, null, 2)}
+
+[최근 출제 이력]
+${JSON.stringify(previousQuestions.slice(-80), null, 2)}
+
+==================================================
+가장 중요한 공통 규칙
+==================================================
+
+1. 반드시 제공된 원문 영어 지문만 근거로 출제합니다.
+2. 원문에 없는 사실을 만들어내지 않습니다.
+3. 문제 제작용 내부 지침을 학생용 발문에 절대 노출하지 않습니다.
+4. 아래 같은 문구는 절대 쓰지 않습니다.
+   - 영어 선택지 우선
+   - 영어 선지를 우선 사용
+   - 본문에 표시된 위치 중
+   - 제작 지침
+   - 출제 지침
+5. 발문은 실제 대한민국 고등학교 시험지처럼 자연스럽게 작성합니다.
+6. 한글과 영어가 비정상적으로 붙은 오타를 만들지 않습니다.
+7. 문제에서 요구하는 A, B, C, ①, ② 등이 실제 자료 안에 반드시 존재해야 합니다.
+8. 객관식은 반드시 5지선다입니다.
+9. 정답이 하나만 존재하도록 만듭니다.
+10. 오답은 원문과 관련성은 있지만 분명히 틀려야 합니다.
+11. 이전 출제 이력과 발문 및 핵심 포인트가 최대한 겹치지 않도록 합니다.
+
+==================================================
+필드 사용법
+==================================================
+
+stem:
+학생에게 보여줄 짧은 문제 발문만 작성합니다.
+긴 문장, 요약문, 삽입문, (A)~(F)를 stem 뒤에 붙이지 않습니다.
+
+passage:
+학생이 읽는 영어 본문입니다.
+
+boxTitle / boxText:
+본문과 별도로 네모 박스에 보여줄 자료입니다.
+
+supplementaryItems:
+(A), (B), (C) 또는 (A)~(F)처럼
+본문 아래에 별도로 보여줄 여러 항목입니다.
+
+choices:
+①~⑤ 객관식 선택지입니다.
+
+answer:
+정답만 간결하게 적습니다.
+
+explanation:
+정답 근거와 설명은 여기 적습니다.
+
+==================================================
+문제 유형별 절대 규칙
+==================================================
+
+[주제·제목]
+- stem은 간결하게:
+  "다음 글의 제목으로 가장 적절한 것은?"
+  또는
+  "다음 글의 주제로 가장 적절한 것은?"
+- 괄호 안에 제작 지침을 절대 덧붙이지 않습니다.
+- choices는 영어 5개를 자연스럽게 구성합니다.
+- boxText = ""
+- supplementaryItems = []
+
+[내용 일치·불일치]
+- 본문의 세부 내용을 정확히 활용합니다.
+- 5지선다입니다.
+
+[빈칸 추론]
+- 발문 뒤에 빈칸 문장 전체를 붙이지 않습니다.
+- 반드시 passage 안의 적절한 부분을 _____ 로 바꿉니다.
+- 학생은 본문을 읽으며 빈칸을 확인할 수 있어야 합니다.
+- choices는 빈칸에 들어갈 영어 표현 5개입니다.
+
+[어휘]
+- passage 안에서 특정 어휘를 명확하게 표시합니다.
+- 단순 암기가 아니라 문맥 판단형으로 출제합니다.
+
+[어법]
+- passage 안에서 판단 대상 부분을 명확히 표시합니다.
+- 발문만 보고 무엇을 고르는지 모호하면 안 됩니다.
+
+[요약문 완성]
+- passage에는 원문을 둡니다.
+- boxTitle = "<요약문>"
+- boxText 안에 실제 요약문을 작성합니다.
+- boxText에 반드시 (A), (B) 두 빈칸이 존재해야 합니다.
+예:
+"The passage shows that nudges can (A) ______ behavior while preserving (B) ______."
+- choices에는 (A), (B) 조합 5개를 제시합니다.
+
+[문장 삽입]
+- boxTitle = "<주어진 문장>"
+- boxText = 삽입해야 할 영어 문장 한 문장
+- passage 안에 반드시 ① ② ③ ④ ⑤ 위치를 직접 삽입합니다.
+- stem에는 삽입문을 길게 다시 쓰지 않습니다.
+- stem 예:
+  "주어진 문장이 들어가기에 가장 적절한 곳은?"
+- choices = ["①", "②", "③", "④", "⑤"]
+
+[글의 순서]
+- passage에는 짧은 '주어진 글' 부분만 둡니다.
+- 나머지 본문은 의미 단위로 3개로 나눕니다.
+- supplementaryItems에 반드시:
+  "(A) ..."
+  "(B) ..."
+  "(C) ..."
+  형식으로 넣습니다.
+- 문장을 중간에서 자르지 않습니다.
+- choices는 순서 조합 5개입니다.
+예:
+"① (A)-(C)-(B)"
+
+[서술형]
+- 학생이 영어로 1~2문장 정도 작성할 수 있는 문제로 만듭니다.
+- 지나치게 많은 근거를 한꺼번에 요구하지 않습니다.
+- answer는 영어 약 10~30단어를 권장하며 절대 30단어를 넘기지 않습니다.
+- 핵심 내용 1~2개만 포함합니다.
+- 긴 설명은 answer에 쓰지 말고 explanation에 적습니다.
+- choices = []
+- supplementaryItems = []
+
+[학교시험형 종합]
+- 실제 고등학교 내신의 복합 내용 판단형으로 만듭니다.
+- stem은 발문만 씁니다.
+- passage에는 영어 본문만 둡니다.
+- (A)~(F)를 사용하는 경우 supplementaryItems에 반드시 실제 항목을 넣습니다.
+예:
+[
+  "(A) ...",
+  "(B) ...",
+  "(C) ...",
+  "(D) ...",
+  "(E) ...",
+  "(F) ..."
+]
+- (A)~(F)를 발문에만 언급하고 실제 항목을 빠뜨리는 것은 절대 금지입니다.
+- choices는 올바른 조합 5개입니다.
+
+==================================================
+반환 형식
+==================================================
+
+JSON 외에는 아무것도 출력하지 마세요.
+
+{
+  "questions": [
+    {
+      "passageId": "계획의 passageId 그대로",
+      "passageTitle": "계획의 passageTitle 그대로",
+      "type": "계획의 유형",
+      "difficulty": "계획의 난이도",
+
+      "stem": "학생용 발문",
+      "passage": "학생에게 보여줄 본문",
+
+      "boxTitle": "",
+      "boxText": "",
+
+      "supplementaryItems": [],
+      "choices": [],
+
+      "answer": "간결한 정답",
+      "explanation": "충분한 해설",
+      "keyPoint": "출제 핵심"
+    }
+  ]
+}
+
+반드시 출제 계획의 문제 수와 정확히 같은 개수를 반환하세요.
+`;
+}
+
+async function generateBatch(
+  openai: OpenAI,
+  plans: QuestionPlan[],
+  previousQuestions: PreviousQuestion[]
+) {
+  const firstResponse = await openai.responses.create({
+    model: "gpt-5-mini",
+    input: buildPrompt(plans, previousQuestions),
+  });
+
+  const firstRaw = firstResponse.output_text?.trim();
+
+  if (!firstRaw) {
+    throw new Error("AI 응답이 없습니다.");
+  }
+
+  const firstParsed = JSON.parse(stripCodeFence(firstRaw));
+
+  const firstQuestions = Array.isArray(firstParsed?.questions)
+    ? firstParsed.questions
+    : [];
+
+  const normalized = plans.map((plan, index) =>
+    normalizeQuestion(firstQuestions[index] || {}, plan)
+  );
+
+  const invalidIndexes: number[] = [];
+  const invalidReasons: string[] = [];
+
+  normalized.forEach((question, index) => {
+    const errors = validateQuestion(question);
+
+    if (errors.length > 0) {
+      invalidIndexes.push(index);
+      invalidReasons.push(
+        `${index + 1}번 ${plans[index].type}: ${errors.join(", ")}`
+      );
+    }
+  });
+
+  if (invalidIndexes.length === 0) {
+    return normalized;
+  }
+
+  const retryPlans = invalidIndexes.map((index) => plans[index]);
+
+  const retryResponse = await openai.responses.create({
+    model: "gpt-5-mini",
+    input: buildPrompt(
+      retryPlans,
+      previousQuestions,
+      invalidReasons
+    ),
+  });
+
+  const retryRaw = retryResponse.output_text?.trim();
+
+  if (!retryRaw) {
+    return normalized;
+  }
+
+  const retryParsed = JSON.parse(stripCodeFence(retryRaw));
+
+  const retryQuestions = Array.isArray(retryParsed?.questions)
+    ? retryParsed.questions
+    : [];
+
+  invalidIndexes.forEach((originalIndex, retryIndex) => {
+    const repaired = normalizeQuestion(
+      retryQuestions[retryIndex] || {},
+      plans[originalIndex]
+    );
+
+    const errors = validateQuestion(repaired);
+
+    if (errors.length === 0) {
+      normalized[originalIndex] = repaired;
+    }
+  });
+
+  return normalized;
 }
 
 export async function POST(req: Request) {
@@ -58,16 +626,10 @@ export async function POST(req: Request) {
 
     if (!apiKey) {
       return Response.json(
-        {
-          error: "OPENAI_API_KEY가 설정되어 있지 않습니다.",
-        },
+        { error: "OPENAI_API_KEY가 설정되어 있지 않습니다." },
         { status: 500 }
       );
     }
-
-    const openai = new OpenAI({
-      apiKey,
-    });
 
     const body = await req.json();
 
@@ -81,10 +643,9 @@ export async function POST(req: Request) {
       ? body.questionRequests
       : [];
 
-    const difficulties: string[] =
-      Array.isArray(body?.difficulties) && body.difficulties.length > 0
-        ? body.difficulties
-        : ["기본"];
+    const difficulties: string[] = Array.isArray(body?.difficulties)
+      ? body.difficulties
+      : ["중상"];
 
     const previousQuestions: PreviousQuestion[] = Array.isArray(
       body?.previousQuestions
@@ -94,387 +655,52 @@ export async function POST(req: Request) {
 
     if (passages.length === 0) {
       return Response.json(
-        {
-          error: "선택된 영어 지문이 없습니다.",
-        },
+        { error: "선택된 지문이 없습니다." },
         { status: 400 }
       );
     }
 
-    if (questionRequests.length === 0) {
-      return Response.json(
-        {
-          error: "선택된 문제 유형이 없습니다.",
-        },
-        { status: 400 }
-      );
-    }
-
-    const cleanPassages = passages.filter(
-      (item) =>
-        typeof item?.id === "string" &&
-        typeof item?.title === "string" &&
-        typeof item?.source === "string" &&
-        item.source.trim().length > 50
+    const plans = makePlans(
+      passages,
+      questionRequests,
+      difficulties
     );
 
-    if (cleanPassages.length === 0) {
+    if (plans.length === 0) {
       return Response.json(
-        {
-          error: "사용 가능한 영어 지문이 없습니다.",
-        },
+        { error: "생성할 문제 수가 0개입니다." },
         { status: 400 }
       );
     }
 
-    /*
-     * 출제 계획 생성
-     *
-     * 예:
-     * 주제·제목 2개
-     * 어법 3개
-     * 빈칸 1개
-     *
-     * → 총 6개의 계획을 만든 뒤
-     *   지문 / 유형 / 난이도를 섞어서 배치
-     */
+    const openai = new OpenAI({ apiKey });
 
-    const expandedTypes: string[] = [];
+    // 4문항씩 묶어서 동시에 생성
+    const batches = chunk(plans, 4);
 
-    for (const request of questionRequests) {
-      const type =
-        typeof request?.type === "string"
-          ? request.type.trim()
-          : "";
-
-      const count = Number(request?.count || 0);
-
-      if (!type || count <= 0) continue;
-
-      for (let i = 0; i < Math.min(count, 20); i += 1) {
-        expandedTypes.push(type);
-      }
-    }
-
-    if (expandedTypes.length === 0) {
-      return Response.json(
-        {
-          error: "생성할 문제 수가 0개입니다.",
-        },
-        { status: 400 }
-      );
-    }
-
-    if (expandedTypes.length > 40) {
-      return Response.json(
-        {
-          error: "한 번에 최대 40문항까지 생성할 수 있습니다.",
-        },
-        { status: 400 }
-      );
-    }
-
-    const shuffledTypes = shuffle(expandedTypes);
-    const shuffledPassages = shuffle(cleanPassages);
-
-    const plans: QuestionPlan[] = shuffledTypes.map(
-      (type, index) => {
-        const passage =
-          shuffledPassages[index % shuffledPassages.length];
-
-        const difficulty =
-          difficulties[
-            Math.floor(Math.random() * difficulties.length)
-          ];
-
-        return {
-          passageId: passage.id,
-          passageTitle: passage.title,
-          type,
-          difficulty,
-        };
-      }
+    const results = await Promise.all(
+      batches.map((batch) =>
+        generateBatch(openai, batch, previousQuestions)
+      )
     );
 
-    /*
-     * 연속해서 같은 지문이 붙는 것을 조금 줄이기 위해
-     * 한 번 더 재정렬
-     */
-    const mixedPlans = [...plans];
-
-    for (let i = 1; i < mixedPlans.length; i += 1) {
-      if (
-        mixedPlans.length > 2 &&
-        mixedPlans[i].passageId === mixedPlans[i - 1].passageId
-      ) {
-        const swapIndex = mixedPlans.findIndex(
-          (item, index) =>
-            index > i &&
-            item.passageId !== mixedPlans[i - 1].passageId
-        );
-
-        if (swapIndex > i) {
-          [mixedPlans[i], mixedPlans[swapIndex]] = [
-            mixedPlans[swapIndex],
-            mixedPlans[i],
-          ];
-        }
-      }
-    }
-
-    const passageData = cleanPassages.map((passage) => ({
-      id: passage.id,
-      title: passage.title,
-      source: passage.source,
+    const questions = results.flat().map((question, index) => ({
+      ...question,
+      id: `question-${Date.now()}-${index}`,
     }));
 
-    const previousHistory = previousQuestions.slice(-100);
-
-    const prompt = `
-당신은 대한민국 고등학교 영어 내신 및 모의고사 변형문제를 제작하는 전문 출제자입니다.
-
-사용자가 제공한 영어 지문을 바탕으로 실제 시험에서 사용할 수 있는 변형문제를 제작하세요.
-
-━━━━━━━━━━━━━━━━━━━━
-[가장 중요한 원칙]
-━━━━━━━━━━━━━━━━━━━━
-
-1. 반드시 제공된 영어 지문 내용만 근거로 문제를 만드세요.
-2. 지문에 없는 사실을 임의로 추가하지 마세요.
-3. 문제마다 출제 포인트를 다르게 하세요.
-4. 같은 지문에서 여러 문제가 출제되어도 같은 문장이나 같은 근거만 반복하지 마세요.
-5. 기존 출제 이력이 제공된 경우, 이전 문제와 발문·정답 근거·핵심 포인트가 겹치지 않도록 새롭게 출제하세요.
-6. 단순히 단어나 표현만 바꾼 사실상 동일한 문제는 만들지 마세요.
-7. 객관식 문제는 정답이 명확하게 하나만 존재해야 합니다.
-8. 객관식은 원칙적으로 5지선다입니다.
-9. 오답 선지는 너무 엉뚱하지 않게, 학생이 실제로 고민할 만한 매력적인 오답으로 만드세요.
-10. 난이도에 따라 선지의 유사성, 추론 깊이, 어휘 수준을 조절하세요.
-
-━━━━━━━━━━━━━━━━━━━━
-[난이도 기준]
-━━━━━━━━━━━━━━━━━━━━
-
-기본:
-- 본문 핵심내용을 정확히 이해하면 해결 가능
-- 과도한 함정 금지
-
-중상:
-- 문맥과 논리 흐름을 함께 이해해야 해결 가능
-- 오답 선지를 서로 비슷하게 구성
-
-고난도:
-- 핵심 논리, 문맥, 함의까지 종합적으로 판단
-- 단순 내용 찾기로 정답이 바로 보이지 않도록 구성
-- 단, 억지 함정이나 복수정답은 금지
-
-━━━━━━━━━━━━━━━━━━━━
-[문제 유형별 기준]
-━━━━━━━━━━━━━━━━━━━━
-
-주제·제목:
-- 글 전체의 중심내용을 판단
-- 제목 또는 주제 선택형
-- 영어 선지를 우선 사용
-
-내용 일치·불일치:
-- 본문 전체에 근거
-- 단순 문장 복사보다 의미를 적절히 변형
-- 일치 또는 불일치 여부가 명확해야 함
-
-빈칸 추론:
-- 핵심 논리나 중심내용에 의미 있는 부분을 빈칸으로 설정
-- 단순 어휘 암기형 빈칸은 피함
-
-어휘:
-- 문맥상 의미
-- 어휘의 적절성
-- 유의어·반의어
-- 문맥상 낱말의 쓰임 등을 다양하게 활용
-
-어법:
-- 문법적으로 의미 있는 부분을 출제
-- 단순 철자나 사소한 오류는 피함
-- 수일치, 준동사, 관계사, 병렬, 시제, 태, 대명사 등 지문에 실제로 존재하는 구조 활용
-
-요약문 완성:
-- 지문 전체 핵심내용을 1~2문장으로 요약
-- (A), (B) 빈칸형 5지선다 가능
-
-문장 삽입:
-- 지문의 논리 흐름이 충분한 경우만 출제
-- 삽입 문장의 위치가 명확해야 함
-
-글의 순서:
-- 원문의 논리 흐름을 활용
-- 지나치게 짧은 글에서는 억지로 만들지 않음
-
-서술형:
-- 학생이 영어 또는 한국어로 핵심을 작성
-- 반드시 채점 가능한 모범답안 포함
-
-학교시험형 종합:
-- 국내 고등학교 실제 내신 스타일로 출제
-- 어법, 어휘, 내용, 문맥, 요약, 복수정답형 등을 다양하게 활용
-- 매번 같은 형식만 반복하지 말 것
-- (A)~(F) 진술을 사용하는 복수정답형 문제의 경우:
-  · stem에는 문제의 발문만 작성
-  · passage에는 영어 본문만 작성
-  · (A)~(F) 진술은 반드시 supplementaryItems 배열에 각각 따로 저장
-  · (A)~(F)를 stem 안에 붙여 쓰지 말 것
-  · (A)~(F)를 passage 안에 섞어 넣지 말 것
-- 기존 유형과 최대한 중복되지 않는 형태로 출제
-
-━━━━━━━━━━━━━━━━━━━━
-[지문 목록]
-━━━━━━━━━━━━━━━━━━━━
-
-${JSON.stringify(passageData, null, 2)}
-
-━━━━━━━━━━━━━━━━━━━━
-[이번 출제 계획]
-━━━━━━━━━━━━━━━━━━━━
-
-${JSON.stringify(mixedPlans, null, 2)}
-
-━━━━━━━━━━━━━━━━━━━━
-[기존 출제 이력]
-━━━━━━━━━━━━━━━━━━━━
-
-${
-  previousHistory.length > 0
-    ? JSON.stringify(previousHistory, null, 2)
-    : "기존 출제 이력 없음"
-}
-
-━━━━━━━━━━━━━━━━━━━━
-[반환 형식]
-━━━━━━━━━━━━━━━━━━━━
-
-반드시 아래 JSON 형식만 반환하세요.
-
-{
-  "questions": [
-    {
-      "passageId": "원래 지문 id",
-      "passageTitle": "지문 제목",
-      "type": "문제 유형",
-      "difficulty": "기본 또는 중상 또는 고난도",
-      "stem": "문제 발문",
-      "passage": "문제에 실제로 표시할 영어 지문. 필요한 경우 원문의 일부에 번호, 밑줄, 빈칸 등의 표시를 넣을 수 있음",
-      "choices": [
-        "① ...",
-        "② ...",
-        "③ ...",
-        "④ ...",
-        "⑤ ..."
-      ],
-      "supplementaryItems": [
-        "(A) ...",
-        "(B) ...",
-        "(C) ..."
-      ],
-      "answer": "정답",
-      "explanation": "정답 근거와 필요한 해설",
-      "keyPoint": "이 문제의 핵심 출제 포인트를 짧게 설명"
-    }
-  ]
-}
-
-추가 규칙:
-
-- 서술형 문제는 choices를 빈 배열 []로 반환하세요.
-- 객관식 문제는 choices를 반드시 5개 반환하세요.
-- 별도 보기 자료가 없는 문제는 supplementaryItems를 []로 반환하세요.
-- (A)~(F) 같은 별도 진술은 supplementaryItems에 넣으세요.
-- (A)~(F) 같은 별도 보기 진술이 없는 문제는 supplementaryItems를 빈 배열 []로 반환하세요.
-- (A)~(F) 진술을 사용하는 문제는 반드시 supplementaryItems에 분리해서 반환하세요.
-- supplementaryItems의 내용은 passage 아래, 객관식 선택지 위에 표시될 자료입니다.
-- answer에는 정답 번호 또는 모범답안을 넣으세요.
-- passage는 반드시 원문의 내용을 유지해야 합니다.
-- 문제 수는 출제 계획과 정확히 같아야 합니다.
-- 출제 계획에 없는 문제 유형을 추가하지 마세요.
-`;
-
-    const response = await openai.responses.create({
-      model: "gpt-5-mini",
-      input: prompt,
-    });
-
-    const raw = response.output_text?.trim();
-
-    if (!raw) {
-      return Response.json(
-        {
-          error: "문제 생성 결과가 없습니다.",
-        },
-        { status: 500 }
-      );
-    }
-
-    let parsed: {
-      questions?: GeneratedQuestion[];
-    };
-
-    try {
-      const cleaned = raw
-        .replace(/^```json\s*/i, "")
-        .replace(/^```\s*/i, "")
-        .replace(/\s*```$/i, "")
-        .trim();
-
-      parsed = JSON.parse(cleaned);
-    } catch {
-      console.error("Question JSON parse failed:", raw);
-
-      return Response.json(
-        {
-          error: "생성된 문제 데이터를 읽지 못했습니다.",
-        },
-        { status: 500 }
-      );
-    }
-
-    const questions = Array.isArray(parsed.questions)
-      ? parsed.questions.filter(
-          (item) =>
-            typeof item?.passageId === "string" &&
-            typeof item?.type === "string" &&
-            typeof item?.stem === "string" &&
-            typeof item?.passage === "string" &&
-            typeof item?.answer === "string"
-        )
-      : [];
-
-    if (questions.length === 0) {
-      return Response.json(
-        {
-          error: "사용 가능한 변형문제를 생성하지 못했습니다.",
-        },
-        { status: 500 }
-      );
-    }
-
-    /*
-     * 최종 문제 순서도 한 번 랜덤하게 섞어서 반환
-     */
-    const shuffledQuestions = shuffle(
-      questions.map((question, index) => ({
-        ...question,
-        id: `question-${Date.now()}-${index}`,
-      }))
-    );
-
     return Response.json({
-      questions: shuffledQuestions,
-      requestedCount: mixedPlans.length,
-      generatedCount: shuffledQuestions.length,
+      questions,
     });
   } catch (error) {
-    console.error("English test generation error:", error);
+    console.error("English generation v2 error:", error);
 
     return Response.json(
       {
-        error: "영어 변형문제 생성 중 오류가 발생했습니다.",
+        error:
+          error instanceof Error
+            ? error.message
+            : "변형문제 생성 중 오류가 발생했습니다.",
       },
       { status: 500 }
     );
