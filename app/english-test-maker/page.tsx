@@ -32,6 +32,8 @@ const COLORS = [
   { name: "그레이", value: "#CBD5E1" },
 ];
 
+const DIFFICULTIES = ["기본", "중상", "고난도"];
+
 export default function EnglishTestMakerPage() {
   const [schoolName, setSchoolName] = useState("");
   const [gradeName, setGradeName] = useState("");
@@ -50,7 +52,8 @@ export default function EnglishTestMakerPage() {
     "내용 일치·불일치": 1,
   });
 
-  const [difficulty, setDifficulty] = useState("기본");
+  const [difficulties, setDifficulties] = useState<string[]>(["기본"]);
+
   const [themeColor, setThemeColor] = useState(COLORS[0].value);
 
   useEffect(() => {
@@ -60,11 +63,12 @@ export default function EnglishTestMakerPage() {
 
     try {
       const parsed = JSON.parse(raw);
+
       if (Array.isArray(parsed)) {
         setSavedPassages(parsed);
       }
     } catch {
-      // ignore malformed localStorage data
+      // 잘못 저장된 localStorage 데이터는 무시
     }
   }, []);
 
@@ -100,6 +104,21 @@ export default function EnglishTestMakerPage() {
     });
   };
 
+  const toggleDifficulty = (difficulty: string) => {
+    setDifficulties((prev) => {
+      if (prev.includes(difficulty)) {
+        // 최소 하나는 반드시 선택된 상태 유지
+        if (prev.length === 1) {
+          return prev;
+        }
+
+        return prev.filter((item) => item !== difficulty);
+      }
+
+      return [...prev, difficulty];
+    });
+  };
+
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-8">
       <div className="mx-auto max-w-6xl">
@@ -121,38 +140,49 @@ export default function EnglishTestMakerPage() {
           </h1>
 
           <p className="mt-3 text-base font-medium text-slate-600">
-            교재 PDF를 분석해 원하는 유형의 모의고사·내신형 변형문제를 제작합니다.
+            교재 PDF를 분석해 원하는 유형의 모의고사·내신형 변형문제를
+            제작합니다.
           </p>
 
           <div className="mt-5 flex flex-wrap items-center gap-2 text-sm font-bold text-slate-500">
             <span className="rounded-full bg-white px-3 py-2 shadow-sm">
               PDF 업로드
             </span>
+
             <span>→</span>
+
             <span className="rounded-full bg-white px-3 py-2 shadow-sm">
               지문 저장
             </span>
+
             <span>→</span>
+
             <span className="rounded-full bg-white px-3 py-2 shadow-sm">
               유형 선택
             </span>
+
             <span>→</span>
+
             <span className="rounded-full bg-white px-3 py-2 shadow-sm">
               문제 제작
             </span>
+
             <span>→</span>
+
             <span className="rounded-full bg-white px-3 py-2 shadow-sm">
               시험지 완성
             </span>
           </div>
         </section>
 
+        {/* 1. 기본정보 */}
         <section className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <h2 className="text-xl font-black text-slate-900">1. 기본정보</h2>
 
           <div className="mt-5 grid gap-4 md:grid-cols-3">
             <label className="block">
               <span className="text-sm font-bold text-slate-700">학교명</span>
+
               <input
                 value={schoolName}
                 onChange={(e) => setSchoolName(e.target.value)}
@@ -163,6 +193,7 @@ export default function EnglishTestMakerPage() {
 
             <label className="block">
               <span className="text-sm font-bold text-slate-700">학년</span>
+
               <input
                 value={gradeName}
                 onChange={(e) => setGradeName(e.target.value)}
@@ -172,7 +203,10 @@ export default function EnglishTestMakerPage() {
             </label>
 
             <label className="block">
-              <span className="text-sm font-bold text-slate-700">시험 범위</span>
+              <span className="text-sm font-bold text-slate-700">
+                시험 범위
+              </span>
+
               <input
                 value={rangeName}
                 onChange={(e) => setRangeName(e.target.value)}
@@ -183,12 +217,14 @@ export default function EnglishTestMakerPage() {
           </div>
         </section>
 
+        {/* 2. 지문 라이브러리 */}
         <section className="mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h2 className="text-xl font-black text-slate-900">
                 2. 지문 라이브러리
               </h2>
+
               <p className="mt-2 text-sm font-medium text-slate-500">
                 한 번 저장한 지문은 다음 제작에서도 다시 사용할 수 있습니다.
               </p>
@@ -196,6 +232,7 @@ export default function EnglishTestMakerPage() {
 
             <label className="inline-flex cursor-pointer rounded-2xl bg-sky-600 px-5 py-3 font-black text-white shadow-sm transition hover:bg-sky-700">
               PDF 업로드
+
               <input
                 type="file"
                 accept="application/pdf"
@@ -233,6 +270,7 @@ export default function EnglishTestMakerPage() {
                           <p className="font-black text-slate-900">
                             {passage.title}
                           </p>
+
                           <p className="mt-1 line-clamp-2 text-sm text-slate-500">
                             {passage.source}
                           </p>
@@ -256,6 +294,7 @@ export default function EnglishTestMakerPage() {
           </div>
         </section>
 
+        {/* 3. 문제 유형 */}
         <section className="mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <h2 className="text-xl font-black text-slate-900">
             3. 문제 유형 선택
@@ -325,36 +364,62 @@ export default function EnglishTestMakerPage() {
 
           <div className="mt-5 rounded-2xl bg-slate-900 px-5 py-4 text-white">
             <span className="text-sm font-bold text-slate-300">총 문항 수</span>
+
             <strong className="ml-3 text-2xl">{totalQuestions}문항</strong>
           </div>
         </section>
 
+        {/* 4 + 5 */}
         <section className="mt-6 grid gap-6 md:grid-cols-2">
+          {/* 난이도 */}
           <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
             <h2 className="text-xl font-black text-slate-900">4. 난이도</h2>
 
+            <p className="mt-2 text-sm font-medium text-slate-500">
+              여러 난이도를 선택하면 선택한 수준을 섞어 출제합니다.
+            </p>
+
             <div className="mt-5 grid grid-cols-3 gap-3">
-              {["기본", "중상", "고난도"].map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => setDifficulty(item)}
-                  className={`rounded-2xl px-4 py-3 font-black transition ${
-                    difficulty === item
-                      ? "bg-slate-900 text-white"
-                      : "bg-slate-100 text-slate-600"
-                  }`}
-                >
-                  {item}
-                </button>
-              ))}
+              {DIFFICULTIES.map((item) => {
+                const checked = difficulties.includes(item);
+
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => toggleDifficulty(item)}
+                    className={`rounded-2xl px-4 py-3 font-black transition ${
+                      checked
+                        ? "bg-slate-900 text-white"
+                        : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {checked ? "✓ " : ""}
+                    {item}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm">
+              <span className="font-bold text-slate-500">선택 난이도</span>
+
+              <strong className="ml-2 text-slate-900">
+                {difficulties.join(" · ")}
+              </strong>
             </div>
           </div>
 
+          {/* 컬러 */}
           <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
             <h2 className="text-xl font-black text-slate-900">
               5. THEME COLOR
             </h2>
+
+            <p className="mt-2 text-sm font-medium text-slate-500">
+              시험지의 제목, 문항 태그, 지문 테두리와 강조 컬러에
+              적용됩니다.
+            </p>
 
             <div className="mt-5 flex flex-wrap gap-3">
               {COLORS.map((color) => {
@@ -375,6 +440,7 @@ export default function EnglishTestMakerPage() {
                       className="h-5 w-5 rounded-full border border-black/10"
                       style={{ backgroundColor: color.value }}
                     />
+
                     {color.name}
                   </button>
                 );
@@ -383,12 +449,14 @@ export default function EnglishTestMakerPage() {
           </div>
         </section>
 
+        {/* 6. 문제 제작 */}
         <section className="mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <h2 className="text-xl font-black text-slate-900">6. 문제 제작</h2>
 
           <div className="mt-5 grid gap-3 text-sm font-bold text-slate-600 md:grid-cols-4">
             <div className="rounded-2xl bg-slate-50 p-4">
               선택 지문
+
               <strong className="mt-1 block text-xl text-slate-900">
                 {selectedPassageIds.length}
               </strong>
@@ -396,6 +464,7 @@ export default function EnglishTestMakerPage() {
 
             <div className="rounded-2xl bg-slate-50 p-4">
               문제 유형
+
               <strong className="mt-1 block text-xl text-slate-900">
                 {selectedTypes.length}
               </strong>
@@ -403,6 +472,7 @@ export default function EnglishTestMakerPage() {
 
             <div className="rounded-2xl bg-slate-50 p-4">
               총 문항
+
               <strong className="mt-1 block text-xl text-slate-900">
                 {totalQuestions}
               </strong>
@@ -410,8 +480,9 @@ export default function EnglishTestMakerPage() {
 
             <div className="rounded-2xl bg-slate-50 p-4">
               난이도
-              <strong className="mt-1 block text-xl text-slate-900">
-                {difficulty}
+
+              <strong className="mt-1 block text-lg text-slate-900">
+                {difficulties.join(" · ")}
               </strong>
             </div>
           </div>
