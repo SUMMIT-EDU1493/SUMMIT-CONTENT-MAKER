@@ -1578,7 +1578,7 @@ export default function Home() {
                   ENG MOCK TEST LAB
                 </div>
 
-                <h2 className="mt-5 text-[42px] font-black leading-tight text-slate-900">
+                <h2 className="mt-5 whitespace-nowrap text-[36px] font-black leading-tight text-slate-900 md:text-[40px]">
                   고등영어 변형문제
                 </h2>
 
@@ -1607,7 +1607,7 @@ export default function Home() {
                   KOR MOCK TEST LAB
                 </div>
 
-                <h2 className="mt-5 text-[42px] font-black leading-tight text-slate-900">
+                <h2 className="mt-5 whitespace-nowrap text-[36px] font-black leading-tight text-slate-900 md:text-[40px]">
                   고등국어 변형문제
                 </h2>
 
