@@ -384,6 +384,8 @@ ${
 
 - 서술형 문제는 choices를 빈 배열 []로 반환하세요.
 - 객관식 문제는 choices를 반드시 5개 반환하세요.
+- 별도 보기 자료가 없는 문제는 supplementaryItems를 []로 반환하세요.
+- (A)~(F) 같은 별도 진술은 supplementaryItems에 넣으세요.
 - (A)~(F) 같은 별도 보기 진술이 없는 문제는 supplementaryItems를 빈 배열 []로 반환하세요.
 - (A)~(F) 진술을 사용하는 문제는 반드시 supplementaryItems에 분리해서 반환하세요.
 - supplementaryItems의 내용은 passage 아래, 객관식 선택지 위에 표시될 자료입니다.

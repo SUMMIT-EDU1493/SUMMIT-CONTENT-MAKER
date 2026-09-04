@@ -25,6 +25,7 @@ type GeneratedQuestion = {
   stem: string;
   passage: string;
   choices: string[];
+  supplementaryItems: string[];
   answer: string;
   explanation: string;
   keyPoint: string;
@@ -126,6 +127,9 @@ export default function EnglishTestMakerPage() {
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(
     null
   );
+
+  const [transformingQuestionId, setTransformingQuestionId] =
+    useState<string | null>(null);
 
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -371,6 +375,79 @@ export default function EnglishTestMakerPage() {
     } finally {
       setReadingPdf(false);
       setAnalyzingPdf(false);
+    }
+  };
+
+  const selectAllQuestionTypes = () => {
+    setSelectedTypes([...QUESTION_TYPES]);
+
+    setQuestionCounts((prev) => {
+      const next = { ...prev };
+
+      QUESTION_TYPES.forEach((type) => {
+        next[type] = next[type] || 1;
+      });
+
+      return next;
+    });
+  };
+
+  const clearAllQuestionTypes = () => {
+    setSelectedTypes([]);
+  };
+
+  const transformQuestion = async (
+    question: GeneratedQuestion,
+    mode: string
+  ) => {
+    try {
+      setTransformingQuestionId(question.id);
+
+      const originalPassage = savedPassages.find(
+        (item) => item.id === question.passageId
+      );
+
+      const response = await fetch("/api/english-test-transform", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          question,
+          mode,
+          originalSource: originalPassage?.source || question.passage,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error || "문제 변형 중 오류가 발생했습니다."
+        );
+      }
+
+      const transformed = data?.question as GeneratedQuestion;
+
+      setGeneratedQuestions((prev) =>
+        prev.map((item) =>
+          item.id === question.id
+            ? {
+                ...transformed,
+                id: question.id,
+              }
+            : item
+        )
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "문제 변형 중 오류가 발생했습니다.";
+
+      alert(message);
+    } finally {
+      setTransformingQuestionId(null);
     }
   };
 
@@ -803,9 +880,29 @@ export default function EnglishTestMakerPage() {
 
         {/* 3 */}
         <section className="mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-          <h2 className="text-xl font-black text-slate-900">
-            3. 문제 유형 선택
-          </h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-xl font-black text-slate-900">
+              3. 문제 유형 선택
+            </h2>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={selectAllQuestionTypes}
+                className="rounded-full bg-sky-50 px-4 py-2 text-sm font-black text-sky-700"
+              >
+                전체 선택
+              </button>
+
+              <button
+                type="button"
+                onClick={clearAllQuestionTypes}
+                className="rounded-full bg-slate-100 px-4 py-2 text-sm font-black text-slate-600"
+              >
+                전체 해제
+              </button>
+            </div>
+          </div>
 
           <div className="mt-5 grid gap-3 md:grid-cols-2">
             {QUESTION_TYPES.map((type) => {
@@ -1065,15 +1162,40 @@ export default function EnglishTestMakerPage() {
                           {editing ? "수정 완료" : "수정"}
                         </button>
 
-                        <button
-                          type="button"
-                          className="rounded-full bg-violet-50 px-4 py-2 text-sm font-black text-violet-700"
-                          onClick={() => {
-                            alert("다음 단계에서 문제 변형 기능을 연결합니다.");
-                          }}
-                        >
-                          변형
-                        </button>
+                        <div className="relative group">
+                          <button
+                            type="button"
+                            disabled={transformingQuestionId === question.id}
+                            className="rounded-full bg-violet-50 px-4 py-2 text-sm font-black text-violet-700 disabled:opacity-50"
+                          >
+                            {transformingQuestionId === question.id
+                              ? "변형 중..."
+                              : "변형"}
+                          </button>
+
+                          <div className="invisible absolute right-0 top-full z-30 mt-2 w-52 rounded-2xl border border-slate-200 bg-white p-2 opacity-0 shadow-xl transition group-hover:visible group-hover:opacity-100">
+                            {[
+                              "난이도 높이기",
+                              "난이도 낮추기",
+                              "발문 변경",
+                              "선지 변형",
+                              "다른 유형으로 변형",
+                              "객관식 → 서술형",
+                              "서술형 → 객관식",
+                            ].map((mode) => (
+                              <button
+                                key={mode}
+                                type="button"
+                                onClick={() =>
+                                  transformQuestion(question, mode)
+                                }
+                                className="block w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-slate-700 hover:bg-violet-50"
+                              >
+                                {mode}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
 
                         <button
                           type="button"
@@ -1166,7 +1288,7 @@ export default function EnglishTestMakerPage() {
                           {question.stem}
                         </h3>
 
-                        <div className="mt-5 whitespace-pre-wrap rounded-2xl border border-slate-200 bg-slate-50 p-5 font-serif text-[16px] leading-8 text-slate-800">
+                        <div className="mt-5 whitespace-pre-wrap rounded-2xl border border-slate-200 bg-slate-50 p-6 font-serif text-[18px] leading-9 text-slate-800">
                           {question.passage}
                         </div>
 
@@ -1175,7 +1297,7 @@ export default function EnglishTestMakerPage() {
                             {question.choices.map((choice, choiceIndex) => (
                               <div
                                 key={choiceIndex}
-                                className="rounded-xl px-3 py-2 text-[15px] leading-6 text-slate-800"
+                                className="rounded-xl px-3 py-2.5 text-[17px] leading-7 text-slate-800"
                               >
                                 {choice}
                               </div>
