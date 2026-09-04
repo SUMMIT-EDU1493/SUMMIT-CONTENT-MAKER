@@ -1461,7 +1461,7 @@ export default function Home() {
             />
 
             <h1 className="mt-1 text-[42px] font-black tracking-[-0.04em] text-slate-900 md:text-[58px]">
-              중등 대화문 제작
+              SUMMIT VISUAL LAB
             </h1>
 
             <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-[22px] font-black text-slate-700 md:gap-5 md:text-[29px]">
