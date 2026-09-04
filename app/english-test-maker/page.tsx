@@ -16,6 +16,28 @@ type ExtractedPassage = {
   source: string;
 };
 
+type GeneratedQuestion = {
+  id: string;
+  passageId: string;
+  passageTitle: string;
+  type: string;
+  difficulty: string;
+  stem: string;
+  passage: string;
+  choices: string[];
+  answer: string;
+  explanation: string;
+  keyPoint: string;
+};
+
+type QuestionHistoryItem = {
+  passageId: string;
+  type: string;
+  stem: string;
+  answer: string;
+  keyPoint: string;
+};
+
 const QUESTION_TYPES = [
   "주제·제목",
   "내용 일치·불일치",
@@ -41,6 +63,7 @@ const COLORS = [
 const DIFFICULTIES = ["기본", "중상", "고난도"];
 
 const STORAGE_KEY = "summit-english-passages";
+const QUESTION_HISTORY_KEY = "summit-english-question-history";
 
 function makePassageId(source: string) {
   const normalized = source
@@ -91,6 +114,18 @@ export default function EnglishTestMakerPage() {
   const [difficulties, setDifficulties] = useState<string[]>(["기본"]);
 
   const [themeColor, setThemeColor] = useState(COLORS[0].value);
+
+  const [generatedQuestions, setGeneratedQuestions] = useState<
+    GeneratedQuestion[]
+  >([]);
+
+  const [generatingQuestions, setGeneratingQuestions] = useState(false);
+
+  const [questionStatus, setQuestionStatus] = useState("");
+
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -336,6 +371,142 @@ export default function EnglishTestMakerPage() {
     } finally {
       setReadingPdf(false);
       setAnalyzingPdf(false);
+    }
+  };
+
+  const makeQuestions = async () => {
+    if (selectedPassageIds.length === 0) {
+      alert("출제에 사용할 지문을 선택해 주세요.");
+      return;
+    }
+
+    if (selectedTypes.length === 0) {
+      alert("문제 유형을 하나 이상 선택해 주세요.");
+      return;
+    }
+
+    const selectedPassages = savedPassages.filter((passage) =>
+      selectedPassageIds.includes(passage.id)
+    );
+
+    const questionRequests = selectedTypes.map((type) => ({
+      type,
+      count: questionCounts[type] || 1,
+    }));
+
+    let previousQuestions: QuestionHistoryItem[] = [];
+
+    try {
+      const raw = localStorage.getItem(QUESTION_HISTORY_KEY);
+
+      if (raw) {
+        const parsed = JSON.parse(raw);
+
+        if (Array.isArray(parsed)) {
+          previousQuestions = parsed;
+        }
+      }
+    } catch {
+      previousQuestions = [];
+    }
+
+    try {
+      setGeneratingQuestions(true);
+      setQuestionStatus(
+        `${totalQuestions}개의 변형문제를 제작하고 있습니다...`
+      );
+
+      const response = await fetch("/api/english-test-generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          passages: selectedPassages,
+          questionRequests,
+          difficulties,
+          previousQuestions,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error || "변형문제 생성 중 오류가 발생했습니다."
+        );
+      }
+
+      const questions: GeneratedQuestion[] = Array.isArray(data?.questions)
+        ? data.questions
+        : [];
+
+      if (questions.length === 0) {
+        throw new Error("생성된 문제가 없습니다.");
+      }
+
+      setGeneratedQuestions(questions);
+
+      const newHistory: QuestionHistoryItem[] = questions.map((question) => ({
+        passageId: question.passageId,
+        type: question.type,
+        stem: question.stem,
+        answer: question.answer,
+        keyPoint: question.keyPoint,
+      }));
+
+      const combinedHistory = [
+        ...previousQuestions,
+        ...newHistory,
+      ].slice(-300);
+
+      localStorage.setItem(
+        QUESTION_HISTORY_KEY,
+        JSON.stringify(combinedHistory)
+      );
+
+      setQuestionStatus(
+        `${questions.length}개의 변형문제가 생성되었습니다.`
+      );
+    } catch (error) {
+      console.error(error);
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : "변형문제 생성 중 오류가 발생했습니다.";
+
+      setQuestionStatus(message);
+      alert(message);
+    } finally {
+      setGeneratingQuestions(false);
+    }
+  };
+
+  const updateQuestion = (
+    id: string,
+    field: keyof GeneratedQuestion,
+    value: string | string[]
+  ) => {
+    setGeneratedQuestions((prev) =>
+      prev.map((question) =>
+        question.id === id
+          ? {
+              ...question,
+              [field]: value,
+            }
+          : question
+      )
+    );
+  };
+
+  const deleteQuestion = (id: string) => {
+    setGeneratedQuestions((prev) =>
+      prev.filter((question) => question.id !== id)
+    );
+
+    if (editingQuestionId === id) {
+      setEditingQuestionId(null);
     }
   };
 
@@ -815,18 +986,232 @@ export default function EnglishTestMakerPage() {
           <button
             type="button"
             disabled={
+              generatingQuestions ||
               selectedPassageIds.length === 0 ||
               selectedTypes.length === 0 ||
               totalQuestions === 0
             }
-            onClick={() => {
-              alert("다음 단계에서 AI 문제 생성 기능을 연결합니다.");
-            }}
+            onClick={makeQuestions}
             className="mt-6 w-full rounded-2xl bg-sky-600 px-6 py-4 text-lg font-black text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            선택한 유형으로 변형문제 만들기
+            {generatingQuestions
+              ? "변형문제 만드는 중..."
+              : "선택한 유형으로 변형문제 만들기"}
           </button>
         </section>
+
+        {questionStatus && (
+          <div className="mt-5 rounded-2xl bg-sky-50 px-5 py-4 text-sm font-bold text-sky-700">
+            {questionStatus}
+          </div>
+        )}
+
+        {generatedQuestions.length > 0 && (
+          <section className="mt-8">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="text-sm font-black tracking-[0.15em] text-sky-600">
+                  QUESTION REVIEW
+                </p>
+
+                <h2 className="mt-1 text-3xl font-black text-slate-900">
+                  생성된 변형문제
+                </h2>
+
+                <p className="mt-2 text-sm font-medium text-slate-500">
+                  문제를 확인한 뒤 수정하거나 삭제할 수 있습니다.
+                </p>
+              </div>
+
+              <div className="rounded-full bg-slate-900 px-4 py-2 text-sm font-black text-white">
+                {generatedQuestions.length}문항
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-6">
+              {generatedQuestions.map((question, index) => {
+                const editing = editingQuestionId === question.id;
+
+                return (
+                  <article
+                    key={question.id}
+                    className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-sky-100 px-3 py-1.5 text-xs font-black text-sky-700">
+                          {String(index + 1).padStart(2, "0")}
+                        </span>
+
+                        <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600">
+                          {question.type}
+                        </span>
+
+                        <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-700">
+                          {question.difficulty}
+                        </span>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditingQuestionId(
+                              editing ? null : question.id
+                            )
+                          }
+                          className="rounded-full bg-slate-100 px-4 py-2 text-sm font-black text-slate-700"
+                        >
+                          {editing ? "수정 완료" : "수정"}
+                        </button>
+
+                        <button
+                          type="button"
+                          className="rounded-full bg-violet-50 px-4 py-2 text-sm font-black text-violet-700"
+                          onClick={() => {
+                            alert("다음 단계에서 문제 변형 기능을 연결합니다.");
+                          }}
+                        >
+                          변형
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => deleteQuestion(question.id)}
+                          className="rounded-full bg-red-50 px-4 py-2 text-sm font-black text-red-500"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    </div>
+
+                    <p className="mt-4 text-xs font-black text-slate-400">
+                      {question.passageTitle}
+                    </p>
+
+                    {editing ? (
+                      <div className="mt-5 grid gap-4">
+                        <textarea
+                          value={question.stem}
+                          onChange={(e) =>
+                            updateQuestion(
+                              question.id,
+                              "stem",
+                              e.target.value
+                            )
+                          }
+                          rows={3}
+                          className="w-full rounded-2xl border border-slate-300 p-4"
+                        />
+
+                        <textarea
+                          value={question.passage}
+                          onChange={(e) =>
+                            updateQuestion(
+                              question.id,
+                              "passage",
+                              e.target.value
+                            )
+                          }
+                          rows={10}
+                          className="w-full rounded-2xl border border-slate-300 p-4 font-serif leading-8"
+                        />
+
+                        {question.choices.map((choice, choiceIndex) => (
+                          <input
+                            key={choiceIndex}
+                            value={choice}
+                            onChange={(e) => {
+                              const next = [...question.choices];
+                              next[choiceIndex] = e.target.value;
+
+                              updateQuestion(
+                                question.id,
+                                "choices",
+                                next
+                              );
+                            }}
+                            className="w-full rounded-xl border border-slate-300 px-4 py-3"
+                          />
+                        ))}
+
+                        <input
+                          value={question.answer}
+                          onChange={(e) =>
+                            updateQuestion(
+                              question.id,
+                              "answer",
+                              e.target.value
+                            )
+                          }
+                          className="w-full rounded-xl border border-slate-300 px-4 py-3"
+                        />
+
+                        <textarea
+                          value={question.explanation}
+                          onChange={(e) =>
+                            updateQuestion(
+                              question.id,
+                              "explanation",
+                              e.target.value
+                            )
+                          }
+                          rows={4}
+                          className="w-full rounded-2xl border border-slate-300 p-4"
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <h3 className="mt-4 text-lg font-black leading-7 text-slate-900">
+                          {question.stem}
+                        </h3>
+
+                        <div className="mt-5 whitespace-pre-wrap rounded-2xl border border-slate-200 bg-slate-50 p-5 font-serif text-[16px] leading-8 text-slate-800">
+                          {question.passage}
+                        </div>
+
+                        {question.choices.length > 0 && (
+                          <div className="mt-5 grid gap-2">
+                            {question.choices.map((choice, choiceIndex) => (
+                              <div
+                                key={choiceIndex}
+                                className="rounded-xl px-3 py-2 text-[15px] leading-6 text-slate-800"
+                              >
+                                {choice}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="mt-6 grid gap-3 md:grid-cols-[160px_1fr]">
+                          <div className="rounded-2xl bg-emerald-50 p-4">
+                            <p className="text-xs font-black text-emerald-600">
+                              정답
+                            </p>
+
+                            <p className="mt-1 font-black text-slate-900">
+                              {question.answer}
+                            </p>
+                          </div>
+
+                          <div className="rounded-2xl bg-amber-50 p-4">
+                            <p className="text-xs font-black text-amber-600">
+                              해설
+                            </p>
+
+                            <p className="mt-1 text-sm font-medium leading-6 text-slate-700">
+                              {question.explanation}
+                            </p>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        )}
       </div>
     </main>
   );
