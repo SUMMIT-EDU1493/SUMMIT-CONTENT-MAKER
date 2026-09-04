@@ -1560,6 +1560,49 @@ export default function Home() {
             </button>
 
           </section>
+
+          {/* TEST MAKER */}
+          <section className="mt-6 grid gap-5 md:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = "/english-test-maker";
+              }}
+              className="rounded-[28px] border border-sky-100 bg-white p-7 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+            >
+              <p className="text-xs font-black tracking-[0.18em] text-sky-600">
+                ENGLISH TEST MAKER
+              </p>
+
+              <h2 className="mt-3 text-3xl font-black text-slate-900">
+                고등영어 변형문제 제작
+              </h2>
+
+              <p className="mt-3 text-base font-medium text-slate-500">
+                교재 본문 → 맞춤형 영어 시험문제
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = "/korean-test-maker";
+              }}
+              className="rounded-[28px] border border-violet-100 bg-white p-7 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+            >
+              <p className="text-xs font-black tracking-[0.18em] text-violet-600">
+                KOREAN TEST MAKER
+              </p>
+
+              <h2 className="mt-3 text-3xl font-black text-slate-900">
+                고등국어 변형문제 제작
+              </h2>
+
+              <p className="mt-3 text-base font-medium text-slate-500">
+                국어 지문 → 모의고사형 변형문제
+              </p>
+            </button>
+          </section>
         </div>
       </main>
     );
