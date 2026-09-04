@@ -646,7 +646,7 @@ export default function EnglishTestMakerPage() {
     // ------------------------------------------------
     const [boldResponse, regularResponse] = await Promise.all([
       fetch("/fonts/NotoSansKR-Bold.ttf"),
-      fetch("/fonts/IBMPlexSansKR-Regular.ttf"),
+      fetch("/fonts/NanumGothic-Regular.ttf"),
     ]);
 
     if (!boldResponse.ok || !regularResponse.ok) {
@@ -674,13 +674,13 @@ export default function EnglishTestMakerPage() {
     );
 
     doc.addFileToVFS(
-      "IBMPlexSansKR-Regular.ttf",
+      "NanumGothic-Regular.ttf",
       regularBase64
     );
 
     doc.addFont(
-      "IBMPlexSansKR-Regular.ttf",
-      "PlexKR",
+      "NanumGothic-Regular.ttf",
+      "NanumKR",
       "normal"
     );
 
@@ -868,7 +868,7 @@ export default function EnglishTestMakerPage() {
           21
         );
       } else {
-        doc.setFont("PlexKR", "normal");
+        doc.setFont("NanumKR", "normal");
         doc.setFontSize(7);
         doc.setTextColor(105, 110, 120);
 
@@ -900,7 +900,7 @@ export default function EnglishTestMakerPage() {
         284
       );
 
-      doc.setFont("PlexKR", "normal");
+      doc.setFont("NanumKR", "normal");
       doc.setFontSize(7);
       doc.setTextColor(120, 125, 135);
 
@@ -930,7 +930,7 @@ export default function EnglishTestMakerPage() {
           15
         );
 
-        doc.setFont("PlexKR", "normal");
+        doc.setFont("NanumKR", "normal");
         doc.setFontSize(7.5);
         doc.setTextColor(100, 100, 100);
 
@@ -982,7 +982,7 @@ export default function EnglishTestMakerPage() {
         284
       );
 
-      doc.setFont("PlexKR", "normal");
+      doc.setFont("NanumKR", "normal");
       doc.setFontSize(7);
       doc.setTextColor(130, 130, 130);
 
@@ -1090,7 +1090,7 @@ export default function EnglishTestMakerPage() {
 
         if (marker) {
           doc.setFont(
-            "PlexKR",
+            "NanumKR",
             "normal"
           );
 
@@ -1121,7 +1121,7 @@ export default function EnglishTestMakerPage() {
 
         if (marker) {
           doc.setFont(
-            "PlexKR",
+            "NanumKR",
             "normal"
           );
 
@@ -1212,7 +1212,7 @@ export default function EnglishTestMakerPage() {
         { align: "center" }
       );
 
-      doc.setFont("PlexKR", "normal");
+      doc.setFont("NanumKR", "normal");
       doc.setFontSize(7.3);
       doc.setTextColor(...accent);
 
@@ -1266,7 +1266,7 @@ export default function EnglishTestMakerPage() {
           );
 
         doc.setFont(
-          "PlexKR",
+          "NanumKR",
           "normal"
         );
 
@@ -1304,7 +1304,7 @@ export default function EnglishTestMakerPage() {
         const choiceX = currentX();
 
         doc.setFont(
-          "PlexKR",
+          "NanumKR",
           "normal"
         );
 
@@ -1356,7 +1356,7 @@ export default function EnglishTestMakerPage() {
       question: GeneratedQuestion,
       index: number
     ) => {
-      doc.setFont("PlexKR", "normal");
+      doc.setFont("NanumKR", "normal");
       doc.setFontSize(8.6);
 
       const explanationLines =
@@ -1386,7 +1386,7 @@ export default function EnglishTestMakerPage() {
       );
 
       doc.setFont(
-        "PlexKR",
+        "NanumKR",
         "normal"
       );
 
@@ -1417,7 +1417,7 @@ export default function EnglishTestMakerPage() {
 
       // 해설
       doc.setFont(
-        "PlexKR",
+        "NanumKR",
         "normal"
       );
 
