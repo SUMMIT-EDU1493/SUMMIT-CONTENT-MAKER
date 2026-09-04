@@ -34,6 +34,7 @@ type GeneratedQuestion = {
   stem: string;
   passage: string;
   choices: string[];
+  supplementaryItems: string[];
   answer: string;
   explanation: string;
   keyPoint: string;
@@ -312,8 +313,15 @@ export async function POST(req: Request) {
 - 반드시 채점 가능한 모범답안 포함
 
 학교시험형 종합:
-- 국내 고등학교 내신 스타일
-- 어법, 어휘, 내용, 문맥, 요약 등을 적절히 변형
+- 국내 고등학교 실제 내신 스타일로 출제
+- 어법, 어휘, 내용, 문맥, 요약, 복수정답형 등을 다양하게 활용
+- 매번 같은 형식만 반복하지 말 것
+- (A)~(F) 진술을 사용하는 복수정답형 문제의 경우:
+  · stem에는 문제의 발문만 작성
+  · passage에는 영어 본문만 작성
+  · (A)~(F) 진술은 반드시 supplementaryItems 배열에 각각 따로 저장
+  · (A)~(F)를 stem 안에 붙여 쓰지 말 것
+  · (A)~(F)를 passage 안에 섞어 넣지 말 것
 - 기존 유형과 최대한 중복되지 않는 형태로 출제
 
 ━━━━━━━━━━━━━━━━━━━━
@@ -360,6 +368,11 @@ ${
         "④ ...",
         "⑤ ..."
       ],
+      "supplementaryItems": [
+        "(A) ...",
+        "(B) ...",
+        "(C) ..."
+      ],
       "answer": "정답",
       "explanation": "정답 근거와 필요한 해설",
       "keyPoint": "이 문제의 핵심 출제 포인트를 짧게 설명"
@@ -371,6 +384,9 @@ ${
 
 - 서술형 문제는 choices를 빈 배열 []로 반환하세요.
 - 객관식 문제는 choices를 반드시 5개 반환하세요.
+- (A)~(F) 같은 별도 보기 진술이 없는 문제는 supplementaryItems를 빈 배열 []로 반환하세요.
+- (A)~(F) 진술을 사용하는 문제는 반드시 supplementaryItems에 분리해서 반환하세요.
+- supplementaryItems의 내용은 passage 아래, 객관식 선택지 위에 표시될 자료입니다.
 - answer에는 정답 번호 또는 모범답안을 넣으세요.
 - passage는 반드시 원문의 내용을 유지해야 합니다.
 - 문제 수는 출제 계획과 정확히 같아야 합니다.
