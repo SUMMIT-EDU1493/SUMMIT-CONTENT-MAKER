@@ -48,7 +48,7 @@ export default function HighSummaryTestPage() {
     useState("");
 
   const [lessonName, setLessonName] =
-    useState("Lesson 2");
+    useState("");
 
   const [sourceText, setSourceText] =
     useState("");
@@ -712,6 +712,26 @@ export default function HighSummaryTestPage() {
         >
           ← 컨텐츠 선택으로
         </button>
+      </div>
+
+      <div className="mb-8">
+        <h1 className="text-4xl font-black tracking-tight text-slate-900">
+          고등 요약집
+        </h1>
+
+        <p className="mt-3 text-base font-medium leading-7 text-slate-600">
+          긴 영어 본문을 핵심 의미 단위로 분석해 한눈에 들어오는 VISUAL 요약자료로 제작합니다.
+        </p>
+
+        <div className="mt-4 inline-flex flex-wrap items-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-700">
+          PDF 업로드
+          <span>→</span>
+          의미 블록 분석
+          <span>→</span>
+          핵심 요약
+          <span>→</span>
+          VISUAL 요약집
+        </div>
       </div>
 
 <section className="mb-8 rounded-3xl bg-white p-6 shadow-sm">

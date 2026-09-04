@@ -832,7 +832,7 @@ export default function Home() {
 
     if (alreadyAdded) {
       alert(
-        "이 이미지는 이미 한 과 작업함에 들어가 있어."
+        "이 이미지는 이미 PDF에 넣을 이미지에 들어가 있어."
       );
       return;
     }
@@ -1323,7 +1323,7 @@ export default function Home() {
         workItems.length === 0
       ) {
         alert(
-          "먼저 한 과 작업함에 써밋네컷을 추가해 주세요."
+          "먼저 PDF에 넣을 이미지에 써밋네컷을 추가해 주세요."
         );
 
         return;
@@ -1461,7 +1461,7 @@ export default function Home() {
             />
 
             <h1 className="mt-1 text-[42px] font-black tracking-[-0.04em] text-slate-900 md:text-[58px]">
-              SUMMIT CONTENT MAKER
+              중등 대화문 제작
             </h1>
 
             <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-[22px] font-black text-slate-700 md:gap-5 md:text-[29px]">
@@ -1469,10 +1469,9 @@ export default function Home() {
 
               <span
                 aria-hidden="true"
-                className="inline-flex items-center gap-0 text-emerald-600"
+                className="text-[34px] font-black leading-none text-emerald-500 md:text-[40px]"
               >
-                <span className="h-[2px] w-10 rounded-full bg-emerald-400 md:w-14" />
-                <span className="-ml-1 text-[30px] font-light leading-none">›</span>
+                ➜
               </span>
 
               <span>
@@ -1578,7 +1577,7 @@ export default function Home() {
 
           <div className="mt-8">
             <p className="text-sm font-bold text-blue-600">
-              SUMMIT CONTENT MAKER
+              중등 대화문 제작
             </p>
 
             <h1 className="mt-2 text-4xl font-black text-slate-900">
@@ -1758,17 +1757,17 @@ export default function Home() {
             </p>
 
             <h1 className="mt-2 text-4xl font-black text-slate-900">
-              SUMMIT CONTENT MAKER
+              중등 대화문 제작
             </h1>
 
             <p className="mt-3 text-slate-600">
-              중3 영어 교재의 대화문을 찾아 써밋네컷으로 만들자.
+              영어 교재의 대화문을 찾아 써밋네컷으로 제작합니다..
             </p>
           </div>
 
           <div className="rounded-2xl bg-purple-100 px-5 py-4 text-center ring-1 ring-purple-200">
             <p className="text-xs font-bold text-purple-600">
-              한 과 작업함
+              PDF에 넣을 이미지
             </p>
 
             <p className="mt-1 text-3xl font-black text-purple-900">
@@ -1791,7 +1790,7 @@ export default function Home() {
           </h2>
 
           <p className="mt-2 text-sm text-slate-500">
-            여기 입력한 내용이 PDF 첫 장 표지에 들어가.
+            입력한 정보는 PDF 첫 장 표지에 반영됩니다.
           </p>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -1807,7 +1806,7 @@ export default function Home() {
                     e.target.value
                   )
                 }
-                placeholder="예: 발안중"
+                placeholder="예: "
                 className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3"
               />
             </div>
@@ -2348,7 +2347,7 @@ export default function Home() {
                             }
                             className="mt-4 rounded-xl bg-slate-900 px-5 py-3 font-bold text-white"
                           >
-                            한 과 작업함에 추가
+                            PDF에 넣을 이미지에 추가
                           </button>
                         </div>
                       )}
@@ -2460,7 +2459,7 @@ export default function Home() {
               </p>
 
               <h2 className="text-3xl font-black">
-                한 과 작업함
+                PDF에 넣을 이미지
               </h2>
             </div>
 
@@ -2472,7 +2471,7 @@ export default function Home() {
           {workItems.length ===
           0 ? (
             <p className="mt-6 rounded-xl border border-dashed border-slate-600 p-8 text-center text-slate-400">
-              아직 작업함에 넣은 이미지가 없어.
+              아직 작업함에 추가된 이미지가 없습니다.
             </p>
           ) : (
             <>
