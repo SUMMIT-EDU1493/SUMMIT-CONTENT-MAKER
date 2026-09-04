@@ -583,6 +583,25 @@ export default function EnglishTestMakerPage() {
     );
   };
 
+  const renderPassageText = (text: string) => {
+    const parts = text.split(/(__[^_]+__)/g);
+
+    return parts.map((part, index) => {
+      if (part.startsWith("__") && part.endsWith("__")) {
+        return (
+          <span
+            key={index}
+            className="underline decoration-2 underline-offset-4"
+          >
+            {part.slice(2, -2)}
+          </span>
+        );
+      }
+
+      return <span key={index}>{part}</span>;
+    });
+  };
+
   const deleteQuestion = (id: string) => {
     setGeneratedQuestions((prev) =>
       prev.filter((question) => question.id !== id)
@@ -1342,7 +1361,7 @@ export default function EnglishTestMakerPage() {
                         </h3>
 
                         <div className="mt-5 whitespace-pre-wrap rounded-2xl border border-slate-200 bg-slate-50 p-6 font-serif text-[18px] leading-9 text-slate-800">
-                          {question.passage}
+                          {renderPassageText(question.passage)}
                         </div>
 
                         {question.choices.length > 0 && (
