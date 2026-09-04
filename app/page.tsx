@@ -1460,7 +1460,7 @@ export default function Home() {
               className="mx-auto w-[135px] md:w-[150px]"
             />
 
-            <h1 className="mt-1 text-[42px] font-black tracking-[-0.04em] text-slate-900 md:text-[58px]">
+            <h1 className="mt-0 text-[48px] font-black tracking-[-0.045em] text-slate-900 md:text-[66px]">
               SUMMIT VISUAL LAB
             </h1>
 
