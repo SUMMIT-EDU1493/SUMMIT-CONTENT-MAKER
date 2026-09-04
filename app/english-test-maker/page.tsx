@@ -613,7 +613,7 @@ export default function EnglishTestMakerPage() {
     return btoa(binary);
   };
 
-  const downloadExamPdf = async (
+   const downloadExamPdf = async (
     mode: "questions" | "answers"
   ) => {
     if (generatedQuestions.length === 0) {
@@ -630,549 +630,576 @@ export default function EnglishTestMakerPage() {
       compress: true,
     });
 
-    // ---------------------------------------------
-    // 한글 폰트
-    // ---------------------------------------------
-    const fontResponse = await fetch(
-      "/fonts/NotoSansKR-Bold.ttf"
-    );
+    const toBase64 = (buffer: ArrayBuffer) => {
+      let binary = "";
+      const bytes = new Uint8Array(buffer);
 
-    if (!fontResponse.ok) {
-      alert("PDF 한글 폰트를 불러오지 못했습니다.");
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+
+      return btoa(binary);
+    };
+
+    // ------------------------------------------------
+    // 폰트
+    // ------------------------------------------------
+    const [boldResponse, regularResponse] = await Promise.all([
+      fetch("/fonts/NotoSansKR-Bold.ttf"),
+      fetch("/fonts/IBMPlexSansKR-Regular.ttf"),
+    ]);
+
+    if (!boldResponse.ok || !regularResponse.ok) {
+      alert("PDF용 한글 폰트를 불러오지 못했습니다.");
       return;
     }
 
-    const fontBuffer = await fontResponse.arrayBuffer();
-    const fontBase64 = arrayBufferToBase64(fontBuffer);
+    const boldBase64 = toBase64(
+      await boldResponse.arrayBuffer()
+    );
+
+    const regularBase64 = toBase64(
+      await regularResponse.arrayBuffer()
+    );
 
     doc.addFileToVFS(
       "NotoSansKR-Bold.ttf",
-      fontBase64
+      boldBase64
     );
 
     doc.addFont(
       "NotoSansKR-Bold.ttf",
       "NotoKR",
+      "bold"
+    );
+
+    doc.addFileToVFS(
+      "IBMPlexSansKR-Regular.ttf",
+      regularBase64
+    );
+
+    doc.addFont(
+      "IBMPlexSansKR-Regular.ttf",
+      "PlexKR",
       "normal"
     );
 
-    // ---------------------------------------------
+    // ------------------------------------------------
     // 테마 컬러
-    // ---------------------------------------------
-    const themeMap: Record<
+    // themeColor가 이름이든 HEX든 대응
+    // ------------------------------------------------
+    const namedColors: Record<
       string,
       [number, number, number]
     > = {
-      mint: [72, 187, 160],
-      lemon: [220, 184, 55],
-      blue: [73, 144, 226],
-      lavender: [145, 117, 210],
-      coral: [225, 111, 101],
-      gray: [105, 116, 130],
+      mint: [65, 174, 150],
+      lemon: [216, 180, 48],
+      blue: [66, 133, 214],
+      lavender: [139, 113, 196],
+      coral: [222, 101, 92],
+      gray: [101, 111, 124],
+
+      민트: [65, 174, 150],
+      레몬: [216, 180, 48],
+      블루: [66, 133, 214],
+      라벤더: [139, 113, 196],
+      코랄: [222, 101, 92],
+      그레이: [101, 111, 124],
+    };
+
+    const parseHex = (
+      value: string
+    ): [number, number, number] | null => {
+      const cleaned = value
+        .trim()
+        .replace("#", "");
+
+      if (!/^[0-9a-fA-F]{6}$/.test(cleaned)) {
+        return null;
+      }
+
+      return [
+        parseInt(cleaned.slice(0, 2), 16),
+        parseInt(cleaned.slice(2, 4), 16),
+        parseInt(cleaned.slice(4, 6), 16),
+      ];
     };
 
     const accent =
-      themeMap[themeColor] || themeMap.mint;
+      parseHex(themeColor) ||
+      namedColors[themeColor] ||
+      namedColors[
+        String(themeColor).toLowerCase()
+      ] ||
+      namedColors.coral;
 
+    // ------------------------------------------------
+    // 기본 레이아웃
+    // ------------------------------------------------
     const pageWidth = 210;
     const pageHeight = 297;
 
-    const outerMargin = 12;
+    const marginX = 11;
     const centerGap = 8;
 
     const columnWidth =
       (pageWidth -
-        outerMargin * 2 -
+        marginX * 2 -
         centerGap) /
       2;
 
-    const leftColumnX = outerMargin;
+    const leftX = marginX;
 
-    const rightColumnX =
-      outerMargin +
+    const rightX =
+      marginX +
       columnWidth +
       centerGap;
 
-    const contentTop = 35;
-    const contentBottom = 283;
+    const contentTop = 29;
+    const contentBottom = 284;
 
     let column: 0 | 1 = 0;
     let cursorY = contentTop;
     let pageNo = 1;
 
-    const getColumnX = () =>
-      column === 0
-        ? leftColumnX
-        : rightColumnX;
+    const currentX = () =>
+      column === 0 ? leftX : rightX;
 
-    const cleanUnderlineMarkers = (
-      value: string
-    ) => value.replace(/__/g, "");
+    // ------------------------------------------------
+    // 학교/학년/범위 표기
+    // ------------------------------------------------
+    const schoolText =
+      schoolName?.trim() || "";
 
-    const drawHeader = () => {
-      // 상단 브랜드
-      doc.setFont("NotoKR", "normal");
-      doc.setFontSize(8.5);
-      doc.setTextColor(...accent);
+    const gradeText =
+      gradeName?.trim() || "";
 
-      doc.text(
-        "SUMMIT VISUAL LAB",
-        outerMargin,
-        11
-      );
+    const rangeText =
+      rangeName?.trim() || "";
 
-      doc.setFontSize(16);
-      doc.setTextColor(25, 32, 45);
+    const examTitle = [
+      schoolText,
+      gradeText,
+      rangeText,
+    ]
+      .filter(Boolean)
+      .join(" ");
 
-      doc.text(
-        mode === "questions"
-          ? "고등영어 변형문제"
-          : "고등영어 정답 · 해설",
-        outerMargin,
-        19
-      );
+    const fullTitle =
+      mode === "questions"
+        ? `${
+            examTitle
+              ? examTitle + " "
+              : ""
+          }영어 변형문제`
+        : `${
+            examTitle
+              ? examTitle + " "
+              : ""
+          }정답 · 해설`;
 
-      doc.setFontSize(8.5);
-      doc.setTextColor(90, 99, 112);
+    // ------------------------------------------------
+    // 선택지 번호 문자열 제거
+    // AI가 ①, $a 등을 붙여도 PDF에서 직접 번호 생성
+    // ------------------------------------------------
+    const removeChoicePrefix = (
+      text: string
+    ) => {
+      return text
+        .replace(
+          /^\s*[①②③④⑤]\s*/,
+          ""
+        )
+        .replace(
+          /^\s*\$[`abcd]\s*/i,
+          ""
+        )
+        .replace(
+          /^\s*\$[a-z]?\s*/i,
+          ""
+        )
+        .replace(
+          /^\s*[1-5][.)]\s*/,
+          ""
+        )
+        .trim();
+    };
 
-      const meta = [
-        schoolName,
-        gradeName,
-        rangeName,
-      ]
-        .filter(Boolean)
-        .join("   |   ");
+    const numbers = [
+      "①",
+      "②",
+      "③",
+      "④",
+      "⑤",
+    ];
 
-      if (meta) {
+    // ------------------------------------------------
+    // 헤더
+    // ------------------------------------------------
+    const drawQuestionHeader = () => {
+      if (pageNo === 1) {
+        doc.setFont("NotoKR", "bold");
+        doc.setFontSize(7.5);
+        doc.setTextColor(...accent);
+
         doc.text(
-          meta,
-          outerMargin,
-          25.5
+          "SUMMIT VISUAL LAB",
+          marginX,
+          8
+        );
+
+        doc.setFont("NotoKR", "bold");
+        doc.setFontSize(14.5);
+        doc.setTextColor(25, 28, 34);
+
+        doc.text(
+          fullTitle,
+          marginX,
+          16
+        );
+
+        doc.setDrawColor(...accent);
+        doc.setLineWidth(0.65);
+
+        doc.line(
+          marginX,
+          21,
+          pageWidth - marginX,
+          21
+        );
+      } else {
+        doc.setFont("PlexKR", "normal");
+        doc.setFontSize(7);
+        doc.setTextColor(105, 110, 120);
+
+        doc.text(
+          fullTitle,
+          marginX,
+          10
+        );
+
+        doc.setDrawColor(220, 222, 226);
+        doc.setLineWidth(0.2);
+
+        doc.line(
+          marginX,
+          13,
+          pageWidth - marginX,
+          13
         );
       }
 
-      // 상단 포인트 라인
-      doc.setDrawColor(...accent);
-      doc.setLineWidth(0.7);
-
-      doc.line(
-        outerMargin,
-        29,
-        pageWidth - outerMargin,
-        29
-      );
-
-      // 가운데 2단 구분선
-      doc.setDrawColor(218, 222, 228);
-      doc.setLineWidth(0.25);
+      // 2단 중앙선
+      doc.setDrawColor(224, 225, 229);
+      doc.setLineWidth(0.2);
 
       doc.line(
         pageWidth / 2,
-        contentTop - 1,
+        pageNo === 1 ? 25 : 17,
         pageWidth / 2,
-        contentBottom
+        284
       );
 
-      // 페이지 번호
-      doc.setFont("NotoKR", "normal");
-      doc.setFontSize(7.5);
-      doc.setTextColor(130, 136, 145);
+      doc.setFont("PlexKR", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(120, 125, 135);
 
       doc.text(
         String(pageNo),
         pageWidth / 2,
-        291,
+        292,
         { align: "center" }
       );
+
+      cursorY =
+        pageNo === 1 ? 27 : 18;
+    };
+
+    const drawAnswerHeader = () => {
+      doc.setFont("NotoKR", "bold");
+      doc.setFontSize(
+        pageNo === 1 ? 13.5 : 8
+      );
+
+      doc.setTextColor(20, 20, 20);
+
+      if (pageNo === 1) {
+        doc.text(
+          fullTitle,
+          marginX,
+          15
+        );
+
+        doc.setFont("PlexKR", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor(100, 100, 100);
+
+        doc.text(
+          "SUMMIT VISUAL LAB",
+          pageWidth - marginX,
+          15,
+          { align: "right" }
+        );
+
+        doc.setDrawColor(80, 80, 80);
+        doc.setLineWidth(0.3);
+
+        doc.line(
+          marginX,
+          20,
+          pageWidth - marginX,
+          20
+        );
+
+        cursorY = 26;
+      } else {
+        doc.text(
+          fullTitle,
+          marginX,
+          10
+        );
+
+        doc.setDrawColor(210, 210, 210);
+        doc.setLineWidth(0.2);
+
+        doc.line(
+          marginX,
+          13,
+          pageWidth - marginX,
+          13
+        );
+
+        cursorY = 18;
+      }
+
+      doc.setDrawColor(225, 225, 225);
+      doc.setLineWidth(0.18);
+
+      doc.line(
+        pageWidth / 2,
+        cursorY,
+        pageWidth / 2,
+        284
+      );
+
+      doc.setFont("PlexKR", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(130, 130, 130);
+
+      doc.text(
+        String(pageNo),
+        pageWidth / 2,
+        292,
+        { align: "center" }
+      );
+    };
+
+    const addPage = () => {
+      doc.addPage();
+
+      pageNo += 1;
+      column = 0;
+
+      if (mode === "questions") {
+        drawQuestionHeader();
+      } else {
+        drawAnswerHeader();
+      }
     };
 
     const nextColumn = () => {
       if (column === 0) {
         column = 1;
-        cursorY = contentTop;
+        cursorY =
+          pageNo === 1
+            ? mode === "questions"
+              ? 27
+              : 26
+            : 18;
       } else {
-        doc.addPage();
-        pageNo += 1;
-        column = 0;
-        cursorY = contentTop;
-        drawHeader();
+        addPage();
       }
     };
 
     const ensureSpace = (
-      requiredHeight: number
+      height: number
     ) => {
       if (
-        cursorY + requiredHeight >
+        cursorY + height >
         contentBottom
       ) {
         nextColumn();
       }
     };
 
-    const splitKR = (
-      value: string,
-      width: number,
-      size: number
-    ) => {
-      doc.setFont("NotoKR", "normal");
-      doc.setFontSize(size);
-
-      return doc.splitTextToSize(
-        value,
-        width
-      ) as string[];
-    };
-
-    const splitEN = (
-      value: string,
-      width: number,
-      size: number
-    ) => {
-      doc.setFont("times", "normal");
-      doc.setFontSize(size);
-
-      return doc.splitTextToSize(
-        cleanUnderlineMarkers(value),
-        width
-      ) as string[];
-    };
-
-    const estimateQuestionHeight = (
-      question: GeneratedQuestion
-    ) => {
-      const stemLines = splitKR(
-        question.stem,
-        columnWidth - 7,
-        9.7
-      ).length;
-
-      const passageLines = splitEN(
-        question.passage,
-        columnWidth - 5,
-        9.3
-      ).length;
-
-      let choiceLines = 0;
-
-      question.choices.forEach(
-        (choice) => {
-          choiceLines += splitEN(
-            choice,
-            columnWidth - 7,
-            9.1
-          ).length;
-        }
-      );
-
-      return (
-        10 +
-        stemLines * 4.3 +
-        passageLines * 4.15 +
-        choiceLines * 4.0 +
-        11
-      );
-    };
-
-    // ---------------------------------------------
-    // 영어 지문 출력
-    // __word__ 는 실제 밑줄 표시
-    // ---------------------------------------------
-    const drawEnglishPassage = (
-      rawText: string,
-      x: number,
-      y: number,
+    // ------------------------------------------------
+    // 영어 본문
+    // 어휘 번호는 한글 폰트 / 영어는 Times
+    // __word__ 밑줄
+    // ------------------------------------------------
+    const drawPassage = (
+      raw: string,
+      startX: number,
+      startY: number,
       maxWidth: number
     ) => {
-      doc.setFont("times", "normal");
-      doc.setFontSize(9.3);
-      doc.setTextColor(35, 39, 46);
+      const fontSize = 9.5;
+      const lineHeight = 4.25;
 
-      const lineHeight = 4.15;
-      const paragraphs = rawText.split("\n");
+      let x = startX;
+      let y = startY;
 
-      let currentY = y;
+      const tokens =
+        raw.match(
+          /[①②③④⑤]?__[^_]+__|[①②③④⑤]|\S+/g
+        ) || [];
 
-      for (
-        let p = 0;
-        p < paragraphs.length;
-        p++
-      ) {
-        const paragraph =
-          paragraphs[p].trim();
+      const newLine = () => {
+        x = startX;
+        y += lineHeight;
+      };
 
-        if (!paragraph) {
-          currentY += lineHeight;
-          continue;
-        }
+      for (const originalToken of tokens) {
+        let token = originalToken;
 
-        const tokens =
-          paragraph.match(
-            /__[^_]+__|\S+/g
-          ) || [];
+        let marker = "";
 
-        let currentX = x;
-
-        for (const token of tokens) {
-          const underlined =
-            token.startsWith("__") &&
-            token.endsWith("__");
-
-          const visible = underlined
-            ? token.slice(2, -2)
-            : token;
-
-          const textWidth =
-            doc.getTextWidth(visible);
-
-          const spaceWidth =
-            doc.getTextWidth(" ");
-
-          if (
-            currentX +
-              textWidth >
-            x + maxWidth
-          ) {
-            currentX = x;
-            currentY += lineHeight;
-
-            if (
-              currentY >
-              contentBottom - 5
-            ) {
-              nextColumn();
-              currentX =
-                getColumnX() + 2.5;
-              currentY = cursorY;
-            }
-          }
-
-          doc.text(
-            visible,
-            currentX,
-            currentY
+        const markerMatch =
+          token.match(
+            /^[①②③④⑤]/
           );
 
-          if (underlined) {
-            doc.setDrawColor(
-              35,
-              39,
-              46
-            );
+        if (markerMatch) {
+          marker = markerMatch[0];
 
-            doc.setLineWidth(0.25);
-
-            doc.line(
-              currentX,
-              currentY + 0.7,
-              currentX + textWidth,
-              currentY + 0.7
-            );
-          }
-
-          currentX +=
-            textWidth + spaceWidth;
+          token = token.slice(
+            marker.length
+          );
         }
 
-        currentY += lineHeight;
+        const underlined =
+          token.startsWith("__") &&
+          token.endsWith("__");
 
-        if (p < paragraphs.length - 1) {
-          currentY += 1.1;
+        const word = underlined
+          ? token.slice(2, -2)
+          : token;
+
+        // 번호 폭
+        let markerWidth = 0;
+
+        if (marker) {
+          doc.setFont(
+            "PlexKR",
+            "normal"
+          );
+
+          doc.setFontSize(8.8);
+
+          markerWidth =
+            doc.getTextWidth(marker);
         }
+
+        // 영어 단어 폭
+        doc.setFont("times", "normal");
+        doc.setFontSize(fontSize);
+
+        const wordWidth =
+          doc.getTextWidth(word);
+
+        const spaceWidth =
+          doc.getTextWidth(" ");
+
+        if (
+          x +
+            markerWidth +
+            wordWidth >
+          startX + maxWidth
+        ) {
+          newLine();
+        }
+
+        if (marker) {
+          doc.setFont(
+            "PlexKR",
+            "normal"
+          );
+
+          doc.setFontSize(8.8);
+          doc.setTextColor(25, 25, 25);
+
+          doc.text(
+            marker,
+            x,
+            y
+          );
+
+          x += markerWidth + 0.4;
+        }
+
+        doc.setFont("times", "normal");
+        doc.setFontSize(fontSize);
+        doc.setTextColor(28, 28, 30);
+
+        doc.text(
+          word,
+          x,
+          y
+        );
+
+        if (underlined) {
+          doc.setDrawColor(
+            25,
+            25,
+            25
+          );
+
+          doc.setLineWidth(0.22);
+
+          doc.line(
+            x,
+            y + 0.75,
+            x + wordWidth,
+            y + 0.75
+          );
+        }
+
+        x +=
+          wordWidth + spaceWidth;
       }
 
-      return currentY;
+      return y + lineHeight;
     };
 
+    // ------------------------------------------------
+    // 문제 1개
+    // ------------------------------------------------
     const drawQuestion = (
       question: GeneratedQuestion,
       index: number
     ) => {
-      const estimated =
-        estimateQuestionHeight(question);
+      const x = currentX();
 
-      // 한 단에 들어갈 수 있는 크기면
-      // 문항 중간 분리를 최대한 피한다.
-      if (
-        estimated <
-        contentBottom - contentTop
-      ) {
-        ensureSpace(estimated);
-      }
+      // 시작할 공간이 너무 적으면 다음 단
+      ensureSpace(55);
 
-      let x = getColumnX();
+      const actualX = currentX();
 
-      // 문항 번호 컬러 태그
-      doc.setFillColor(...accent);
-
-      doc.roundedRect(
-        x,
-        cursorY,
-        10,
-        5.6,
-        1.6,
-        1.6,
-        "F"
-      );
-
-      doc.setFont("NotoKR", "normal");
-      doc.setFontSize(7.3);
-      doc.setTextColor(255, 255, 255);
-
-      doc.text(
-        String(index + 1).padStart(
-          2,
-          "0"
-        ),
-        x + 5,
-        cursorY + 3.8,
-        { align: "center" }
-      );
-
-      // 유형
-      doc.setFontSize(7.2);
-      doc.setTextColor(...accent);
-
-      doc.text(
-        question.type,
-        x + 12.2,
-        cursorY + 3.8
-      );
-
-      cursorY += 8;
-
-      // 발문
-      doc.setFont("NotoKR", "normal");
-      doc.setFontSize(9.7);
-      doc.setTextColor(22, 28, 38);
-
-      const stemLines = doc.splitTextToSize(
-        question.stem,
-        columnWidth - 5
-      ) as string[];
-
-      doc.text(
-        stemLines,
-        x + 1.5,
-        cursorY
-      );
-
-      cursorY +=
-        stemLines.length * 4.3 + 3;
-
-      // 지문
-      doc.setDrawColor(224, 227, 232);
-      doc.setLineWidth(0.25);
-
-      doc.line(
-        x + 1.5,
-        cursorY - 1.5,
-        x + columnWidth - 1.5,
-        cursorY - 1.5
-      );
-
-      cursorY += 1.8;
-
-      cursorY = drawEnglishPassage(
-        question.passage,
-        x + 2.3,
-        cursorY,
-        columnWidth - 4.6
-      );
-
-      cursorY += 2.5;
-
-      // 선택지
-      doc.setFont("times", "normal");
-      doc.setFontSize(9.1);
-      doc.setTextColor(30, 35, 43);
-
-      for (
-        let i = 0;
-        i < question.choices.length;
-        i++
-      ) {
-        const choice =
-          cleanUnderlineMarkers(
-            question.choices[i]
-          );
-
-        const lines =
-          doc.splitTextToSize(
-            choice,
-            columnWidth - 6
-          ) as string[];
-
-        if (
-          cursorY +
-            lines.length * 4 >
-          contentBottom
-        ) {
-          nextColumn();
-          x = getColumnX();
-        }
-
-        doc.text(
-          lines,
-          x + 2.3,
-          cursorY
-        );
-
-        cursorY +=
-          lines.length * 4 + 0.9;
-      }
-
-      cursorY += 5;
-
-      // 문항 구분
-      doc.setDrawColor(230, 232, 236);
-      doc.setLineWidth(0.2);
-
-      doc.line(
-        x + 1,
-        cursorY,
-        x + columnWidth - 1,
-        cursorY
-      );
-
-      cursorY += 5;
-    };
-
-    const drawAnswer = (
-      question: GeneratedQuestion,
-      index: number
-    ) => {
-      const x = getColumnX();
-
-      const explanationLines =
-        splitKR(
-          question.explanation,
-          columnWidth - 7,
-          8.8
-        );
-
-      const required =
-        18 +
-        explanationLines.length * 4.2;
-
-      ensureSpace(required);
-
-      const actualX = getColumnX();
-
+      // 번호 - 색은 여기만 강하게
       doc.setFillColor(...accent);
 
       doc.roundedRect(
         actualX,
         cursorY,
-        10,
-        5.6,
-        1.6,
-        1.6,
+        8.5,
+        5,
+        1.3,
+        1.3,
         "F"
       );
 
-      doc.setFont("NotoKR", "normal");
-      doc.setFontSize(7.3);
+      doc.setFont("NotoKR", "bold");
+      doc.setFontSize(6.8);
       doc.setTextColor(255, 255, 255);
 
       doc.text(
@@ -1180,97 +1207,302 @@ export default function EnglishTestMakerPage() {
           2,
           "0"
         ),
-        actualX + 5,
-        cursorY + 3.8,
+        actualX + 4.25,
+        cursorY + 3.45,
         { align: "center" }
       );
 
-      doc.setFontSize(8);
+      doc.setFont("PlexKR", "normal");
+      doc.setFontSize(7.3);
       doc.setTextColor(...accent);
 
       doc.text(
         question.type,
-        actualX + 12,
-        cursorY + 3.8
+        actualX + 10.5,
+        cursorY + 3.5
       );
 
-      cursorY += 9;
+      cursorY += 8;
 
-      // 정답
-      doc.setFontSize(9.5);
-      doc.setTextColor(25, 31, 40);
+      // 발문
+      doc.setFont("NotoKR", "bold");
+      doc.setFontSize(9.2);
+      doc.setTextColor(22, 22, 24);
 
-      doc.text(
-        `정답  ${question.answer}`,
-        actualX + 2,
-        cursorY
-      );
-
-      cursorY += 5.5;
-
-      doc.setFontSize(8.8);
-      doc.setTextColor(67, 75, 88);
+      const stemLines =
+        doc.splitTextToSize(
+          question.stem,
+          columnWidth - 4
+        ) as string[];
 
       doc.text(
-        explanationLines,
-        actualX + 2,
+        stemLines,
+        actualX + 1,
         cursorY
       );
 
       cursorY +=
-        explanationLines.length * 4.2 +
-        5;
+        stemLines.length * 4.2 + 2.3;
 
-      doc.setDrawColor(230, 232, 236);
-
-      doc.line(
+      // 영어 본문
+      cursorY = drawPassage(
+        question.passage,
         actualX + 1,
         cursorY,
-        actualX + columnWidth - 1,
+        columnWidth - 2
+      );
+
+      cursorY += 1.8;
+
+      // 선택지
+      for (
+        let i = 0;
+        i < question.choices.length;
+        i++
+      ) {
+        const cleanChoice =
+          removeChoicePrefix(
+            question.choices[i]
+          );
+
+        doc.setFont(
+          "PlexKR",
+          "normal"
+        );
+
+        doc.setFontSize(8.5);
+
+        const numberWidth =
+          doc.getTextWidth(
+            numbers[i] || ""
+          );
+
+        doc.setFont("times", "normal");
+        doc.setFontSize(9.2);
+
+        const choiceLines =
+          doc.splitTextToSize(
+            cleanChoice,
+            columnWidth -
+              numberWidth -
+              5
+          ) as string[];
+
+        const required =
+          Math.max(
+            choiceLines.length * 4,
+            4
+          );
+
+        if (
+          cursorY + required >
+          contentBottom
+        ) {
+          nextColumn();
+        }
+
+        const choiceX = currentX();
+
+        doc.setFont(
+          "PlexKR",
+          "normal"
+        );
+
+        doc.setFontSize(8.5);
+        doc.setTextColor(30, 30, 32);
+
+        doc.text(
+          numbers[i],
+          choiceX + 1,
+          cursorY
+        );
+
+        doc.setFont("times", "normal");
+        doc.setFontSize(9.2);
+
+        doc.text(
+          choiceLines,
+          choiceX + 5.3,
+          cursorY
+        );
+
+        cursorY +=
+          choiceLines.length * 4 +
+          1;
+      }
+
+      cursorY += 4;
+
+      doc.setDrawColor(224, 225, 228);
+      doc.setLineWidth(0.18);
+
+      doc.line(
+        currentX() + 1,
+        cursorY,
+        currentX() +
+          columnWidth -
+          1,
         cursorY
       );
 
       cursorY += 5;
     };
 
-    // ---------------------------------------------
-    // 첫 페이지
-    // ---------------------------------------------
-    drawHeader();
+    // ------------------------------------------------
+    // 답지 - 교재형
+    // 배경/컬러박스 없음
+    // ------------------------------------------------
+    const drawAnswer = (
+      question: GeneratedQuestion,
+      index: number
+    ) => {
+      doc.setFont("PlexKR", "normal");
+      doc.setFontSize(8.6);
 
+      const explanationLines =
+        doc.splitTextToSize(
+          question.explanation,
+          columnWidth - 5
+        ) as string[];
+
+      const required =
+        13 +
+        explanationLines.length *
+          4.15;
+
+      ensureSpace(required);
+
+      const x = currentX();
+
+      // 번호 + 유형
+      doc.setFont("NotoKR", "bold");
+      doc.setFontSize(9.3);
+      doc.setTextColor(20, 20, 20);
+
+      doc.text(
+        `${index + 1}.`,
+        x + 1,
+        cursorY
+      );
+
+      doc.setFont(
+        "PlexKR",
+        "normal"
+      );
+
+      doc.setFontSize(8.4);
+      doc.setTextColor(85, 85, 85);
+
+      doc.text(
+        question.type,
+        x + 8,
+        cursorY
+      );
+
+      // 정답
+      doc.setFont("NotoKR", "bold");
+      doc.setFontSize(9.2);
+      doc.setTextColor(20, 20, 20);
+
+      doc.text(
+        `정답 ${question.answer}`,
+        x +
+          columnWidth -
+          1,
+        cursorY,
+        { align: "right" }
+      );
+
+      cursorY += 5.3;
+
+      // 해설
+      doc.setFont(
+        "PlexKR",
+        "normal"
+      );
+
+      doc.setFontSize(8.6);
+      doc.setTextColor(45, 45, 45);
+
+      doc.text(
+        explanationLines,
+        x + 1,
+        cursorY
+      );
+
+      cursorY +=
+        explanationLines.length *
+          4.15 +
+        4;
+
+      doc.setDrawColor(
+        220,
+        220,
+        220
+      );
+
+      doc.setLineWidth(0.15);
+
+      doc.line(
+        x + 1,
+        cursorY,
+        x +
+          columnWidth -
+          1,
+        cursorY
+      );
+
+      cursorY += 4.5;
+    };
+
+    // ------------------------------------------------
+    // 첫 페이지
+    // ------------------------------------------------
     if (mode === "questions") {
+      drawQuestionHeader();
+
       generatedQuestions.forEach(
-        (question, index) => {
+        (question, index) =>
           drawQuestion(
             question,
             index
-          );
-        }
+          )
       );
     } else {
+      drawAnswerHeader();
+
       generatedQuestions.forEach(
-        (question, index) => {
+        (question, index) =>
           drawAnswer(
             question,
             index
-          );
-        }
+          )
       );
     }
 
-    // ---------------------------------------------
-    // 파일명
-    // ---------------------------------------------
-    const safeSchool =
-      schoolName?.trim() ||
-      "SUMMIT";
+    // ------------------------------------------------
+    // 저장
+    // ------------------------------------------------
+    const safeBase = [
+      schoolText,
+      gradeText,
+      rangeText,
+    ]
+      .filter(Boolean)
+      .join("_")
+      .replace(
+        /[\\/:*?"<>|]/g,
+        "_"
+      );
 
-    const fileName =
+    const base =
+      safeBase || "SUMMIT";
+
+    doc.save(
       mode === "questions"
-        ? `${safeSchool}_영어_변형문제.pdf`
-        : `${safeSchool}_영어_정답해설.pdf`;
-
-    doc.save(fileName);
+        ? `${base}_영어_변형문제.pdf`
+        : `${base}_영어_정답해설.pdf`
+    );
   };
 
   const deleteQuestion = (id: string) => {
