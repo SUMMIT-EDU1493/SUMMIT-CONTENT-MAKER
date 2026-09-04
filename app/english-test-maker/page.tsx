@@ -827,7 +827,27 @@ export default function EnglishTestMakerPage() {
               </div>
             ) : (
               <div className="grid gap-3">
-                {savedPassages.map((passage) => {
+                <div className="mb-4 flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={selectAllSavedPassages}
+                  disabled={savedPassages.length === 0}
+                  className="rounded-full bg-sky-50 px-4 py-2 text-sm font-black text-sky-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  전체 선택
+                </button>
+
+                <button
+                  type="button"
+                  onClick={clearAllSavedPassages}
+                  disabled={selectedPassageIds.length === 0}
+                  className="rounded-full bg-slate-100 px-4 py-2 text-sm font-black text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  전체 해제
+                </button>
+              </div>
+
+              {savedPassages.map((passage) => {
                   const selected = selectedPassageIds.includes(passage.id);
 
                   return (
