@@ -602,6 +602,677 @@ export default function EnglishTestMakerPage() {
     });
   };
 
+  const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
+    let binary = "";
+    const bytes = new Uint8Array(buffer);
+
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+
+    return btoa(binary);
+  };
+
+  const downloadExamPdf = async (
+    mode: "questions" | "answers"
+  ) => {
+    if (generatedQuestions.length === 0) {
+      alert("먼저 변형문제를 생성해 주세요.");
+      return;
+    }
+
+    const { jsPDF } = await import("jspdf");
+
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+      compress: true,
+    });
+
+    // ---------------------------------------------
+    // 한글 폰트
+    // ---------------------------------------------
+    const fontResponse = await fetch(
+      "/fonts/NotoSansKR-Bold.ttf"
+    );
+
+    if (!fontResponse.ok) {
+      alert("PDF 한글 폰트를 불러오지 못했습니다.");
+      return;
+    }
+
+    const fontBuffer = await fontResponse.arrayBuffer();
+    const fontBase64 = arrayBufferToBase64(fontBuffer);
+
+    doc.addFileToVFS(
+      "NotoSansKR-Bold.ttf",
+      fontBase64
+    );
+
+    doc.addFont(
+      "NotoSansKR-Bold.ttf",
+      "NotoKR",
+      "normal"
+    );
+
+    // ---------------------------------------------
+    // 테마 컬러
+    // ---------------------------------------------
+    const themeMap: Record<
+      string,
+      [number, number, number]
+    > = {
+      mint: [72, 187, 160],
+      lemon: [220, 184, 55],
+      blue: [73, 144, 226],
+      lavender: [145, 117, 210],
+      coral: [225, 111, 101],
+      gray: [105, 116, 130],
+    };
+
+    const accent =
+      themeMap[themeColor] || themeMap.mint;
+
+    const pageWidth = 210;
+    const pageHeight = 297;
+
+    const outerMargin = 12;
+    const centerGap = 8;
+
+    const columnWidth =
+      (pageWidth -
+        outerMargin * 2 -
+        centerGap) /
+      2;
+
+    const leftColumnX = outerMargin;
+
+    const rightColumnX =
+      outerMargin +
+      columnWidth +
+      centerGap;
+
+    const contentTop = 35;
+    const contentBottom = 283;
+
+    let column: 0 | 1 = 0;
+    let cursorY = contentTop;
+    let pageNo = 1;
+
+    const getColumnX = () =>
+      column === 0
+        ? leftColumnX
+        : rightColumnX;
+
+    const cleanUnderlineMarkers = (
+      value: string
+    ) => value.replace(/__/g, "");
+
+    const drawHeader = () => {
+      // 상단 브랜드
+      doc.setFont("NotoKR", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(...accent);
+
+      doc.text(
+        "SUMMIT VISUAL LAB",
+        outerMargin,
+        11
+      );
+
+      doc.setFontSize(16);
+      doc.setTextColor(25, 32, 45);
+
+      doc.text(
+        mode === "questions"
+          ? "고등영어 변형문제"
+          : "고등영어 정답 · 해설",
+        outerMargin,
+        19
+      );
+
+      doc.setFontSize(8.5);
+      doc.setTextColor(90, 99, 112);
+
+      const meta = [
+        schoolName,
+        gradeName,
+        rangeName,
+      ]
+        .filter(Boolean)
+        .join("   |   ");
+
+      if (meta) {
+        doc.text(
+          meta,
+          outerMargin,
+          25.5
+        );
+      }
+
+      // 상단 포인트 라인
+      doc.setDrawColor(...accent);
+      doc.setLineWidth(0.7);
+
+      doc.line(
+        outerMargin,
+        29,
+        pageWidth - outerMargin,
+        29
+      );
+
+      // 가운데 2단 구분선
+      doc.setDrawColor(218, 222, 228);
+      doc.setLineWidth(0.25);
+
+      doc.line(
+        pageWidth / 2,
+        contentTop - 1,
+        pageWidth / 2,
+        contentBottom
+      );
+
+      // 페이지 번호
+      doc.setFont("NotoKR", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(130, 136, 145);
+
+      doc.text(
+        String(pageNo),
+        pageWidth / 2,
+        291,
+        { align: "center" }
+      );
+    };
+
+    const nextColumn = () => {
+      if (column === 0) {
+        column = 1;
+        cursorY = contentTop;
+      } else {
+        doc.addPage();
+        pageNo += 1;
+        column = 0;
+        cursorY = contentTop;
+        drawHeader();
+      }
+    };
+
+    const ensureSpace = (
+      requiredHeight: number
+    ) => {
+      if (
+        cursorY + requiredHeight >
+        contentBottom
+      ) {
+        nextColumn();
+      }
+    };
+
+    const splitKR = (
+      value: string,
+      width: number,
+      size: number
+    ) => {
+      doc.setFont("NotoKR", "normal");
+      doc.setFontSize(size);
+
+      return doc.splitTextToSize(
+        value,
+        width
+      ) as string[];
+    };
+
+    const splitEN = (
+      value: string,
+      width: number,
+      size: number
+    ) => {
+      doc.setFont("times", "normal");
+      doc.setFontSize(size);
+
+      return doc.splitTextToSize(
+        cleanUnderlineMarkers(value),
+        width
+      ) as string[];
+    };
+
+    const estimateQuestionHeight = (
+      question: GeneratedQuestion
+    ) => {
+      const stemLines = splitKR(
+        question.stem,
+        columnWidth - 7,
+        9.7
+      ).length;
+
+      const passageLines = splitEN(
+        question.passage,
+        columnWidth - 5,
+        9.3
+      ).length;
+
+      let choiceLines = 0;
+
+      question.choices.forEach(
+        (choice) => {
+          choiceLines += splitEN(
+            choice,
+            columnWidth - 7,
+            9.1
+          ).length;
+        }
+      );
+
+      return (
+        10 +
+        stemLines * 4.3 +
+        passageLines * 4.15 +
+        choiceLines * 4.0 +
+        11
+      );
+    };
+
+    // ---------------------------------------------
+    // 영어 지문 출력
+    // __word__ 는 실제 밑줄 표시
+    // ---------------------------------------------
+    const drawEnglishPassage = (
+      rawText: string,
+      x: number,
+      y: number,
+      maxWidth: number
+    ) => {
+      doc.setFont("times", "normal");
+      doc.setFontSize(9.3);
+      doc.setTextColor(35, 39, 46);
+
+      const lineHeight = 4.15;
+      const paragraphs = rawText.split("\n");
+
+      let currentY = y;
+
+      for (
+        let p = 0;
+        p < paragraphs.length;
+        p++
+      ) {
+        const paragraph =
+          paragraphs[p].trim();
+
+        if (!paragraph) {
+          currentY += lineHeight;
+          continue;
+        }
+
+        const tokens =
+          paragraph.match(
+            /__[^_]+__|\S+/g
+          ) || [];
+
+        let currentX = x;
+
+        for (const token of tokens) {
+          const underlined =
+            token.startsWith("__") &&
+            token.endsWith("__");
+
+          const visible = underlined
+            ? token.slice(2, -2)
+            : token;
+
+          const textWidth =
+            doc.getTextWidth(visible);
+
+          const spaceWidth =
+            doc.getTextWidth(" ");
+
+          if (
+            currentX +
+              textWidth >
+            x + maxWidth
+          ) {
+            currentX = x;
+            currentY += lineHeight;
+
+            if (
+              currentY >
+              contentBottom - 5
+            ) {
+              nextColumn();
+              currentX =
+                getColumnX() + 2.5;
+              currentY = cursorY;
+            }
+          }
+
+          doc.text(
+            visible,
+            currentX,
+            currentY
+          );
+
+          if (underlined) {
+            doc.setDrawColor(
+              35,
+              39,
+              46
+            );
+
+            doc.setLineWidth(0.25);
+
+            doc.line(
+              currentX,
+              currentY + 0.7,
+              currentX + textWidth,
+              currentY + 0.7
+            );
+          }
+
+          currentX +=
+            textWidth + spaceWidth;
+        }
+
+        currentY += lineHeight;
+
+        if (p < paragraphs.length - 1) {
+          currentY += 1.1;
+        }
+      }
+
+      return currentY;
+    };
+
+    const drawQuestion = (
+      question: GeneratedQuestion,
+      index: number
+    ) => {
+      const estimated =
+        estimateQuestionHeight(question);
+
+      // 한 단에 들어갈 수 있는 크기면
+      // 문항 중간 분리를 최대한 피한다.
+      if (
+        estimated <
+        contentBottom - contentTop
+      ) {
+        ensureSpace(estimated);
+      }
+
+      let x = getColumnX();
+
+      // 문항 번호 컬러 태그
+      doc.setFillColor(...accent);
+
+      doc.roundedRect(
+        x,
+        cursorY,
+        10,
+        5.6,
+        1.6,
+        1.6,
+        "F"
+      );
+
+      doc.setFont("NotoKR", "normal");
+      doc.setFontSize(7.3);
+      doc.setTextColor(255, 255, 255);
+
+      doc.text(
+        String(index + 1).padStart(
+          2,
+          "0"
+        ),
+        x + 5,
+        cursorY + 3.8,
+        { align: "center" }
+      );
+
+      // 유형
+      doc.setFontSize(7.2);
+      doc.setTextColor(...accent);
+
+      doc.text(
+        question.type,
+        x + 12.2,
+        cursorY + 3.8
+      );
+
+      cursorY += 8;
+
+      // 발문
+      doc.setFont("NotoKR", "normal");
+      doc.setFontSize(9.7);
+      doc.setTextColor(22, 28, 38);
+
+      const stemLines = doc.splitTextToSize(
+        question.stem,
+        columnWidth - 5
+      ) as string[];
+
+      doc.text(
+        stemLines,
+        x + 1.5,
+        cursorY
+      );
+
+      cursorY +=
+        stemLines.length * 4.3 + 3;
+
+      // 지문
+      doc.setDrawColor(224, 227, 232);
+      doc.setLineWidth(0.25);
+
+      doc.line(
+        x + 1.5,
+        cursorY - 1.5,
+        x + columnWidth - 1.5,
+        cursorY - 1.5
+      );
+
+      cursorY += 1.8;
+
+      cursorY = drawEnglishPassage(
+        question.passage,
+        x + 2.3,
+        cursorY,
+        columnWidth - 4.6
+      );
+
+      cursorY += 2.5;
+
+      // 선택지
+      doc.setFont("times", "normal");
+      doc.setFontSize(9.1);
+      doc.setTextColor(30, 35, 43);
+
+      for (
+        let i = 0;
+        i < question.choices.length;
+        i++
+      ) {
+        const choice =
+          cleanUnderlineMarkers(
+            question.choices[i]
+          );
+
+        const lines =
+          doc.splitTextToSize(
+            choice,
+            columnWidth - 6
+          ) as string[];
+
+        if (
+          cursorY +
+            lines.length * 4 >
+          contentBottom
+        ) {
+          nextColumn();
+          x = getColumnX();
+        }
+
+        doc.text(
+          lines,
+          x + 2.3,
+          cursorY
+        );
+
+        cursorY +=
+          lines.length * 4 + 0.9;
+      }
+
+      cursorY += 5;
+
+      // 문항 구분
+      doc.setDrawColor(230, 232, 236);
+      doc.setLineWidth(0.2);
+
+      doc.line(
+        x + 1,
+        cursorY,
+        x + columnWidth - 1,
+        cursorY
+      );
+
+      cursorY += 5;
+    };
+
+    const drawAnswer = (
+      question: GeneratedQuestion,
+      index: number
+    ) => {
+      const x = getColumnX();
+
+      const explanationLines =
+        splitKR(
+          question.explanation,
+          columnWidth - 7,
+          8.8
+        );
+
+      const required =
+        18 +
+        explanationLines.length * 4.2;
+
+      ensureSpace(required);
+
+      const actualX = getColumnX();
+
+      doc.setFillColor(...accent);
+
+      doc.roundedRect(
+        actualX,
+        cursorY,
+        10,
+        5.6,
+        1.6,
+        1.6,
+        "F"
+      );
+
+      doc.setFont("NotoKR", "normal");
+      doc.setFontSize(7.3);
+      doc.setTextColor(255, 255, 255);
+
+      doc.text(
+        String(index + 1).padStart(
+          2,
+          "0"
+        ),
+        actualX + 5,
+        cursorY + 3.8,
+        { align: "center" }
+      );
+
+      doc.setFontSize(8);
+      doc.setTextColor(...accent);
+
+      doc.text(
+        question.type,
+        actualX + 12,
+        cursorY + 3.8
+      );
+
+      cursorY += 9;
+
+      // 정답
+      doc.setFontSize(9.5);
+      doc.setTextColor(25, 31, 40);
+
+      doc.text(
+        `정답  ${question.answer}`,
+        actualX + 2,
+        cursorY
+      );
+
+      cursorY += 5.5;
+
+      doc.setFontSize(8.8);
+      doc.setTextColor(67, 75, 88);
+
+      doc.text(
+        explanationLines,
+        actualX + 2,
+        cursorY
+      );
+
+      cursorY +=
+        explanationLines.length * 4.2 +
+        5;
+
+      doc.setDrawColor(230, 232, 236);
+
+      doc.line(
+        actualX + 1,
+        cursorY,
+        actualX + columnWidth - 1,
+        cursorY
+      );
+
+      cursorY += 5;
+    };
+
+    // ---------------------------------------------
+    // 첫 페이지
+    // ---------------------------------------------
+    drawHeader();
+
+    if (mode === "questions") {
+      generatedQuestions.forEach(
+        (question, index) => {
+          drawQuestion(
+            question,
+            index
+          );
+        }
+      );
+    } else {
+      generatedQuestions.forEach(
+        (question, index) => {
+          drawAnswer(
+            question,
+            index
+          );
+        }
+      );
+    }
+
+    // ---------------------------------------------
+    // 파일명
+    // ---------------------------------------------
+    const safeSchool =
+      schoolName?.trim() ||
+      "SUMMIT";
+
+    const fileName =
+      mode === "questions"
+        ? `${safeSchool}_영어_변형문제.pdf`
+        : `${safeSchool}_영어_정답해설.pdf`;
+
+    doc.save(fileName);
+  };
+
   const deleteQuestion = (id: string) => {
     setGeneratedQuestions((prev) =>
       prev.filter((question) => question.id !== id)
@@ -1163,6 +1834,28 @@ export default function EnglishTestMakerPage() {
                 <p className="mt-2 text-sm font-medium text-slate-500">
                   문제를 확인한 뒤 수정하거나 삭제할 수 있습니다.
                 </p>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      downloadExamPdf("questions")
+                    }
+                    className="rounded-full bg-slate-900 px-5 py-2.5 text-sm font-black text-white shadow-sm"
+                  >
+                    문제지 PDF
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      downloadExamPdf("answers")
+                    }
+                    className="rounded-full bg-white px-5 py-2.5 text-sm font-black text-slate-700 shadow-sm ring-1 ring-slate-200"
+                  >
+                    정답 · 해설 PDF
+                  </button>
+                </div>
               </div>
 
               <div className="rounded-full bg-slate-900 px-4 py-2 text-sm font-black text-white">
