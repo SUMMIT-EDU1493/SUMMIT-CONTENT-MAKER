@@ -1258,7 +1258,7 @@ ${pageText}
 </div>
         <div>
           <p className="text-sm font-bold text-purple-600">
-            HIGH SCHOOL TEST
+            HIGH SCHOOL FOUR-CUT
           </p>
 
           <h1 className="mt-2 text-4xl font-black text-slate-900">
@@ -1266,7 +1266,7 @@ ${pageText}
           </h1>
 
           <p className="mt-3 text-slate-600">
-            PDF → 의미 블록 분할 → 4컷 설계안 →
+            PDF → 의미 블럭 분할 → 4컷 설계안 →
             원하는 블록만 이미지로 생성
           </p>
         </div>

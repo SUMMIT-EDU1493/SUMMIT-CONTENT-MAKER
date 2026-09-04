@@ -187,7 +187,7 @@ export default function HighSummaryTestPage() {
   };
 
   // -----------------------------
-  // 요약집 계획
+  // 요약.ZIP 계획
   // -----------------------------
 
   const makeSummaryPlan =
@@ -228,7 +228,7 @@ export default function HighSummaryTestPage() {
         if (!response.ok) {
           throw new Error(
             data?.error ||
-              "요약집 계획 생성 실패"
+              "요약.ZIP 계획 생성 실패"
           );
         }
 
@@ -241,7 +241,7 @@ export default function HighSummaryTestPage() {
 
         alert(
           error?.message ||
-            "요약집 계획 생성 중 오류가 생겼어."
+            "요약.ZIP 계획 생성 중 오류가 발생했습니다."
         );
       } finally {
         setMakingPlan(false);
@@ -318,7 +318,7 @@ export default function HighSummaryTestPage() {
 
       alert(
         error?.message ||
-          "요약집 이미지 생성 중 오류가 생겼어."
+          "요약.ZIP 이미지 생성 중 오류가 발생했습니다."
       );
 
       throw error;
@@ -651,7 +651,7 @@ export default function HighSummaryTestPage() {
             schoolName.trim(),
             gradeName.trim(),
             lessonName.trim(),
-            "요약집",
+            "요약.ZIP",
           ]
             .filter(
               Boolean
@@ -670,7 +670,7 @@ export default function HighSummaryTestPage() {
         );
 
         alert(
-          "최종 요약집 PDF를 만드는 중 오류가 생겼어."
+          "최종 요약.ZIP PDF를 만드는 중 오류가 발생했습니다."
         );
       } finally {
         setMakingFinalPdf(
@@ -716,7 +716,7 @@ export default function HighSummaryTestPage() {
 
       <div className="mb-8">
         <h1 className="text-4xl font-black tracking-tight text-slate-900">
-          고등 요약집
+          고등 요약.ZIP
         </h1>
 
         <p className="mt-3 text-base font-medium leading-7 text-slate-600">
@@ -726,11 +726,11 @@ export default function HighSummaryTestPage() {
         <div className="mt-4 inline-flex flex-wrap items-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-700">
           PDF 업로드
           <span>→</span>
-          의미 블록 분석
+          의미 블럭 분석
           <span>→</span>
           핵심 요약
           <span>→</span>
-          VISUAL 요약집
+          VISUAL 요약.ZIP
         </div>
       </div>
 
@@ -842,8 +842,8 @@ export default function HighSummaryTestPage() {
             className="mt-6 w-full rounded-2xl bg-black px-6 py-4 font-black text-white disabled:opacity-40"
           >
             {makingPlan
-              ? "요약집 계획 만드는 중..."
-              : "요약집 계획 만들기"}
+              ? "요약.ZIP 계획 만드는 중..."
+              : "요약.ZIP 계획 만들기"}
           </button>
 
         </section>
@@ -1103,7 +1103,7 @@ export default function HighSummaryTestPage() {
                 className="mt-6 w-full rounded-2xl bg-black px-6 py-5 text-lg font-black text-white disabled:opacity-40"
               >
                 {makingFinalPdf
-                  ? "최종 요약집 PDF 만드는 중..."
+                  ? "최종 요약.ZIP PDF 만드는 중..."
                   : "앞표지 + 본문 + 마지막장 PDF 만들기"}
               </button>
 

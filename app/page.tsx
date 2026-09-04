@@ -60,8 +60,8 @@ export default function Home() {
   const [schoolLevel, setSchoolLevel] = useState<SchoolLevel>("");
   const [workMode, setWorkMode] = useState<WorkMode>("");
   const [schoolName, setSchoolName] = useState("");
-  const [gradeName, setGradeName] = useState("중3");
-  const [lessonName, setLessonName] = useState("Lesson 1");
+  const [gradeName, setGradeName] = useState("");
+  const [lessonName, setLessonName] = useState("");
   const [contentType, setContentType] = useState("대화문");
 
   const [fileName, setFileName] = useState("");
@@ -1544,7 +1544,7 @@ export default function Home() {
                 </h2>
 
                 <p className="mt-3 text-lg font-bold text-slate-600">
-                  써밋네컷 · 요약집
+                  써밋네컷 · 요약.ZIP
                 </p>
 
                 <div className="mt-7 flex flex-wrap gap-2">
@@ -1577,7 +1577,9 @@ export default function Home() {
 
           <div className="mt-8">
             <p className="text-sm font-bold text-blue-600">
-              중등 대화문 제작
+              {schoolLevel === "middle"
+                ? "중등 컨텐츠 선택"
+                : "고등 컨텐츠 선택"}
             </p>
 
             <h1 className="mt-2 text-4xl font-black text-slate-900">
@@ -1587,7 +1589,7 @@ export default function Home() {
             <p className="mt-3 text-slate-600">
               {isMiddle
                 ? "대화문 또는 본문 작업을 선택해 주세요."
-                : "써밋네컷 또는 요약집 작업을 선택해 주세요."}
+                : "써밋네컷 또는 요약.ZIP 작업을 선택해 주세요."}
             </p>
           </div>
 
@@ -1599,7 +1601,7 @@ export default function Home() {
                   onClick={() => {
                     setWorkMode("dialogue");
                     setContentType("대화문");
-                    setGradeName("중3");
+                    setGradeName("");
                   }}
                   className="rounded-3xl bg-purple-600 p-8 text-left text-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
                 >
@@ -1633,7 +1635,7 @@ export default function Home() {
                   </h2>
 
                   <p className="mt-3 text-slate-500">
-                    중등 본문 작업
+                    중등 본문 써밋네컷
                   </p>
                 </button>
               </>
@@ -1655,7 +1657,7 @@ export default function Home() {
                   </h2>
 
                   <p className="mt-3 text-slate-300">
-                    긴 본문을 흐름대로 나눠 여러 개의 4컷으로
+                    긴 지문 → 직관적인 네컷만화
                   </p>
                 </button>
 
@@ -1667,11 +1669,11 @@ export default function Home() {
                   className="rounded-3xl border border-slate-200 bg-white p-7 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
                 >
                   <p className="text-sm font-bold text-amber-600">
-                    SUMMARY BOOK
+                    SUMMARY.ZIP
                   </p>
 
                   <h2 className="mt-2 text-3xl font-black text-slate-900">
-                    요약집
+                    요약.ZIP
                   </h2>
 
                   <p className="mt-3 text-slate-500">
@@ -1692,7 +1694,7 @@ export default function Home() {
         ? "중등 · 본문"
         : workMode === "fourcut"
         ? "고등 · 써밋네컷"
-        : "고등 · 요약집";
+        : "고등 · 요약.ZIP";
 
     return (
       <main className="min-h-screen bg-slate-50 px-5 py-12">
@@ -1873,7 +1875,7 @@ export default function Home() {
 
         <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <h2 className="text-xl font-bold">
-            1. 중3 교재 PDF 업로드
+            1. 교재 PDF 업로드
           </h2>
 
           <label className="mt-5 inline-block cursor-pointer rounded-xl bg-slate-900 px-6 py-3 font-semibold text-white">
@@ -2471,7 +2473,7 @@ export default function Home() {
           {workItems.length ===
           0 ? (
             <p className="mt-6 rounded-xl border border-dashed border-slate-600 p-8 text-center text-slate-400">
-              아직 작업함에 추가된 이미지가 없습니다.
+              아직 추가된 이미지가 없습니다.
             </p>
           ) : (
             <>
