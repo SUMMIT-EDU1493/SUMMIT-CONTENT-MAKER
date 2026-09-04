@@ -10,6 +10,12 @@ type SavedPassage = {
   createdAt: string;
 };
 
+type ExtractedPassage = {
+  id: string;
+  title: string;
+  source: string;
+};
+
 const QUESTION_TYPES = [
   "주제·제목",
   "내용 일치·불일치",
@@ -34,6 +40,23 @@ const COLORS = [
 
 const DIFFICULTIES = ["기본", "중상", "고난도"];
 
+const STORAGE_KEY = "summit-english-passages";
+
+function makePassageId(source: string) {
+  const normalized = source
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+  let hash = 0;
+
+  for (let i = 0; i < normalized.length; i += 1) {
+    hash = (hash * 31 + normalized.charCodeAt(i)) >>> 0;
+  }
+
+  return `passage-${hash.toString(16)}`;
+}
+
 export default function EnglishTestMakerPage() {
   const [schoolName, setSchoolName] = useState("");
   const [gradeName, setGradeName] = useState("");
@@ -41,6 +64,19 @@ export default function EnglishTestMakerPage() {
 
   const [savedPassages, setSavedPassages] = useState<SavedPassage[]>([]);
   const [selectedPassageIds, setSelectedPassageIds] = useState<string[]>([]);
+
+  const [extractedPassages, setExtractedPassages] = useState<
+    ExtractedPassage[]
+  >([]);
+
+  const [selectedExtractedIds, setSelectedExtractedIds] = useState<string[]>(
+    []
+  );
+
+  const [pdfFileName, setPdfFileName] = useState("");
+  const [readingPdf, setReadingPdf] = useState(false);
+  const [analyzingPdf, setAnalyzingPdf] = useState(false);
+  const [pdfStatus, setPdfStatus] = useState("");
 
   const [selectedTypes, setSelectedTypes] = useState<string[]>([
     "주제·제목",
@@ -57,7 +93,7 @@ export default function EnglishTestMakerPage() {
   const [themeColor, setThemeColor] = useState(COLORS[0].value);
 
   useEffect(() => {
-    const raw = localStorage.getItem("summit-english-passages");
+    const raw = localStorage.getItem(STORAGE_KEY);
 
     if (!raw) return;
 
@@ -68,7 +104,7 @@ export default function EnglishTestMakerPage() {
         setSavedPassages(parsed);
       }
     } catch {
-      // 잘못 저장된 localStorage 데이터는 무시
+      console.error("저장된 지문을 불러오지 못했습니다.");
     }
   }, []);
 
@@ -78,6 +114,11 @@ export default function EnglishTestMakerPage() {
       0
     );
   }, [selectedTypes, questionCounts]);
+
+  const savePassageList = (passages: SavedPassage[]) => {
+    setSavedPassages(passages);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(passages));
+  };
 
   const toggleQuestionType = (type: string) => {
     setSelectedTypes((prev) => {
@@ -94,8 +135,18 @@ export default function EnglishTestMakerPage() {
     }));
   };
 
-  const togglePassage = (id: string) => {
+  const toggleSavedPassage = (id: string) => {
     setSelectedPassageIds((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((item) => item !== id);
+      }
+
+      return [...prev, id];
+    });
+  };
+
+  const toggleExtractedPassage = (id: string) => {
+    setSelectedExtractedIds((prev) => {
       if (prev.includes(id)) {
         return prev.filter((item) => item !== id);
       }
@@ -107,7 +158,6 @@ export default function EnglishTestMakerPage() {
   const toggleDifficulty = (difficulty: string) => {
     setDifficulties((prev) => {
       if (prev.includes(difficulty)) {
-        // 최소 하나는 반드시 선택된 상태 유지
         if (prev.length === 1) {
           return prev;
         }
@@ -117,6 +167,176 @@ export default function EnglishTestMakerPage() {
 
       return [...prev, difficulty];
     });
+  };
+
+  const deleteSavedPassage = (id: string) => {
+    const next = savedPassages.filter((item) => item.id !== id);
+
+    savePassageList(next);
+
+    setSelectedPassageIds((prev) =>
+      prev.filter((selectedId) => selectedId !== id)
+    );
+  };
+
+  const saveExtractedPassages = (onlySelected: boolean) => {
+    const targets = onlySelected
+      ? extractedPassages.filter((item) =>
+          selectedExtractedIds.includes(item.id)
+        )
+      : extractedPassages;
+
+    if (targets.length === 0) {
+      alert("저장할 지문을 선택해 주세요.");
+      return;
+    }
+
+    const existingIds = new Set(savedPassages.map((item) => item.id));
+
+    const newItems: SavedPassage[] = [];
+
+    for (const passage of targets) {
+      const id = makePassageId(passage.source);
+
+      if (existingIds.has(id)) {
+        continue;
+      }
+
+      existingIds.add(id);
+
+      newItems.push({
+        id,
+        title: passage.title,
+        source: passage.source,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    if (newItems.length === 0) {
+      alert("선택한 지문은 이미 라이브러리에 저장되어 있습니다.");
+      return;
+    }
+
+    const next = [...savedPassages, ...newItems];
+
+    savePassageList(next);
+
+    setSelectedPassageIds((prev) => [
+      ...new Set([...prev, ...newItems.map((item) => item.id)]),
+    ]);
+
+    alert(`${newItems.length}개의 지문을 저장했습니다.`);
+  };
+
+  const extractPdfText = async (file: File) => {
+    try {
+      setReadingPdf(true);
+      setAnalyzingPdf(false);
+      setPdfStatus("PDF에서 텍스트를 읽고 있습니다...");
+      setExtractedPassages([]);
+      setSelectedExtractedIds([]);
+      setPdfFileName(file.name);
+
+      const pdfjs = await import("pdfjs-dist");
+
+      pdfjs.GlobalWorkerOptions.workerSrc =
+        `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+
+      const arrayBuffer = await file.arrayBuffer();
+
+      const pdf = await pdfjs.getDocument({
+        data: arrayBuffer,
+      }).promise;
+
+      let fullText = "";
+
+      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+        setPdfStatus(
+          `PDF 읽는 중... ${pageNumber} / ${pdf.numPages} 페이지`
+        );
+
+        const page = await pdf.getPage(pageNumber);
+        const content = await page.getTextContent();
+
+        const pageText = content.items
+          .map((item) => {
+            if ("str" in item) {
+              return item.str;
+            }
+
+            return "";
+          })
+          .join(" ");
+
+        fullText += `\n\n--- PAGE ${pageNumber} ---\n\n${pageText}`;
+      }
+
+      if (!fullText.trim()) {
+        throw new Error("PDF에서 텍스트를 추출하지 못했습니다.");
+      }
+
+      setReadingPdf(false);
+      setAnalyzingPdf(true);
+      setPdfStatus("AI가 영어 지문을 찾아 분리하고 있습니다...");
+
+      const response = await fetch("/api/english-test-passages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          sourceText: fullText,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error || "영어 지문 분석 중 오류가 발생했습니다."
+        );
+      }
+
+      const passages: ExtractedPassage[] = Array.isArray(data?.passages)
+        ? data.passages.map(
+            (
+              item: {
+                title?: string;
+                source?: string;
+              },
+              index: number
+            ) => ({
+              id: `extracted-${Date.now()}-${index}`,
+              title: item.title || `Passage ${index + 1}`,
+              source: item.source || "",
+            })
+          )
+        : [];
+
+      if (passages.length === 0) {
+        throw new Error("사용 가능한 영어 지문을 찾지 못했습니다.");
+      }
+
+      setExtractedPassages(passages);
+      setSelectedExtractedIds(passages.map((item) => item.id));
+
+      setPdfStatus(
+        `${passages.length}개의 영어 지문을 찾았습니다. 저장할 지문을 확인해 주세요.`
+      );
+    } catch (error) {
+      console.error(error);
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : "PDF 분석 중 오류가 발생했습니다.";
+
+      setPdfStatus(message);
+      alert(message);
+    } finally {
+      setReadingPdf(false);
+      setAnalyzingPdf(false);
+    }
   };
 
   return (
@@ -143,44 +363,14 @@ export default function EnglishTestMakerPage() {
             교재 PDF를 분석해 원하는 유형의 모의고사·내신형 변형문제를
             제작합니다.
           </p>
-
-          <div className="mt-5 flex flex-wrap items-center gap-2 text-sm font-bold text-slate-500">
-            <span className="rounded-full bg-white px-3 py-2 shadow-sm">
-              PDF 업로드
-            </span>
-
-            <span>→</span>
-
-            <span className="rounded-full bg-white px-3 py-2 shadow-sm">
-              지문 저장
-            </span>
-
-            <span>→</span>
-
-            <span className="rounded-full bg-white px-3 py-2 shadow-sm">
-              유형 선택
-            </span>
-
-            <span>→</span>
-
-            <span className="rounded-full bg-white px-3 py-2 shadow-sm">
-              문제 제작
-            </span>
-
-            <span>→</span>
-
-            <span className="rounded-full bg-white px-3 py-2 shadow-sm">
-              시험지 완성
-            </span>
-          </div>
         </section>
 
-        {/* 1. 기본정보 */}
+        {/* 1 */}
         <section className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <h2 className="text-xl font-black text-slate-900">1. 기본정보</h2>
 
           <div className="mt-5 grid gap-4 md:grid-cols-3">
-            <label className="block">
+            <label>
               <span className="text-sm font-bold text-slate-700">학교명</span>
 
               <input
@@ -191,7 +381,7 @@ export default function EnglishTestMakerPage() {
               />
             </label>
 
-            <label className="block">
+            <label>
               <span className="text-sm font-bold text-slate-700">학년</span>
 
               <input
@@ -202,7 +392,7 @@ export default function EnglishTestMakerPage() {
               />
             </label>
 
-            <label className="block">
+            <label>
               <span className="text-sm font-bold text-slate-700">
                 시험 범위
               </span>
@@ -217,7 +407,7 @@ export default function EnglishTestMakerPage() {
           </div>
         </section>
 
-        {/* 2. 지문 라이브러리 */}
+        {/* 2 */}
         <section className="mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
@@ -230,21 +420,153 @@ export default function EnglishTestMakerPage() {
               </p>
             </div>
 
-            <label className="inline-flex cursor-pointer rounded-2xl bg-sky-600 px-5 py-3 font-black text-white shadow-sm transition hover:bg-sky-700">
-              PDF 업로드
+            <label
+              className={`inline-flex cursor-pointer rounded-2xl px-5 py-3 font-black text-white shadow-sm transition ${
+                readingPdf || analyzingPdf
+                  ? "bg-slate-400"
+                  : "bg-sky-600 hover:bg-sky-700"
+              }`}
+            >
+              {readingPdf || analyzingPdf ? "분석 중..." : "PDF 업로드"}
 
               <input
                 type="file"
                 accept="application/pdf"
                 className="hidden"
-                onChange={() => {
-                  alert("다음 단계에서 PDF 지문 자동 추출 기능을 연결합니다.");
+                disabled={readingPdf || analyzingPdf}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+
+                  if (file) {
+                    extractPdfText(file);
+                  }
+
+                  e.target.value = "";
                 }}
               />
             </label>
           </div>
 
-          <div className="mt-5">
+          {pdfFileName && (
+            <div className="mt-4 rounded-xl bg-sky-50 px-4 py-3 text-sm font-bold text-sky-700">
+              {pdfFileName}
+            </div>
+          )}
+
+          {pdfStatus && (
+            <div className="mt-3 text-sm font-bold text-slate-600">
+              {pdfStatus}
+            </div>
+          )}
+
+          {/* 분석된 새 지문 */}
+          {extractedPassages.length > 0 && (
+            <div className="mt-6 rounded-3xl border border-sky-200 bg-sky-50/50 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">
+                    PDF에서 찾은 지문
+                  </h3>
+
+                  <p className="mt-1 text-sm font-medium text-slate-500">
+                    저장하지 않을 지문은 체크를 해제할 수 있습니다.
+                  </p>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedExtractedIds(
+                        extractedPassages.map((item) => item.id)
+                      )
+                    }
+                    className="rounded-full bg-white px-4 py-2 text-sm font-black text-slate-700 shadow-sm"
+                  >
+                    전체 선택
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedExtractedIds([])}
+                    className="rounded-full bg-white px-4 py-2 text-sm font-black text-slate-700 shadow-sm"
+                  >
+                    전체 해제
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-3">
+                {extractedPassages.map((passage, index) => {
+                  const selected = selectedExtractedIds.includes(passage.id);
+
+                  return (
+                    <button
+                      key={passage.id}
+                      type="button"
+                      onClick={() => toggleExtractedPassage(passage.id)}
+                      className={`rounded-2xl border p-4 text-left transition ${
+                        selected
+                          ? "border-sky-400 bg-white"
+                          : "border-slate-200 bg-slate-50 opacity-60"
+                      }`}
+                    >
+                      <div className="flex items-start gap-4">
+                        <div
+                          className={`mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-sm font-black ${
+                            selected
+                              ? "border-sky-600 bg-sky-600 text-white"
+                              : "border-slate-300 bg-white text-transparent"
+                          }`}
+                        >
+                          ✓
+                        </div>
+
+                        <div className="min-w-0">
+                          <p className="font-black text-slate-900">
+                            {index + 1}. {passage.title}
+                          </p>
+
+                          <p className="mt-2 line-clamp-4 text-sm leading-6 text-slate-500">
+                            {passage.source}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-5 grid gap-3 md:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => saveExtractedPassages(true)}
+                  className="rounded-2xl bg-sky-600 px-5 py-3 font-black text-white hover:bg-sky-700"
+                >
+                  선택한 지문 저장
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => saveExtractedPassages(false)}
+                  className="rounded-2xl bg-slate-900 px-5 py-3 font-black text-white hover:bg-slate-800"
+                >
+                  전체 지문 저장
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 저장된 라이브러리 */}
+          <div className="mt-6">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="font-black text-slate-900">저장된 지문</h3>
+
+              <span className="text-sm font-bold text-slate-400">
+                {savedPassages.length}개
+              </span>
+            </div>
+
             {savedPassages.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm font-bold text-slate-400">
                 아직 저장된 지문이 없습니다.
@@ -255,38 +577,52 @@ export default function EnglishTestMakerPage() {
                   const selected = selectedPassageIds.includes(passage.id);
 
                   return (
-                    <button
+                    <div
                       key={passage.id}
-                      type="button"
-                      onClick={() => togglePassage(passage.id)}
-                      className={`rounded-2xl border p-4 text-left transition ${
+                      className={`rounded-2xl border p-4 ${
                         selected
                           ? "border-sky-400 bg-sky-50"
-                          : "border-slate-200 bg-white hover:bg-slate-50"
+                          : "border-slate-200 bg-white"
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-4">
-                        <div>
-                          <p className="font-black text-slate-900">
-                            {passage.title}
-                          </p>
-
-                          <p className="mt-1 line-clamp-2 text-sm text-slate-500">
-                            {passage.source}
-                          </p>
-                        </div>
-
-                        <div
-                          className={`rounded-full px-3 py-1 text-xs font-black ${
-                            selected
-                              ? "bg-sky-600 text-white"
-                              : "bg-slate-100 text-slate-500"
-                          }`}
+                      <div className="flex items-start justify-between gap-4">
+                        <button
+                          type="button"
+                          onClick={() => toggleSavedPassage(passage.id)}
+                          className="min-w-0 flex-1 text-left"
                         >
-                          {selected ? "선택됨" : "선택"}
-                        </div>
+                          <div className="flex items-start gap-3">
+                            <div
+                              className={`mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-sm font-black ${
+                                selected
+                                  ? "border-sky-600 bg-sky-600 text-white"
+                                  : "border-slate-300 bg-white text-transparent"
+                              }`}
+                            >
+                              ✓
+                            </div>
+
+                            <div className="min-w-0">
+                              <p className="font-black text-slate-900">
+                                {passage.title}
+                              </p>
+
+                              <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-500">
+                                {passage.source}
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => deleteSavedPassage(passage.id)}
+                          className="shrink-0 rounded-full bg-red-50 px-3 py-2 text-xs font-black text-red-500 transition hover:bg-red-100"
+                        >
+                          삭제
+                        </button>
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -294,7 +630,7 @@ export default function EnglishTestMakerPage() {
           </div>
         </section>
 
-        {/* 3. 문제 유형 */}
+        {/* 3 */}
         <section className="mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <h2 className="text-xl font-black text-slate-900">
             3. 문제 유형 선택
@@ -363,7 +699,9 @@ export default function EnglishTestMakerPage() {
           </div>
 
           <div className="mt-5 rounded-2xl bg-slate-900 px-5 py-4 text-white">
-            <span className="text-sm font-bold text-slate-300">총 문항 수</span>
+            <span className="text-sm font-bold text-slate-300">
+              총 문항 수
+            </span>
 
             <strong className="ml-3 text-2xl">{totalQuestions}문항</strong>
           </div>
@@ -371,7 +709,6 @@ export default function EnglishTestMakerPage() {
 
         {/* 4 + 5 */}
         <section className="mt-6 grid gap-6 md:grid-cols-2">
-          {/* 난이도 */}
           <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
             <h2 className="text-xl font-black text-slate-900">4. 난이도</h2>
 
@@ -400,25 +737,15 @@ export default function EnglishTestMakerPage() {
                 );
               })}
             </div>
-
-            <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm">
-              <span className="font-bold text-slate-500">선택 난이도</span>
-
-              <strong className="ml-2 text-slate-900">
-                {difficulties.join(" · ")}
-              </strong>
-            </div>
           </div>
 
-          {/* 컬러 */}
           <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
             <h2 className="text-xl font-black text-slate-900">
               5. THEME COLOR
             </h2>
 
             <p className="mt-2 text-sm font-medium text-slate-500">
-              시험지의 제목, 문항 태그, 지문 테두리와 강조 컬러에
-              적용됩니다.
+              시험지 제목, 문항 태그, 지문 테두리 등에 적용됩니다.
             </p>
 
             <div className="mt-5 flex flex-wrap gap-3">
@@ -438,7 +765,9 @@ export default function EnglishTestMakerPage() {
                   >
                     <span
                       className="h-5 w-5 rounded-full border border-black/10"
-                      style={{ backgroundColor: color.value }}
+                      style={{
+                        backgroundColor: color.value,
+                      }}
                     />
 
                     {color.name}
@@ -449,14 +778,13 @@ export default function EnglishTestMakerPage() {
           </div>
         </section>
 
-        {/* 6. 문제 제작 */}
+        {/* 6 */}
         <section className="mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <h2 className="text-xl font-black text-slate-900">6. 문제 제작</h2>
 
           <div className="mt-5 grid gap-3 text-sm font-bold text-slate-600 md:grid-cols-4">
             <div className="rounded-2xl bg-slate-50 p-4">
               선택 지문
-
               <strong className="mt-1 block text-xl text-slate-900">
                 {selectedPassageIds.length}
               </strong>
@@ -464,7 +792,6 @@ export default function EnglishTestMakerPage() {
 
             <div className="rounded-2xl bg-slate-50 p-4">
               문제 유형
-
               <strong className="mt-1 block text-xl text-slate-900">
                 {selectedTypes.length}
               </strong>
@@ -472,7 +799,6 @@ export default function EnglishTestMakerPage() {
 
             <div className="rounded-2xl bg-slate-50 p-4">
               총 문항
-
               <strong className="mt-1 block text-xl text-slate-900">
                 {totalQuestions}
               </strong>
@@ -480,7 +806,6 @@ export default function EnglishTestMakerPage() {
 
             <div className="rounded-2xl bg-slate-50 p-4">
               난이도
-
               <strong className="mt-1 block text-lg text-slate-900">
                 {difficulties.join(" · ")}
               </strong>
@@ -489,10 +814,15 @@ export default function EnglishTestMakerPage() {
 
           <button
             type="button"
+            disabled={
+              selectedPassageIds.length === 0 ||
+              selectedTypes.length === 0 ||
+              totalQuestions === 0
+            }
             onClick={() => {
-              alert("다음 단계에서 AI 변형문제 생성 기능을 연결합니다.");
+              alert("다음 단계에서 AI 문제 생성 기능을 연결합니다.");
             }}
-            className="mt-6 w-full rounded-2xl bg-sky-600 px-6 py-4 text-lg font-black text-white shadow-sm transition hover:bg-sky-700"
+            className="mt-6 w-full rounded-2xl bg-sky-600 px-6 py-4 text-lg font-black text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             선택한 유형으로 변형문제 만들기
           </button>
