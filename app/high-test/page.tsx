@@ -40,9 +40,9 @@ type HighComicResult = {
 };
 
 export default function HighTestPage() {
-  const [schoolName, setSchoolName] = useState("향일고");
-  const [gradeName, setGradeName] = useState("고2");
-  const [lessonName, setLessonName] = useState("Lesson 1");
+  const [schoolName, setSchoolName] = useState("");
+  const [gradeName, setGradeName] = useState("");
+  const [lessonName, setLessonName] = useState("");
 
   const [fileName, setFileName] = useState("");
   const [pdfText, setPdfText] = useState("");
@@ -298,7 +298,7 @@ ${pageText}
 
   const createPlans = async () => {
     if (!pdfText) {
-      alert("먼저 PDF를 업로드해줘.");
+      alert("먼저 PDF 파일을 업로드해 주세요.");
       return;
     }
 
@@ -422,7 +422,7 @@ ${pageText}
       generatedImages[plan.id];
 
     if (!image) {
-      alert("먼저 이미지를 생성해줘.");
+      alert("먼저 이미지를 생성해 주세요.");
       return;
     }
 
@@ -1073,7 +1073,7 @@ ${pageText}
   const makeFinalPdf = async () => {
     if (workItems.length === 0) {
       alert(
-        "먼저 이미지를 작업함에 추가해줘."
+        "먼저 이미지를 작업함에 추가해 주세요."
       );
       return;
     }
@@ -1249,7 +1249,7 @@ ${pageText}
           }}
           className="rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-md"
         >
-          ← 콘텐츠 선택으로
+          ← 컨텐츠 선택으로
         </button>
       </div>
 
@@ -1262,7 +1262,7 @@ ${pageText}
           </p>
 
           <h1 className="mt-2 text-4xl font-black text-slate-900">
-            고등 써밋네컷 테스트
+            고등 써밋네컷
           </h1>
 
           <p className="mt-3 text-slate-600">
@@ -1279,15 +1279,16 @@ ${pageText}
           <div className="mt-5 grid gap-4 md:grid-cols-3">
             <div>
               <label className="text-sm font-bold text-slate-700">
-                학교
+                학교명
               </label>
 
               <input
                 value={schoolName}
-                onChange={(e) =>
-                  setSchoolName(e.target.value)
-                }
-                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3"
+                onChange={(e) => {
+                  setSchoolName(e.target.value);
+                }}
+                placeholder="예) 써밋고"
+                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 placeholder:text-slate-400"
               />
             </div>
 
@@ -1298,10 +1299,11 @@ ${pageText}
 
               <input
                 value={gradeName}
-                onChange={(e) =>
-                  setGradeName(e.target.value)
-                }
-                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3"
+                onChange={(e) => {
+                  setGradeName(e.target.value);
+                }}
+                placeholder="예) 고 2"
+                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 placeholder:text-slate-400"
               />
             </div>
 
@@ -1312,10 +1314,11 @@ ${pageText}
 
               <input
                 value={lessonName}
-                onChange={(e) =>
-                  setLessonName(e.target.value)
-                }
-                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3"
+                onChange={(e) => {
+                  setLessonName(e.target.value);
+                }}
+                placeholder="예) Lesson 1"
+                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 placeholder:text-slate-400"
               />
             </div>
           </div>

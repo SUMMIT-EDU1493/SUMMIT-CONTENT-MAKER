@@ -42,10 +42,10 @@ type WorkItem = {
 
 export default function HighSummaryTestPage() {
   const [schoolName, setSchoolName] =
-    useState("향일고");
+    useState("");
 
   const [gradeName, setGradeName] =
-    useState("고2");
+    useState("");
 
   const [lessonName, setLessonName] =
     useState("Lesson 2");
@@ -194,7 +194,7 @@ export default function HighSummaryTestPage() {
     async () => {
       if (!sourceText.trim()) {
         alert(
-          "먼저 PDF를 올리거나 본문을 입력해줘."
+          "먼저 PDF 파일을 업로드하거나 본문을 입력해 주세요."
         );
         return;
       }
@@ -588,7 +588,7 @@ export default function HighSummaryTestPage() {
         workItems.length === 0
       ) {
         alert(
-          "먼저 이미지를 작업함에 추가해줘."
+          "먼저 이미지를 작업함에 추가해 주세요."
         );
         return;
       }
@@ -710,76 +710,56 @@ export default function HighSummaryTestPage() {
           }}
           className="rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-md"
         >
-          ← 콘텐츠 선택으로
+          ← 컨텐츠 선택으로
         </button>
       </div>
 
-<div className="mb-8">
-          <div className="text-sm font-bold text-emerald-600">
-            SUMMIT CONTENT MAKER
-          </div>
-
-          <h1 className="mt-2 text-3xl font-black">
-            고등 요약집 테스트
-          </h1>
-
-          <p className="mt-2 text-sm text-gray-500">
-            PDF → 요약계획 → 이미지 → 작업함 → 최종 PDF
-          </p>
-        </div>
-
-        <section className="rounded-3xl bg-white p-6 shadow-sm">
-
-          <div className="grid gap-4 md:grid-cols-3">
-
-            <label>
-              <span className="mb-2 block text-sm font-bold">
-                학교
+<section className="mb-8 rounded-3xl bg-white p-6 shadow-sm">
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
+            <label className="block">
+              <span className="text-sm font-bold text-slate-700">
+                학교명
               </span>
 
               <input
                 value={schoolName}
-                onChange={(e) =>
-                  setSchoolName(
-                    e.target.value
-                  )
-                }
-                className="w-full rounded-xl border px-4 py-3"
+                onChange={(e) => {
+                  setSchoolName(e.target.value);
+                }}
+                placeholder="예) 써밋고"
+                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 placeholder:text-slate-400"
               />
             </label>
 
-            <label>
-              <span className="mb-2 block text-sm font-bold">
+            <label className="block">
+              <span className="text-sm font-bold text-slate-700">
                 학년
               </span>
 
               <input
                 value={gradeName}
-                onChange={(e) =>
-                  setGradeName(
-                    e.target.value
-                  )
-                }
-                className="w-full rounded-xl border px-4 py-3"
+                onChange={(e) => {
+                  setGradeName(e.target.value);
+                }}
+                placeholder="예) 고 2"
+                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 placeholder:text-slate-400"
               />
             </label>
 
-            <label>
-              <span className="mb-2 block text-sm font-bold">
+            <label className="block">
+              <span className="text-sm font-bold text-slate-700">
                 Lesson
               </span>
 
               <input
                 value={lessonName}
-                onChange={(e) =>
-                  setLessonName(
-                    e.target.value
-                  )
-                }
-                className="w-full rounded-xl border px-4 py-3"
+                onChange={(e) => {
+                  setLessonName(e.target.value);
+                }}
+                placeholder="예) Lesson 1"
+                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 placeholder:text-slate-400"
               />
             </label>
-
           </div>
 
           <div className="mt-6">

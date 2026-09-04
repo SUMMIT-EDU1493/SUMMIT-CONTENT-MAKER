@@ -145,7 +145,7 @@ export default function Home() {
 
   const analyzePdf = async () => {
     if (!pdfText) {
-      alert("먼저 PDF를 업로드해줘.");
+      alert("먼저 PDF 파일을 업로드해 주세요.");
       return;
     }
 
@@ -1323,7 +1323,7 @@ export default function Home() {
         workItems.length === 0
       ) {
         alert(
-          "먼저 한 과 작업함에 써밋네컷을 추가해줘."
+          "먼저 한 과 작업함에 써밋네컷을 추가해 주세요."
         );
 
         return;
@@ -1432,26 +1432,47 @@ export default function Home() {
 
    if (!schoolLevel) {
     return (
-      <main className="min-h-screen bg-[#f7f4ea] px-5 py-7">
+      <main className="min-h-screen bg-[#f7f4ea] px-5 py-5">
         <div className="mx-auto max-w-6xl">
 
+          {/* ACCOUNT */}
+          <div className="mb-3 flex justify-end gap-2">
+            <button
+              type="button"
+              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 shadow-sm transition hover:border-emerald-300 hover:text-emerald-700"
+            >
+              로그인
+            </button>
+
+            <button
+              type="button"
+              className="rounded-full bg-slate-900 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"
+            >
+              회원가입
+            </button>
+          </div>
+
           {/* BRAND */}
-          <section className="rounded-[30px] bg-white px-6 py-6 text-center shadow-sm md:px-10 md:py-7">
+          <section className="relative rounded-[30px] bg-white px-6 pb-6 pt-4 text-center shadow-sm md:px-10 md:pb-7 md:pt-4">
             <img
               src="/summit-edu.png"
               alt="SUMMIT EDU"
-              className="mx-auto w-[145px] md:w-[165px]"
+              className="mx-auto w-[135px] md:w-[150px]"
             />
 
-            <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-900 md:text-5xl">
+            <h1 className="mt-1 text-[42px] font-black tracking-[-0.04em] text-slate-900 md:text-[58px]">
               SUMMIT CONTENT MAKER
             </h1>
 
-            <div className="mt-5 flex flex-wrap items-center justify-center gap-3 text-xl font-black text-slate-700 md:gap-5 md:text-[27px]">
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-[22px] font-black text-slate-700 md:gap-5 md:text-[29px]">
               <span>교과서 &amp; 부교재</span>
 
-              <span className="inline-flex h-11 min-w-16 items-center justify-center rounded-full bg-emerald-100 px-4 text-2xl font-black text-emerald-700 shadow-sm">
-                →
+              <span
+                aria-hidden="true"
+                className="inline-flex items-center gap-0 text-emerald-600"
+              >
+                <span className="h-[2px] w-10 rounded-full bg-emerald-400 md:w-14" />
+                <span className="-ml-1 text-[30px] font-light leading-none">›</span>
               </span>
 
               <span>
@@ -1561,13 +1582,13 @@ export default function Home() {
             </p>
 
             <h1 className="mt-2 text-4xl font-black text-slate-900">
-              {isMiddle ? "중등" : "고등"} 콘텐츠 선택
+              {isMiddle ? "중등" : "고등"} 컨텐츠 선택
             </h1>
 
             <p className="mt-3 text-slate-600">
               {isMiddle
-                ? "대화문 또는 본문 작업을 선택해줘."
-                : "써밋네컷 또는 요약집 작업을 선택해줘."}
+                ? "대화문 또는 본문 작업을 선택해 주세요."
+                : "써밋네컷 또는 요약집 작업을 선택해 주세요."}
             </p>
           </div>
 
@@ -1687,7 +1708,7 @@ export default function Home() {
       onClick={() => setWorkMode("")}
       className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-600"
     >
-      ← 콘텐츠 선택으로
+      ← 컨텐츠 선택으로
     </button>
 
           <section className="mt-8 rounded-3xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
@@ -1728,7 +1749,7 @@ export default function Home() {
           onClick={() => setWorkMode("")}
           className="mb-6 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-600"
         >
-          ← 콘텐츠 선택으로
+          ← 컨텐츠 선택으로
         </button>
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>

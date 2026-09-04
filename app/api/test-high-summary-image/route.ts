@@ -281,7 +281,7 @@ DO NOT
     return Response.json(
       {
         error:
-          "고등 요약집 이미지 테스트 중 오류가 생겼어.",
+          "고등 요약집 이미지 생성 중 오류가 발생했습니다.",
         detail:
           error?.message ||
           "알 수 없는 오류",
