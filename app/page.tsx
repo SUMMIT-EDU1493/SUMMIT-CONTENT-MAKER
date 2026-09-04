@@ -1480,7 +1480,7 @@ export default function Home() {
             </div>
           </section>
 
-          {/* SCHOOL LEVEL */}
+          {/* LAB CARDS */}
           <section className="mt-7 grid gap-6 md:grid-cols-2">
 
             {/* MIDDLE */}
@@ -1498,9 +1498,9 @@ export default function Home() {
                 className="absolute -right-4 top-4 w-[210px] opacity-95 md:w-[240px]"
               />
 
-              <div className="relative z-10 max-w-[58%]">
+              <div className="relative z-10 max-w-[60%]">
                 <div className="inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-black tracking-widest text-emerald-700 shadow-sm">
-                  MIDDLE SCHOOL
+                  MIDDLE SCHOOL LAB
                 </div>
 
                 <h2 className="mt-5 text-5xl font-black text-slate-900">
@@ -1534,9 +1534,9 @@ export default function Home() {
                 className="absolute -right-4 top-4 w-[210px] opacity-95 md:w-[240px]"
               />
 
-              <div className="relative z-10 max-w-[58%]">
+              <div className="relative z-10 max-w-[60%]">
                 <div className="inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-black tracking-widest text-amber-700 shadow-sm">
-                  HIGH SCHOOL
+                  HIGH SCHOOL LAB
                 </div>
 
                 <h2 className="mt-5 text-5xl font-black text-slate-900">
@@ -1559,50 +1559,66 @@ export default function Home() {
               </div>
             </button>
 
-          </section>
-
-          {/* TEST MAKER */}
-          <section className="mt-6 grid gap-5 md:grid-cols-2">
+            {/* ENGLISH MOCK TEST */}
             <button
               type="button"
               onClick={() => {
                 window.location.href = "/english-test-maker";
               }}
-              className="rounded-[28px] border border-sky-100 bg-white p-7 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+              className="relative min-h-[300px] overflow-hidden rounded-[34px] border border-sky-100 bg-[#dfefff] p-8 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
             >
-              <p className="text-xs font-black tracking-[0.18em] text-sky-600">
-                ENGLISH TEST MAKER
-              </p>
+              <img
+                src="/summit-bulb.png"
+                alt=""
+                className="absolute -right-4 top-4 w-[210px] opacity-95 md:w-[240px]"
+              />
 
-              <h2 className="mt-3 text-3xl font-black text-slate-900">
-                고등영어 변형문제 제작
-              </h2>
+              <div className="relative z-10 max-w-[64%]">
+                <div className="inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-black tracking-widest text-sky-700 shadow-sm">
+                  ENG MOCK TEST LAB
+                </div>
 
-              <p className="mt-3 text-base font-medium text-slate-500">
-                교재 본문 → 맞춤형 영어 시험문제
-              </p>
+                <h2 className="mt-5 text-[42px] font-black leading-tight text-slate-900">
+                  고등영어 변형문제
+                </h2>
+
+                <p className="mt-3 text-lg font-bold text-slate-600">
+                  모의고사 · 내신형 변형문제 제작
+                </p>
+              </div>
             </button>
 
+            {/* KOREAN MOCK TEST */}
             <button
               type="button"
               onClick={() => {
                 window.location.href = "/korean-test-maker";
               }}
-              className="rounded-[28px] border border-violet-100 bg-white p-7 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+              className="relative min-h-[300px] overflow-hidden rounded-[34px] border border-violet-100 bg-[#eee4ff] p-8 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
             >
-              <p className="text-xs font-black tracking-[0.18em] text-violet-600">
-                KOREAN TEST MAKER
-              </p>
+              <img
+                src="/summit-bulb.png"
+                alt=""
+                className="absolute -right-4 top-4 w-[210px] opacity-95 md:w-[240px]"
+              />
 
-              <h2 className="mt-3 text-3xl font-black text-slate-900">
-                고등국어 변형문제 제작
-              </h2>
+              <div className="relative z-10 max-w-[64%]">
+                <div className="inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-black tracking-widest text-violet-700 shadow-sm">
+                  KOR MOCK TEST LAB
+                </div>
 
-              <p className="mt-3 text-base font-medium text-slate-500">
-                국어 지문 → 모의고사형 변형문제
-              </p>
+                <h2 className="mt-5 text-[42px] font-black leading-tight text-slate-900">
+                  고등국어 변형문제
+                </h2>
+
+                <p className="mt-3 text-lg font-bold text-slate-600">
+                  모의고사 · 내신형 변형문제 제작
+                </p>
+              </div>
             </button>
+
           </section>
+
         </div>
       </main>
     );
