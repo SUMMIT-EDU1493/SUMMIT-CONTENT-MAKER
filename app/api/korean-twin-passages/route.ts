@@ -39,20 +39,24 @@ type NormalizedBBox = {
   height: number;
 };
 
+type VisualType =
+  | "table"
+  | "graph"
+  | "diagram"
+  | "image"
+  | "chart"
+  | "other";
+
+type VisualPlacement =
+  | "passage"
+  | "question"
+  | "bogi"
+  | "choice";
+
 type QuestionAttachment = {
   id: string;
-  type:
-    | "table"
-    | "graph"
-    | "diagram"
-    | "image"
-    | "chart"
-    | "other";
-  placement:
-    | "passage"
-    | "question"
-    | "bogi"
-    | "choice";
+  type: VisualType;
+  placement: VisualPlacement;
   pageNumber: number;
   description: string;
   imageUrl: string;
@@ -76,18 +80,8 @@ type TwinPassageGroup = {
 };
 
 type DetectedVisual = {
-  type:
-    | "table"
-    | "graph"
-    | "diagram"
-    | "image"
-    | "chart"
-    | "other";
-  placement:
-    | "passage"
-    | "question"
-    | "bogi"
-    | "choice";
+  type: VisualType;
+  placement: VisualPlacement;
   description: string;
   bbox: NormalizedBBox;
 };
@@ -307,15 +301,13 @@ async function cropNormalizedImage(
 
   let width =
     Math.round(
-      (bbox.width /
-        1000) *
+      (bbox.width / 1000) *
         imageWidth
     );
 
   let height =
     Math.round(
-      (bbox.height /
-        1000) *
+      (bbox.height / 1000) *
         imageHeight
     );
 
@@ -363,7 +355,7 @@ async function cropNormalizedImage(
         height,
       })
       .jpeg({
-        quality: 95,
+        quality: 96,
       })
       .toBuffer();
 
@@ -470,9 +462,9 @@ function findQuestionRegion(
     page.items.length === 0
   ) {
     return {
-      x: 20,
+      x: 10,
       y: 0,
-      width: 960,
+      width: 980,
       height: 1000,
     };
   }
@@ -521,9 +513,9 @@ function findQuestionRegion(
 
   if (!current) {
     return {
-      x: 20,
+      x: 10,
       y: 0,
-      width: 960,
+      width: 980,
       height: 1000,
     };
   }
@@ -534,7 +526,7 @@ function findQuestionRegion(
         item
       ) =>
         item.y >
-          current.y + 15 &&
+          current.y + 12 &&
         Number(
           item.detectedNumber
         ) >
@@ -543,7 +535,7 @@ function findQuestionRegion(
 
   const startY =
     clamp(
-      current.y - 12,
+      current.y - 10,
       0,
       980
     );
@@ -551,16 +543,16 @@ function findQuestionRegion(
   const endY =
     next
       ? clamp(
-          next.y - 15,
-          startY + 80,
+          next.y - 8,
+          startY + 100,
           1000
         )
       : 1000;
 
   return {
-    x: 15,
+    x: 10,
     y: startY,
-    width: 970,
+    width: 980,
     height:
       endY -
       startY,
@@ -579,15 +571,13 @@ async function detectVisualsInQuestion({
   DetectedVisual[]
 > {
   const prompt = `
-당신은 대한민국 국어 모의고사 시험지에서
-"실제 시각 자료"만 찾는 전문가입니다.
+이 이미지는 대한민국 국어 모의고사의
+${questionNumber}번 문항 영역입니다.
 
-현재 이미지는 ${questionNumber}번 문항 영역만 잘라낸 것입니다.
-
-이 문항 안에 실제로 존재하는 시각 자료를 모두 찾으세요.
+이 문항 안에서 실제 시각 자료만 모두 찾으세요.
 
 ==================================================
-반드시 찾아야 하는 것
+시각 자료
 ==================================================
 
 - 표
@@ -598,109 +588,92 @@ async function detectVisualsInQuestion({
 - 사진
 - 도식
 - 좌표 그림
-- 물체 배치 그림
-- 표 형태의 선택지
-- 그림이나 표가 포함된 <보기>
+- 사물 배치 그림
+- 표 형태 선택지
+- 그림/표가 포함된 <보기>
 
 ==================================================
-시각 자료가 아닌 것
+시각 자료가 아님
 ==================================================
-
-아래는 절대 시각 자료로 판단하지 마세요.
 
 - 문제 번호
 - 발문
 - 일반 문장
 - 순수 텍스트 <보기>
-- ①~⑤ 일반 텍스트 선택지
-- <보기> 위아래의 가로선만 있는 경우
-- 단순 밑줄
+- 일반 선택지
+- 밑줄
+- <보기>의 가로선만 있는 경우
 - 문장 강조
-- 괄호
-- 기호
-- 문제의 빈 여백
 
 ==================================================
-매우 중요
+중요
 ==================================================
 
-1. 1차 분석 결과에 시각 자료 표시가 없어도
-   실제 이미지에 보이면 반드시 찾아야 합니다.
+표 안의 글자가 많아도 표입니다.
 
-2. "그림 첨부", "표 첨부" 같은 글자가 아니라
-   실제 그림이나 표를 찾아야 합니다.
+표를 단순 텍스트라고 판단하면 안 됩니다.
 
-3. 시각 자료 위쪽이나 아래쪽의
-   문제 발문·선택지를 포함하지 마세요.
+가로선과 세로선으로
+행과 열이 나뉘어 있으면 반드시 표입니다.
 
-4. 표라면 표 전체가 들어가야 합니다.
-
-5. 그림이라면 그림 전체가 들어가야 합니다.
-
-6. 위아래가 조금이라도 잘리지 않도록
-   시각 자료 외곽보다 아주 조금 넓게 잡으세요.
-
-7. 지나치게 큰 여백은 포함하지 마세요.
+그림과 표가 한 문제에 둘 다 있으면
+둘을 각각 별개의 visual로 반환하세요.
 
 ==================================================
 PLACEMENT
 ==================================================
 
-자료 위치는 다음 중 하나입니다.
-
 question
-- 발문 바로 아래 독립 자료
-
 bogi
-- <보기> 안의 자료
-
 choice
-- 선택지 자체가 표/그림 형식
-
 passage
-- 지문에 포함된 자료
+
+중 하나로 반환하세요.
 
 ==================================================
 좌표
 ==================================================
 
-현재 문항 이미지 전체를 0~1000 좌표로 봅니다.
+현재 문항 이미지 전체가
+0~1000 좌표입니다.
 
-왼쪽 위:
-x=0
-y=0
+시각 자료의 대략적인 위치를 반환하세요.
 
-오른쪽 아래:
-x=1000
-y=1000
+너무 좁게 잡지 말고
+자료 전체가 들어가도록 약간 넉넉히 잡으세요.
 
 ==================================================
-출력
+JSON
 ==================================================
-
-시각 자료가 하나 있다면:
 
 {
   "visuals": [
     {
       "type": "image",
       "placement": "bogi",
-      "description": "바위, 양, 나무의 배치를 보여 주는 그림",
+      "description": "바위, 양, 나무 그림",
       "bbox": {
-        "x": 200,
-        "y": 250,
-        "width": 600,
-        "height": 220
+        "x": 150,
+        "y": 220,
+        "width": 700,
+        "height": 250
+      }
+    },
+    {
+      "type": "table",
+      "placement": "bogi",
+      "description": "㉠과 ㉡에 대한 답을 정리한 표",
+      "bbox": {
+        "x": 160,
+        "y": 520,
+        "width": 680,
+        "height": 370
       }
     }
   ]
 }
 
-표가 있다면 type은 "table".
-
-여러 개라면 visuals 배열에 각각 넣으세요.
-
-실제 시각 자료가 하나도 없다면:
+없으면:
 
 {
   "visuals": []
@@ -716,7 +689,8 @@ y=1000
 
       input: [
         {
-          role: "user",
+          role:
+            "user",
 
           content: [
             {
@@ -784,7 +758,7 @@ y=1000
               item.type
             );
 
-          const allowedTypes: DetectedVisual["type"][] =
+          const allowedTypes: VisualType[] =
             [
               "table",
               "graph",
@@ -796,9 +770,9 @@ y=1000
 
           const type =
             allowedTypes.includes(
-              rawType as DetectedVisual["type"]
+              rawType as VisualType
             )
-              ? (rawType as DetectedVisual["type"])
+              ? (rawType as VisualType)
               : "other";
 
           const rawPlacement =
@@ -806,7 +780,7 @@ y=1000
               item.placement
             );
 
-          const allowedPlacements: DetectedVisual["placement"][] =
+          const allowedPlacements: VisualPlacement[] =
             [
               "passage",
               "question",
@@ -816,9 +790,9 @@ y=1000
 
           const placement =
             allowedPlacements.includes(
-              rawPlacement as DetectedVisual["placement"]
+              rawPlacement as VisualPlacement
             )
-              ? (rawPlacement as DetectedVisual["placement"])
+              ? (rawPlacement as VisualPlacement)
               : "question";
 
           const bbox =
@@ -833,11 +807,13 @@ y=1000
           return {
             type,
             placement,
+
             description:
               cleanInline(
                 item.description
               ) ||
               "원본 시각 자료",
+
             bbox,
           };
         }
@@ -850,6 +826,341 @@ y=1000
       );
   } catch {
     return [];
+  }
+}
+
+async function refineVisualBBox({
+  openai,
+  questionCrop,
+  questionNumber,
+  visual,
+}: {
+  openai: OpenAI;
+  questionCrop: string;
+  questionNumber: string;
+  visual: DetectedVisual;
+}): Promise<
+  NormalizedBBox
+> {
+  const prompt = `
+이 이미지는 국어 모의고사 ${questionNumber}번
+문항 전체 영역입니다.
+
+아래 시각 자료를 최종적으로
+정확히 크롭하려고 합니다.
+
+종류:
+${visual.type}
+
+위치:
+${visual.placement}
+
+설명:
+${visual.description}
+
+현재 대략적인 위치:
+
+x=${visual.bbox.x}
+y=${visual.bbox.y}
+width=${visual.bbox.width}
+height=${visual.bbox.height}
+
+==================================================
+목표
+==================================================
+
+시각 자료의 최종 경계를 다시 정확히 찾으세요.
+
+이번 단계에서는
+"시각 자료 전체가 안 잘리는 것"이 가장 중요합니다.
+
+==================================================
+표일 경우
+==================================================
+
+반드시 포함:
+
+- 표의 맨 위
+- 표의 맨 아래
+- 표의 왼쪽
+- 표의 오른쪽
+- 모든 행
+- 모든 열
+- 모든 셀
+- ①~⑤ 또는 ㄱ~ㅁ 등 표 내부 항목
+- 표와 직접 붙어 있는 단위
+- 표 자체의 제목
+
+절대 표의 마지막 행이 잘리면 안 됩니다.
+
+절대 표의 첫 행이 잘리면 안 됩니다.
+
+==================================================
+그림일 경우
+==================================================
+
+반드시 그림 전체를 포함합니다.
+
+예:
+
+늑대
+바위
+양
+나무
+
+가 하나의 그림을 구성한다면
+어느 하나도 잘리면 안 됩니다.
+
+그림 아래의 직접적인 명칭도
+그림 해석에 필요한 경우 포함하세요.
+
+==================================================
+제외
+==================================================
+
+- 문제 번호
+- 문제 발문
+- 이전 선택지
+- 다음 선택지
+- 다른 문제
+- 순수 텍스트 문장
+- 큰 빈 공간
+
+==================================================
+안전 여백
+==================================================
+
+자료 경계를 찾은 후
+사방에 아주 조금만 여유를 주세요.
+
+표/그림이 잘리는 것보다
+조금의 흰 여백이 있는 것이 낫습니다.
+
+==================================================
+좌표
+==================================================
+
+현재 문항 이미지 기준 0~1000.
+
+반드시 JSON:
+
+{
+  "bbox": {
+    "x": 100,
+    "y": 300,
+    "width": 700,
+    "height": 400
+  }
+}
+`;
+
+  const result =
+    await openai.responses.create({
+      model:
+        "gpt-5-mini",
+
+      input: [
+        {
+          role:
+            "user",
+
+          content: [
+            {
+              type:
+                "input_text",
+              text:
+                prompt,
+            },
+
+            {
+              type:
+                "input_image",
+              image_url:
+                questionCrop,
+              detail:
+                "high",
+            },
+          ],
+        },
+      ],
+    });
+
+  const output =
+    result.output_text?.trim() ??
+    "";
+
+  if (!output) {
+    return visual.bbox;
+  }
+
+  try {
+    const parsed =
+      parseJsonOutput(
+        output
+      );
+
+    return (
+      parseBBox(
+        parsed?.bbox
+      ) ??
+      visual.bbox
+    );
+  } catch {
+    return visual.bbox;
+  }
+}
+
+async function cleanQuestionBogi({
+  openai,
+  questionCrop,
+  questionNumber,
+  bogi,
+  hasVisual,
+}: {
+  openai: OpenAI;
+  questionCrop: string;
+  questionNumber: string;
+  bogi: string;
+  hasVisual: boolean;
+}) {
+  if (!hasVisual) {
+    return cleanBogi(
+      bogi
+    );
+  }
+
+  const prompt = `
+이 이미지는 국어 모의고사 ${questionNumber}번
+문항 전체입니다.
+
+현재 추출된 <보기> 텍스트는 다음과 같습니다.
+
+-----
+${bogi}
+-----
+
+이 문제의 <보기> 안에는
+표, 그림, 그래프 또는 도식 같은
+시각 자료가 존재합니다.
+
+시각 자료는 별도의 원본 이미지로
+이미 삽입할 예정입니다.
+
+따라서 bogi 텍스트에는
+"순수한 설명 문장"만 남겨야 합니다.
+
+==================================================
+삭제해야 하는 것
+==================================================
+
+- 표의 행/열 데이터
+- 표의 숫자
+- 표의 항목명
+- 표를 줄글로 풀어쓴 내용
+- 그림의 객체 이름 나열
+- 그래프 수치
+- 도식의 구조를 텍스트로 옮긴 내용
+- "그림 첨부"
+- "표 첨부"
+- 이미지에 이미 들어 있는 정보
+
+==================================================
+남겨야 하는 것
+==================================================
+
+시각 자료 앞이나 뒤에 실제로 인쇄된
+독립적인 설명 문장만 남깁니다.
+
+예:
+
+"모든 물체들은 일직선상에 위치하고 있으며,
+양과 늑대는 움직이지 않는다."
+
+이런 문장은 남깁니다.
+
+==================================================
+특별 규칙
+==================================================
+
+<보기>가 사실상 표 하나로만 구성되어 있고
+별도 설명 문장이 없다면
+빈 문자열을 반환하세요.
+
+표의 "단위: 만 원" 같은 것은
+원본 표 이미지에 있으므로
+텍스트로 반복하지 마세요.
+
+==================================================
+JSON
+==================================================
+
+{
+  "bogi": "남겨야 할 순수 설명 문장"
+}
+
+아무것도 남길 필요가 없으면:
+
+{
+  "bogi": ""
+}
+
+반드시 JSON만 출력하세요.
+`;
+
+  try {
+    const result =
+      await openai.responses.create({
+        model:
+          "gpt-5-mini",
+
+        input: [
+          {
+            role:
+              "user",
+
+            content: [
+              {
+                type:
+                  "input_text",
+                text:
+                  prompt,
+              },
+
+              {
+                type:
+                  "input_image",
+                image_url:
+                  questionCrop,
+                detail:
+                  "high",
+              },
+            ],
+          },
+        ],
+      });
+
+    const output =
+      result.output_text?.trim() ??
+      "";
+
+    if (!output) {
+      return cleanBogi(
+        bogi
+      );
+    }
+
+    const parsed =
+      parseJsonOutput(
+        output
+      );
+
+    return cleanBogi(
+      parsed?.bogi
+    );
+  } catch {
+    return cleanBogi(
+      bogi
+    );
   }
 }
 
@@ -1067,73 +1378,62 @@ export async function POST(
       });
 
     const prompt = `
-당신은 대한민국 고등학교 국어 모의고사 분석 전문가입니다.
+당신은 대한민국 고등학교 국어 모의고사
+전문 분석가입니다.
 
-아래에는
-
-1. PDF에서 추출한 시험지 전체 텍스트
-2. 실제 시험지 페이지 이미지
-
-가 함께 제공됩니다.
-
-이번 단계에서는 비문학 지문과
-그 지문에 딸린 원본 문제의 텍스트 구조만
-정확히 추출하세요.
+PDF 전체 텍스트와 실제 시험지 페이지 이미지를 보고
+비문학 지문과 원본 문제를 추출하세요.
 
 새 문제는 만들지 마세요.
 
 ==================================================
-비문학 우선
+비문학
 ==================================================
 
-- 사회
-- 경제
-- 과학
-- 기술
-- 철학
-- 인문
-- 언어
-- 독서
-- 예술 이론
-- 설명문
-- 논설문
+사회
+경제
+과학
+기술
+철학
+인문
+언어
+독서
+예술 이론
+설명문
+논설문
 
-문학은 비문학이 충분히 있으면 제외하세요.
+을 우선합니다.
 
 ==================================================
 SOURCE
 ==================================================
 
-source에는 실제 지문만 넣습니다.
+지문 원문만 넣습니다.
 
-제거:
+문제 번호
+발문
+선택지
+시험 안내
+페이지 번호
+인쇄 정보
 
-- 문제 번호
-- 발문
-- 선택지
-- 시험 안내
-- 페이지 번호
-- 인쇄 정보
+는 제외합니다.
 
-보존:
+(가)
+(나)
+ⓐ
+ⓑ
+각주
+문단
+인용
 
-- 문단
-- (가)
-- (나)
-- (다)
-- ⓐ
-- ⓑ
-- ⓒ
-- 인용
-- 각주
-
-원문을 요약하거나 바꾸지 마세요.
+은 보존합니다.
 
 ==================================================
 MARKERS
 ==================================================
 
-문제가 참조하는 지문 표식을 추출합니다.
+문항이 참조하는 지문 표시를 추출합니다.
 
 kind:
 
@@ -1143,17 +1443,12 @@ symbol
 quoted
 other
 
-(가), (나)의 경우
-해당 구간 전체 원문을 text에 넣으세요.
-
-실제 페이지 이미지에서 밑줄이 확인되면
-정확한 밑줄 원문을 넣으세요.
+페이지 이미지에서 실제 밑줄이 보이면
+정확한 원문을 marker.text에 넣습니다.
 
 ==================================================
 QUESTIONS
 ==================================================
-
-각 문제:
 
 number
 pageNumber
@@ -1164,31 +1459,19 @@ choices
 를 추출합니다.
 
 ==================================================
-<보기>
+보기
 ==================================================
 
-순수 텍스트 <보기>는
-본문을 bogi에 넣습니다.
+순수 텍스트 보기의 문장만 bogi에 넣습니다.
 
-"<보기>" 제목 자체는 넣지 않습니다.
+표, 그림, 그래프, 도식 내부의 내용을
+줄글로 변환하지 마세요.
 
-실제 그림이나 표가 있는 경우에도
-"그림 첨부", "표 첨부" 등의 가짜 설명 문구를
-bogi에 넣지 마세요.
+특히 표의 행/열/숫자를
+bogi에 나열하지 마세요.
 
-그림이나 표 안의 내용을
-억지로 줄글로 변환하지 마세요.
-
-실제 시각 자료는 다음 단계에서
-각 문항 이미지를 직접 검사해 별도로 가져옵니다.
-
-==================================================
-CHOICES
-==================================================
-
-①~⑤ 기호를 유지합니다.
-
-일반 텍스트 선택지만 choices에 넣습니다.
+시각 자료는 이 이후 별도 이미지 분석 단계에서
+원본 그대로 추출합니다.
 
 ==================================================
 JSON
@@ -1198,15 +1481,15 @@ JSON
   "groups": [
     {
       "id": "group-1",
-      "title": "짧은 지문 제목",
+      "title": "짧은 제목",
       "source": "지문 원문",
       "markers": [],
       "questions": [
         {
           "number": "25",
           "pageNumber": 1,
-          "stem": "문제 발문",
-          "bogi": "보기 본문",
+          "stem": "발문",
+          "bogi": "",
           "choices": [
             "① ...",
             "② ...",
@@ -1462,6 +1745,15 @@ ${text}
             );
         }
 
+        const pageImage =
+          pageImages.find(
+            (
+              page: PageImage
+            ) =>
+              page.pageNumber ===
+              pageNumber
+          );
+
         const rawChoices: unknown[] =
           Array.isArray(
             question.choices
@@ -1488,17 +1780,13 @@ ${text}
                 )
             );
 
+        let bogi =
+          cleanBogi(
+            question.bogi
+          );
+
         const attachments: QuestionAttachment[] =
           [];
-
-        const pageImage =
-          pageImages.find(
-            (
-              page: PageImage
-            ) =>
-              page.pageNumber ===
-              pageNumber
-          );
 
         if (pageImage) {
           const questionRegion =
@@ -1512,10 +1800,10 @@ ${text}
             await cropNormalizedImage(
               pageImage.imageUrl,
               questionRegion,
-              10
+              6
             );
 
-          const detectedVisuals =
+          const visuals =
             await detectVisualsInQuestion({
               openai,
               questionCrop,
@@ -1527,20 +1815,29 @@ ${text}
             let visualIndex =
               0;
             visualIndex <
-            detectedVisuals.length;
+            visuals.length;
             visualIndex++
           ) {
             const visual =
-              detectedVisuals[
+              visuals[
                 visualIndex
               ];
+
+            const refinedBBox =
+              await refineVisualBBox({
+                openai,
+                questionCrop,
+                questionNumber:
+                  number,
+                visual,
+              });
 
             try {
               const imageUrl =
                 await cropNormalizedImage(
                   questionCrop,
-                  visual.bbox,
-                  20
+                  refinedBBox,
+                  8
                 );
 
               attachments.push({
@@ -1564,6 +1861,26 @@ ${text}
               //
             }
           }
+
+          const hasBogiVisual =
+            attachments.some(
+              (
+                item: QuestionAttachment
+              ) =>
+                item.placement ===
+                "bogi"
+            );
+
+          bogi =
+            await cleanQuestionBogi({
+              openai,
+              questionCrop,
+              questionNumber:
+                number,
+              bogi,
+              hasVisual:
+                hasBogiVisual,
+            });
         }
 
         questions.push({
@@ -1576,10 +1893,7 @@ ${text}
               question.stem
             ),
 
-          bogi:
-            cleanBogi(
-              question.bogi
-            ),
+          bogi,
 
           choices,
 
