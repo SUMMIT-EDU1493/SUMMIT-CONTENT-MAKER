@@ -12,92 +12,138 @@ export async function POST(req: Request) {
 
     if (!apiKey) {
       return Response.json(
-        { error: "OPENAI_API_KEY가 설정되어 있지 않습니다." },
+        {
+          error:
+            "OPENAI_API_KEY가 설정되어 있지 않습니다.",
+        },
         { status: 500 }
       );
     }
 
     const body = await req.json();
 
-    const passages: Passage[] = Array.isArray(body?.passages)
+    const passages: Passage[] = Array.isArray(
+      body?.passages
+    )
       ? body.passages
       : [];
 
     if (passages.length === 0) {
       return Response.json(
-        { error: "선택된 국어 지문이 없습니다." },
+        {
+          error:
+            "선택된 국어 지문이 없습니다.",
+        },
         { status: 400 }
       );
     }
 
-    const openai = new OpenAI({ apiKey });
+    const openai = new OpenAI({
+      apiKey,
+    });
 
     const prompt = `
-당신은 대한민국 고등학교 국어 비문학 수업자료 전문 편집자입니다.
+당신은 대한민국 고등학교 국어 비문학
+'비주얼 요약집' 전문 편집자입니다.
 
-아래 지문을 학생들이 시험 직전에 빠르게 복습할 수 있는
-'요약.ZIP' 형태로 정리하세요.
+아래 지문을 시험 직전 한눈에 볼 수 있는
+아주 짧고 압축적인 학습자료로 정리하세요.
 
-중요:
-단순 요약문을 만드는 것이 아닙니다.
-글의 논리 구조와 시험에서 묻기 좋은 관계를 시각적으로 정리할 수 있는 데이터를 만듭니다.
+절대로 장문의 설명을 쓰지 마세요.
 
-[선택 지문]
+이 자료는 작은 박스와 일러스트가 함께 들어가는
+가로형 비주얼 학습지에 사용됩니다.
+
+==================================================
+가장 중요한 원칙
+==================================================
+
+1. 많이 담으려 하지 마세요.
+2. 핵심만 남기세요.
+3. 긴 문장을 만들지 마세요.
+4. 모든 내용은 원문에 근거해야 합니다.
+5. 같은 내용을 다른 항목에서 반복하지 마세요.
+6. 설명보다 '키워드 + 짧은 관계'를 우선합니다.
+
+==================================================
+분량 제한 — 반드시 지키세요
+==================================================
+
+TITLE
+- 18자 이내
+- 지문의 핵심 대상만
+- "요약", "정리" 같은 말 붙이지 않기
+
+ONELINE
+- 35자 이내
+- 한 문장
+- 가장 중요한 메시지만
+
+FLOW
+- 정확히 4~5단계
+- label: 6자 이내
+- content: 22자 이내
+- 한 단계에 하나의 정보만
+
+좋은 예:
+{
+  "label": "문제 제기",
+  "content": "기술 발전 → 일자리 감소 우려"
+}
+
+나쁜 예:
+{
+  "label": "문제 제기",
+  "content": "기술의 발전으로 인해 향후 여러 일자리가 감소할 것으로 예상되면서 저소득층 보호를 위한 사회보장제도의 필요성이 커지고 있다."
+}
+
+CONCEPTS
+- 최대 5개
+- name: 8자 이내
+- description: 18자 이내
+- 사전식 설명 금지
+- 시험에 필요한 뜻만
+
+COMPARISON
+- 비교 대상이 명확할 때만 작성
+- 헤더는 3개까지만
+- 행은 최대 4개
+- 각 셀 15자 이내
+- 문장보다 단어/짧은 구 사용
+
+예:
+[
+  ["대상", "저소득층", "모든 국민"],
+  ["심사", "필요", "없음"],
+  ["장점", "집중 지원", "사각지대 감소"],
+  ["한계", "근로 유인 저하", "재정 부담"]
+]
+
+TEST POINT
+- 정확히 3개 이하
+- 각 22자 이내
+- 시험에서 구분해야 할 것만
+
+CAUTION
+- 30자 이내
+- 가장 헷갈릴 내용 하나만
+
+VISUAL PROMPT
+- 그림 생성용이므로 구체적으로 작성
+- 글자를 그림에 넣도록 지시하지 않기
+- 비교 지문이면 좌우 대비
+- 인과 지문이면 원인 → 결과
+- 과정 지문이면 단계 변화
+- 원문에 없는 정보 추가 금지
+
+==================================================
+지문
+==================================================
 
 ${JSON.stringify(passages, null, 2)}
 
 ==================================================
-요약 기준
-==================================================
-
-1. oneLine
-- 지문 전체 핵심을 한 문장으로 정리
-- 지나치게 길지 않게
-
-2. flow
-- 글의 전개를 3~6단계로 나눔
-- label은 "문제 제기", "개념 설명", "원리", "대안", "한계", "결론" 등의 기능
-- content는 해당 단계의 핵심
-
-3. concepts
-- 반드시 알아야 할 개념만 추출
-- 지문에 없는 지식 추가 금지
-- 정의와 역할을 간단히 설명
-
-4. comparison
-- 지문에 비교·대조되는 대상이 있으면 표로 정리
-- 예:
-  최저소득보장제 vs 기본소득제
-  육식동물 vs 초식동물
-- 비교할 대상이 없다면 빈 배열 사용
-
-5. testPoints
-- 실제 시험에서 확인할 만한 핵심 관계
-- 인과관계
-- 비교·대조
-- 개념 정의
-- 사례의 역할
-- 결론
-위주로 3~5개 작성
-
-6. caution
-- 학생이 혼동하기 쉬운 핵심 포인트 1개
-- 지문에 근거해서만 작성
-
-7. 사실 정확성이 최우선
-- 원문에 없는 내용을 절대 추가하지 마세요.
-- 원문의 입장을 과장하지 마세요.
-- 논설문이라면 찬반 여부를 임의로 단정하지 마세요.
-
-8. visualPrompt
-- 이 지문의 핵심 내용을 그림 하나로 이해할 수 있게 장면을 설명한다.
-- 비교 지문이면 좌우 대비가 보이게 한다.
-- 원인과 결과가 있으면 흐름이 보이게 한다.
-- 그림 안에 글자를 넣도록 요구하지 않는다.
-- 지문에 없는 내용은 추가하지 않는다.
-
-==================================================
-반환 형식
+반환 JSON
 ==================================================
 
 JSON만 반환하세요.
@@ -106,24 +152,29 @@ JSON만 반환하세요.
   "summaries": [
     {
       "passageId": "원래 passage id",
-      "title": "요약 제목",
-      "oneLine": "핵심 한 줄",
-"visualPrompt": "이 지문의 핵심 관계를 그림으로 보여주는 장면 설명",
+
+      "title": "18자 이내 제목",
+
+      "oneLine": "35자 이내 핵심 한 줄",
+
+      "visualPrompt": "학습용 일러스트 설명",
+
       "flow": [
         {
-          "label": "문제 제기",
-          "content": "내용"
+          "label": "6자 이내",
+          "content": "22자 이내"
         }
       ],
 
       "concepts": [
         {
-          "name": "개념",
-          "description": "설명"
+          "name": "8자 이내",
+          "description": "18자 이내"
         }
       ],
 
-      "comparisonTitle": "핵심 비교",
+      "comparisonTitle": "12자 이내",
+
       "comparisonHeaders": [
         "구분",
         "A",
@@ -132,31 +183,43 @@ JSON만 반환하세요.
 
       "comparisonRows": [
         [
-          "특징",
-          "A의 특징",
-          "B의 특징"
+          "항목",
+          "15자 이내",
+          "15자 이내"
         ]
       ],
 
       "testPoints": [
-        "시험 포인트"
+        "22자 이내"
       ],
 
-      "caution": "헷갈리기 쉬운 포인트"
+      "caution": "30자 이내"
     }
   ]
 }
+
+다시 강조합니다.
+
+이것은 교과서 해설지가 아닙니다.
+학생이 10초 안에 훑어볼 수 있는
+비주얼 요약 자료입니다.
+
+짧게 쓰세요.
 `;
 
-    const response = await openai.responses.create({
-      model: "gpt-5-mini",
-      input: prompt,
-    });
+    const response =
+      await openai.responses.create({
+        model: "gpt-5-mini",
+        input: prompt,
+      });
 
-    const raw = response.output_text?.trim();
+    const raw =
+      response.output_text?.trim();
 
     if (!raw) {
-      throw new Error("요약.ZIP 결과가 없습니다.");
+      throw new Error(
+        "요약.ZIP 결과가 없습니다."
+      );
     }
 
     const cleaned = raw
@@ -167,13 +230,112 @@ JSON만 반환하세요.
 
     const parsed = JSON.parse(cleaned);
 
+    const summaries = Array.isArray(
+      parsed?.summaries
+    )
+      ? parsed.summaries.map(
+          (item: any) => ({
+            ...item,
+
+            title:
+              String(item?.title || "")
+                .trim()
+                .slice(0, 24),
+
+            oneLine:
+              String(item?.oneLine || "")
+                .trim()
+                .slice(0, 50),
+
+            flow: Array.isArray(item?.flow)
+              ? item.flow
+                  .slice(0, 5)
+                  .map((flow: any) => ({
+                    label: String(
+                      flow?.label || ""
+                    )
+                      .trim()
+                      .slice(0, 8),
+
+                    content: String(
+                      flow?.content || ""
+                    )
+                      .trim()
+                      .slice(0, 30),
+                  }))
+              : [],
+
+            concepts: Array.isArray(
+              item?.concepts
+            )
+              ? item.concepts
+                  .slice(0, 5)
+                  .map(
+                    (concept: any) => ({
+                      name: String(
+                        concept?.name || ""
+                      )
+                        .trim()
+                        .slice(0, 10),
+
+                      description: String(
+                        concept?.description ||
+                          ""
+                      )
+                        .trim()
+                        .slice(0, 24),
+                    })
+                  )
+              : [],
+
+            comparisonRows:
+              Array.isArray(
+                item?.comparisonRows
+              )
+                ? item.comparisonRows
+                    .slice(0, 4)
+                    .map((row: any[]) =>
+                      Array.isArray(row)
+                        ? row
+                            .slice(0, 3)
+                            .map((cell) =>
+                              String(cell || "")
+                                .trim()
+                                .slice(0, 20)
+                            )
+                        : []
+                    )
+                : [],
+
+            testPoints: Array.isArray(
+              item?.testPoints
+            )
+              ? item.testPoints
+                  .slice(0, 3)
+                  .map((point: any) =>
+                    String(point || "")
+                      .trim()
+                      .slice(0, 30)
+                  )
+              : [],
+
+            caution: String(
+              item?.caution || ""
+            )
+              .trim()
+              .slice(0, 40),
+          })
+        )
+      : [];
+
     return Response.json({
-      summaries: Array.isArray(parsed?.summaries)
-        ? parsed.summaries
-        : [],
+      summaries,
     });
   } catch (error) {
-    console.error("Korean summary generation error:", error);
+    console.error(
+      "Korean summary generation error:",
+      error
+    );
 
     return Response.json(
       {
