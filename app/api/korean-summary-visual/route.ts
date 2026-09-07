@@ -20,42 +20,50 @@ type VisualRequest = {
   title?: string;
   oneLine?: string;
   visualPrompt?: string;
+
   flow?: FlowItem[];
+
   concepts?: ConceptItem[];
+
   comparisonTitle?: string;
   comparisonHeaders?: string[];
   comparisonRows?: string[][];
+
   testPoints?: string[];
+
   caution?: string;
 };
 
 const W = 1536;
 const H = 1024;
 
-const COLORS = {
-  ink: "#17223B",
-  body: "#374151",
-  cream: "#FFFDF7",
-  blue: "#BFE3F5",
-  blueDark: "#2D7EA3",
-  green: "#CDEFD9",
-  greenDark: "#37866B",
-  yellow: "#FCE68D",
-  yellowDark: "#9A7220",
-  pink: "#F8D4DF",
-  pinkDark: "#A95470",
-  lavender: "#DED4F1",
-  line: "#D6D3C9",
+const C = {
+  bg: "#FFFDF6",
+  ink: "#17213B",
+  text: "#374151",
+
+  blue: "#CDEAF8",
+  blue2: "#6CB7DB",
+
+  mint: "#D9F1E6",
+  mint2: "#69B79D",
+
+  yellow: "#FCE9A8",
+  yellow2: "#E8B844",
+
+  pink: "#F8D9E1",
+  pink2: "#E58EA6",
+
+  purple: "#E7DDF4",
+
+  border: "#D9D4C8",
 };
 
-function esc(value = "") {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-function wrapKorean(text: string, maxChars: number) {
+function wrapText(
+  text: string,
+  maxChars: number,
+  maxLines = 99
+) {
   const clean = String(text || "")
     .replace(/\s+/g, " ")
     .trim();
@@ -69,82 +77,125 @@ function wrapKorean(text: string, maxChars: number) {
     if (current.length >= maxChars) {
       lines.push(current.trim());
       current = "";
+
+      if (lines.length >= maxLines) {
+        break;
+      }
     }
 
     current += ch;
   }
 
-  if (current.trim()) {
+  if (
+    current.trim() &&
+    lines.length < maxLines
+  ) {
     lines.push(current.trim());
+  }
+
+  if (
+    clean.length >
+    maxChars * maxLines
+  ) {
+    const last =
+      lines.length - 1;
+
+    if (last >= 0) {
+      lines[last] =
+        lines[last].slice(
+          0,
+          Math.max(
+            0,
+            maxChars - 1
+          )
+        ) + "…";
+    }
   }
 
   return lines;
 }
 
-function textSvg(
+function makeText(
   font: any,
   text: string,
-  options: {
+  {
+    width,
+    fontSize,
+    color = C.text,
+    maxChars = 20,
+    maxLines = 3,
+    lineHeight = Math.round(
+      fontSize * 1.35
+    ),
+  }: {
     width: number;
     fontSize: number;
     color?: string;
     maxChars?: number;
+    maxLines?: number;
     lineHeight?: number;
   }
 ) {
-  const {
-    width,
-    fontSize,
-    color = COLORS.body,
-    maxChars = 24,
-    lineHeight = Math.round(fontSize * 1.42),
-  } = options;
-
-  const lines = wrapKorean(text, maxChars);
+  const lines = wrapText(
+    text,
+    maxChars,
+    maxLines
+  );
 
   const height = Math.max(
     lineHeight,
-    lines.length * lineHeight + 8
+    lines.length * lineHeight + 4
   );
 
-  const body = lines
-    .map((line, index) => {
-      const raw = font.getSVG(line, {
-        x: 0,
-        y: index * lineHeight,
-        fontSize,
-        anchor: "top",
-        attributes: {
-          fill: color,
-        },
-      });
+  const paths = lines
+    .map((line, i) => {
+      const svg =
+        font.getSVG(line, {
+          x: 0,
+          y: i * lineHeight,
+          fontSize,
+          anchor: "top",
+          attributes: {
+            fill: color,
+          },
+        });
 
-      return raw
-        .replace(/^<svg[^>]*>/, "")
-        .replace(/<\/svg>$/, "");
+      return svg
+        .replace(
+          /^<svg[^>]*>/,
+          ""
+        )
+        .replace(
+          /<\/svg>$/,
+          ""
+        );
     })
     .join("");
 
   return Buffer.from(`
-    <svg xmlns="http://www.w3.org/2000/svg"
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
       width="${width}"
-      height="${height}">
-      ${body}
+      height="${height}"
+    >
+      ${paths}
     </svg>
   `);
 }
 
-function svgBox(
+function box(
   width: number,
   height: number,
   fill: string,
   stroke = "none",
-  radius = 22
+  radius = 24
 ) {
   return Buffer.from(`
-    <svg xmlns="http://www.w3.org/2000/svg"
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
       width="${width}"
-      height="${height}">
+      height="${height}"
+    >
       <rect
         x="2"
         y="2"
@@ -159,27 +210,67 @@ function svgBox(
   `);
 }
 
-export async function POST(req: Request) {
+function circleNumber(
+  number: number,
+  color: string
+) {
+  return Buffer.from(`
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="58"
+      height="58"
+    >
+      <circle
+        cx="29"
+        cy="29"
+        r="27"
+        fill="${color}"
+      />
+      <text
+        x="29"
+        y="38"
+        text-anchor="middle"
+        font-family="Arial"
+        font-size="26"
+        font-weight="700"
+        fill="white"
+      >
+        ${number}
+      </text>
+    </svg>
+  `);
+}
+
+export async function POST(
+  req: Request
+) {
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey =
+      process.env.OPENAI_API_KEY;
 
     if (!apiKey) {
       return Response.json(
-        { error: "OPENAI_API_KEY가 설정되어 있지 않습니다." },
+        {
+          error:
+            "OPENAI_API_KEY가 설정되어 있지 않습니다.",
+        },
         { status: 500 }
       );
     }
 
-    const body: VisualRequest = await req.json();
+    const body: VisualRequest =
+      await req.json();
 
     const title =
-      body.title?.trim() || "국어 비주얼 요약";
+      body.title?.trim() ||
+      "국어 비주얼 요약";
 
     const oneLine =
       body.oneLine?.trim() || "";
 
     const visualPrompt =
-      body.visualPrompt?.trim() || "";
+      body.visualPrompt?.trim() ||
+      "";
 
     const flow =
       Array.isArray(body.flow)
@@ -187,91 +278,109 @@ export async function POST(req: Request) {
         : [];
 
     const concepts =
-      Array.isArray(body.concepts)
-        ? body.concepts.slice(0, 6)
+      Array.isArray(
+        body.concepts
+      )
+        ? body.concepts.slice(0, 5)
         : [];
 
-    const comparisonHeaders =
-      Array.isArray(body.comparisonHeaders)
+    const headers =
+      Array.isArray(
+        body.comparisonHeaders
+      )
         ? body.comparisonHeaders
         : [];
 
-    const comparisonRows =
-      Array.isArray(body.comparisonRows)
-        ? body.comparisonRows.slice(0, 4)
+    const rows =
+      Array.isArray(
+        body.comparisonRows
+      )
+        ? body.comparisonRows.slice(
+            0,
+            4
+          )
         : [];
 
     const testPoints =
-      Array.isArray(body.testPoints)
+      Array.isArray(
+        body.testPoints
+      )
         ? body.testPoints.slice(0, 3)
         : [];
 
     const caution =
       body.caution?.trim() || "";
 
-    const openai = new OpenAI({ apiKey });
+    const openai =
+      new OpenAI({
+        apiKey,
+      });
 
-    // ======================================================
-    // 1. 삽화만 생성
-    // ======================================================
-
-    const illustrationPrompt = `
-Create ONE clean educational illustration for a Korean high-school visual study guide.
-
-STYLE:
-- warm hand-drawn Korean workbook illustration
-- soft colored-pencil / watercolor feeling
-- simple friendly characters and icons
-- clean white or transparent-looking background
-- pastel colors
-- sophisticated enough for high-school students
-- similar to a handmade study-note infographic
-- no photorealism
-- no 3D
-- no glossy corporate infographic
-
-VERY IMPORTANT:
-- NO Korean text
-- NO English text
-- NO numbers
-- NO captions
-- NO labels
-- NO speech bubbles with text
-- illustration only
-
-The image will be placed inside a fixed educational worksheet layout.
-
-LEARNING IDEA:
-${visualPrompt}
-
-If the passage compares two ideas, visually show them as two sides.
-If it explains cause and effect, show the relationship clearly.
-If it explains a process, show a simple visual sequence.
-`;
+    // =========================================
+    // AI는 오직 중앙 삽화만 제작
+    // =========================================
 
     const imageResult =
       await openai.images.generate({
         model: "gpt-image-2",
-        prompt: illustrationPrompt,
+
         size: "1536x1024",
+
         quality: "medium",
+
+        prompt: `
+Create ONE compact educational illustration.
+
+STYLE:
+- Korean high school workbook
+- warm hand-drawn illustration
+- colored pencil / soft watercolor
+- clean pastel palette
+- friendly but not childish
+- simple educational icons
+- white background
+
+IMPORTANT:
+- no Korean text
+- no English text
+- no labels
+- no captions
+- no numbers
+- no speech bubbles
+
+The illustration will fit inside a fixed comparison panel.
+
+Learning concept:
+${visualPrompt}
+
+If two ideas are compared,
+show them visually as LEFT vs RIGHT.
+
+Keep the composition simple.
+Do not fill every empty space.
+`,
       });
 
-    const b64 =
-      imageResult.data?.[0]?.b64_json;
+    const base64 =
+      imageResult.data?.[0]
+        ?.b64_json;
 
-    if (!b64) {
+    if (!base64) {
       throw new Error(
-        "삽화가 생성되지 않았습니다."
+        "삽화 생성 실패"
       );
     }
 
     const illustration =
       await sharp(
-        Buffer.from(b64, "base64")
+        Buffer.from(
+          base64,
+          "base64"
+        )
       )
-        .resize(700, 380, {
+        .resize(710, 320, {
           fit: "contain",
+
           background: {
             r: 255,
             g: 255,
@@ -282,19 +391,21 @@ If it explains a process, show a simple visual sequence.
         .png()
         .toBuffer();
 
-    // ======================================================
-    // 2. 폰트
-    // ======================================================
+    // =========================================
+    // FONT
+    // =========================================
 
-    const bodyFontPath = path.join(
-      process.cwd(),
-      "public/fonts/NotoSansKR-Bold.ttf"
-    );
+    const bodyFontPath =
+      path.join(
+        process.cwd(),
+        "public/fonts/NotoSansKR-Bold.ttf"
+      );
 
-    const titleFontPath = path.join(
-      process.cwd(),
-      "public/fonts/Gaegu-Bold.ttf"
-    );
+    const titleFontPath =
+      path.join(
+        process.cwd(),
+        "public/fonts/Gaegu-Bold.ttf"
+      );
 
     await Promise.all([
       fs.access(bodyFontPath),
@@ -302,508 +413,495 @@ If it explains a process, show a simple visual sequence.
     ]);
 
     const bodyFont =
-      TextToSVG.loadSync(bodyFontPath);
+      TextToSVG.loadSync(
+        bodyFontPath
+      );
 
     const titleFont =
-      TextToSVG.loadSync(titleFontPath);
+      TextToSVG.loadSync(
+        titleFontPath
+      );
 
     const layers: any[] = [];
 
-    // ======================================================
-    // 3. 전체 배경
-    // ======================================================
-
-    const bg = Buffer.from(`
-      <svg xmlns="http://www.w3.org/2000/svg"
-        width="${W}"
-        height="${H}">
-
-        <rect
-          width="100%"
-          height="100%"
-          fill="${COLORS.cream}"
-        />
-
-        <rect
-          x="16"
-          y="16"
-          width="${W - 32}"
-          height="${H - 32}"
-          rx="30"
-          fill="none"
-          stroke="#CFC8B8"
-          stroke-width="3"
-        />
-
-        <path
-          d="M380 122
-             C620 105 880 118 1140 110"
-          stroke="#F2C94C"
-          stroke-width="24"
-          stroke-linecap="round"
-          opacity=".48"
-        />
-
-        <path
-          d="M380 166
-             C620 158 870 168 1135 160"
-          stroke="#F8E58C"
-          stroke-width="18"
-          stroke-linecap="round"
-          opacity=".75"
-        />
-      </svg>
-    `);
+    // =========================================
+    // BACKGROUND
+    // =========================================
 
     layers.push({
-      input: bg,
+      input: Buffer.from(`
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="${W}"
+          height="${H}"
+        >
+          <rect
+            width="${W}"
+            height="${H}"
+            fill="${C.bg}"
+          />
+
+          <rect
+            x="16"
+            y="16"
+            width="${W - 32}"
+            height="${H - 32}"
+            rx="32"
+            fill="none"
+            stroke="${C.border}"
+            stroke-width="3"
+          />
+
+          <path
+            d="M395 120 C670 105 980 116 1160 105"
+            stroke="#F4D65D"
+            stroke-width="28"
+            stroke-linecap="round"
+            opacity=".45"
+          />
+        </svg>
+      `),
       left: 0,
       top: 0,
     });
 
-    // ======================================================
-    // 4. 제목
-    // ======================================================
+    // =========================================
+    // TOP
+    // =========================================
 
     layers.push({
-      input: textSvg(
+      input: makeText(
         titleFont,
         title,
         {
           width: 900,
-          fontSize: 65,
-          color: COLORS.ink,
-          maxChars: 24,
-          lineHeight: 70,
+          fontSize: 66,
+          color: C.ink,
+          maxChars: 22,
+          maxLines: 1,
         }
       ),
-      left: 385,
-      top: 42,
+      left: 405,
+      top: 38,
     });
 
     layers.push({
-      input: textSvg(
+      input: makeText(
         titleFont,
         oneLine,
         {
-          width: 900,
+          width: 1000,
           fontSize: 29,
-          color: "#292524",
-          maxChars: 38,
-          lineHeight: 36,
+          color: C.ink,
+          maxChars: 40,
+          maxLines: 2,
+          lineHeight: 35,
         }
       ),
-      left: 390,
+      left: 355,
       top: 135,
     });
 
-    // ======================================================
-    // 5. 왼쪽 핵심 흐름
-    // ======================================================
+    // =========================================
+    // LEFT : 핵심 흐름
+    // =========================================
 
     layers.push({
-      input: svgBox(
-        285,
-        750,
-        "#F8FBF8",
-        "#BFD4C5",
-        24
+      input: box(
+        282,
+        770,
+        "#FCFCF8",
+        "#BFD8CD",
+        25
       ),
-      left: 32,
-      top: 220,
+      left: 30,
+      top: 210,
     });
 
     layers.push({
-      input: svgBox(
-        200,
-        62,
-        COLORS.blue,
+      input: box(
+        210,
+        65,
+        C.blue,
         "none",
-        10
+        13
       ),
-      left: 70,
-      top: 238,
+      left: 62,
+      top: 228,
     });
 
     layers.push({
-      input: textSvg(
+      input: makeText(
         titleFont,
         "핵심 흐름",
         {
-          width: 180,
-          fontSize: 37,
-          color: COLORS.ink,
-          maxChars: 8,
+          width: 190,
+          fontSize: 38,
+          color: C.ink,
+          maxChars: 6,
+          maxLines: 1,
         }
       ),
-      left: 92,
-      top: 245,
+      left: 84,
+      top: 237,
     });
 
-    let flowY = 325;
+    const flowColors = [
+      "#64B89A",
+      "#66A8D7",
+      "#F0C14D",
+      "#E88EA7",
+      "#8173BF",
+    ];
 
-    flow.forEach((item, index) => {
-      const circleColor = [
-        "#64B59A",
-        "#66A7D5",
-        "#F3C34E",
-        "#E78FA7",
-        "#9B8AC8",
-      ][index % 5];
+    const flowStart = 325;
+    const flowGap = 128;
 
-      layers.push({
-        input: Buffer.from(`
-          <svg xmlns="http://www.w3.org/2000/svg"
-            width="54"
-            height="54">
-            <circle
-              cx="27"
-              cy="27"
-              r="25"
-              fill="${circleColor}"
-            />
-            <text
-              x="27"
-              y="36"
-              text-anchor="middle"
-              font-family="Arial"
-              font-size="25"
-              font-weight="700"
-              fill="white">
-              ${index + 1}
-            </text>
-          </svg>
-        `),
-        left: 54,
-        top: flowY,
-      });
+    flow.forEach(
+      (item, i) => {
+        const y =
+          flowStart +
+          i * flowGap;
 
-      layers.push({
-        input: textSvg(
-          titleFont,
-          item.label || "",
-          {
-            width: 190,
-            fontSize: 27,
-            color: COLORS.ink,
-            maxChars: 10,
-          }
-        ),
-        left: 118,
-        top: flowY + 2,
-      });
+        layers.push({
+          input: circleNumber(
+            i + 1,
+            flowColors[i]
+          ),
+          left: 48,
+          top: y,
+        });
 
-      layers.push({
-        input: textSvg(
-          bodyFont,
-          item.content || "",
-          {
-            width: 175,
-            fontSize: 16,
-            color: COLORS.body,
-            maxChars: 16,
-            lineHeight: 24,
-          }
-        ),
-        left: 118,
-        top: flowY + 42,
-      });
+        layers.push({
+          input: makeText(
+            titleFont,
+            item.label || "",
+            {
+              width: 185,
+              fontSize: 28,
+              color: C.ink,
+              maxChars: 8,
+              maxLines: 1,
+            }
+          ),
+          left: 118,
+          top: y + 3,
+        });
 
-      flowY += 126;
-    });
+        layers.push({
+          input: makeText(
+            bodyFont,
+            item.content || "",
+            {
+              width: 170,
+              fontSize: 16,
+              color: C.text,
+              maxChars: 13,
+              maxLines: 3,
+              lineHeight: 23,
+            }
+          ),
+          left: 118,
+          top: y + 43,
+        });
+      }
+    );
 
-    // ======================================================
-    // 6. 가운데 비교 영역
-    // ======================================================
-
-    const centerX = 335;
-    const centerY = 225;
-    const centerW = 800;
-    const centerH = 545;
+    // =========================================
+    // CENTER : 핵심 비교
+    // =========================================
 
     layers.push({
-      input: svgBox(
-        centerW,
-        centerH,
+      input: box(
+        790,
+        550,
         "#FFFFFF",
-        "#B9D6DF",
+        "#C6DAD4",
         26
       ),
-      left: centerX,
-      top: centerY,
+      left: 330,
+      top: 210,
     });
 
-    let compareTitle =
-      body.comparisonTitle?.trim();
-
-    if (!compareTitle) {
-      compareTitle =
-        comparisonHeaders
-          .slice(1)
-          .join(" ↔ ") ||
-        "핵심 비교";
-    }
+    layers.push({
+      input: box(
+        240,
+        64,
+        C.mint,
+        "none",
+        16
+      ),
+      left: 365,
+      top: 230,
+    });
 
     layers.push({
-      input: textSvg(
+      input: makeText(
         titleFont,
-        compareTitle,
+        "핵심 비교",
         {
-          width: 650,
-          fontSize: 40,
-          color: COLORS.ink,
-          maxChars: 22,
+          width: 215,
+          fontSize: 39,
+          color: C.ink,
+          maxChars: 6,
+          maxLines: 1,
         }
       ),
-      left: 420,
-      top: 242,
+      left: 390,
+      top: 238,
     });
 
-    // AI 삽화는 여기 한 칸에만 들어간다.
+    // Illustration ONLY here
     layers.push({
       input: illustration,
-      left: 385,
-      top: 315,
+      left: 370,
+      top: 305,
     });
 
-    // ======================================================
-    // 7. 비교표 / 장단점
-    // ======================================================
+    const leftTitle =
+      headers[1] ||
+      "A";
 
-    if (
-      comparisonRows.length > 0 &&
-      comparisonHeaders.length >= 3
-    ) {
-      const leftHeader =
-        comparisonHeaders[1] || "";
+    const rightTitle =
+      headers[2] ||
+      "B";
 
-      const rightHeader =
-        comparisonHeaders[2] || "";
-
-      layers.push({
-        input: svgBox(
-          345,
-          58,
-          "#DDF0FA",
-          "none",
-          10
-        ),
-        left: 355,
-        top: 575,
-      });
-
-      layers.push({
-        input: svgBox(
-          345,
-          58,
-          "#E0F4E8",
-          "none",
-          10
-        ),
-        left: 770,
-        top: 575,
-      });
-
-      layers.push({
-        input: textSvg(
-          titleFont,
-          leftHeader,
-          {
-            width: 300,
-            fontSize: 30,
-            color: COLORS.ink,
-            maxChars: 15,
-          }
-        ),
-        left: 385,
-        top: 586,
-      });
-
-      layers.push({
-        input: textSvg(
-          titleFont,
-          rightHeader,
-          {
-            width: 300,
-            fontSize: 30,
-            color: COLORS.ink,
-            maxChars: 15,
-          }
-        ),
-        left: 800,
-        top: 586,
-      });
-
-      let rowY = 650;
-
-      comparisonRows
-        .slice(0, 3)
-        .forEach((row) => {
-          const category = row[0] || "";
-          const left = row[1] || "";
-          const right = row[2] || "";
-
-          layers.push({
-            input: textSvg(
-              titleFont,
-              category,
-              {
-                width: 95,
-                fontSize: 22,
-                color: COLORS.yellowDark,
-                maxChars: 7,
-              }
-            ),
-            left: 680,
-            top: rowY,
-          });
-
-          layers.push({
-            input: textSvg(
-              bodyFont,
-              left,
-              {
-                width: 280,
-                fontSize: 15,
-                color: COLORS.body,
-                maxChars: 20,
-                lineHeight: 22,
-              }
-            ),
-            left: 370,
-            top: rowY,
-          });
-
-          layers.push({
-            input: textSvg(
-              bodyFont,
-              right,
-              {
-                width: 280,
-                fontSize: 15,
-                color: COLORS.body,
-                maxChars: 20,
-                lineHeight: 22,
-              }
-            ),
-            left: 810,
-            top: rowY,
-          });
-
-          rowY += 55;
-        });
-    }
-
-    // ======================================================
-    // 8. 오른쪽 기억하자
-    // ======================================================
-
+    // 두 비교 제목
     layers.push({
-      input: svgBox(
-        330,
-        545,
-        "#FFFDFC",
-        "#66615A",
-        20
-      ),
-      left: 1160,
-      top: 220,
-    });
-
-    layers.push({
-      input: svgBox(
-        235,
-        62,
-        COLORS.pink,
+      input: box(
+        320,
+        56,
+        "#F8DADA",
         "none",
-        6
+        12
       ),
-      left: 1210,
-      top: 240,
+      left: 350,
+      top: 575,
     });
 
     layers.push({
-      input: textSvg(
+      input: box(
+        320,
+        56,
+        "#D9EDF8",
+        "none",
+        12
+      ),
+      left: 780,
+      top: 575,
+    });
+
+    layers.push({
+      input: makeText(
+        titleFont,
+        leftTitle,
+        {
+          width: 285,
+          fontSize: 31,
+          color: C.ink,
+          maxChars: 12,
+          maxLines: 1,
+        }
+      ),
+      left: 380,
+      top: 586,
+    });
+
+    layers.push({
+      input: makeText(
+        titleFont,
+        rightTitle,
+        {
+          width: 285,
+          fontSize: 31,
+          color: C.ink,
+          maxChars: 12,
+          maxLines: 1,
+        }
+      ),
+      left: 810,
+      top: 586,
+    });
+
+    // 비교 핵심 최대 4개
+    let rowY = 650;
+
+    rows.forEach(
+      (row) => {
+        const label =
+          row[0] || "";
+
+        const left =
+          row[1] || "";
+
+        const right =
+          row[2] || "";
+
+        layers.push({
+          input: makeText(
+            titleFont,
+            label,
+            {
+              width: 90,
+              fontSize: 19,
+              color:
+                C.yellow2,
+              maxChars: 6,
+              maxLines: 1,
+            }
+          ),
+          left: 698,
+          top: rowY,
+        });
+
+        layers.push({
+          input: makeText(
+            bodyFont,
+            left,
+            {
+              width: 270,
+              fontSize: 15,
+              color: C.text,
+              maxChars: 16,
+              maxLines: 2,
+              lineHeight: 21,
+            }
+          ),
+          left: 365,
+          top: rowY,
+        });
+
+        layers.push({
+          input: makeText(
+            bodyFont,
+            right,
+            {
+              width: 270,
+              fontSize: 15,
+              color: C.text,
+              maxChars: 16,
+              maxLines: 2,
+              lineHeight: 21,
+            }
+          ),
+          left: 815,
+          top: rowY,
+        });
+
+        rowY += 49;
+      }
+    );
+
+    // =========================================
+    // RIGHT TOP : 기억하자
+    // =========================================
+
+    layers.push({
+      input: box(
+        350,
+        550,
+        "#FFFDFC",
+        "#807971",
+        23
+      ),
+      left: 1145,
+      top: 210,
+    });
+
+    layers.push({
+      input: box(
+        245,
+        66,
+        C.pink,
+        "none",
+        10
+      ),
+      left: 1195,
+      top: 235,
+    });
+
+    layers.push({
+      input: makeText(
         titleFont,
         "기억하자!",
         {
           width: 220,
-          fontSize: 35,
-          color: COLORS.ink,
-          maxChars: 10,
+          fontSize: 38,
+          color: C.ink,
+          maxChars: 7,
+          maxLines: 1,
         }
       ),
-      left: 1230,
-      top: 249,
+      left: 1223,
+      top: 243,
     });
 
-    if (caution) {
-      layers.push({
-        input: textSvg(
-          bodyFont,
-          caution,
-          {
-            width: 265,
-            fontSize: 18,
-            color: COLORS.body,
-            maxChars: 18,
-            lineHeight: 28,
-          }
-        ),
-        left: 1190,
-        top: 320,
-      });
-    }
-
-    // ======================================================
-    // 9. 핵심 개념
-    // ======================================================
-
     layers.push({
-      input: svgBox(
-        800,
-        175,
-        "#FCFCF8",
-        "#BCD5C7",
-        18
+      input: makeText(
+        bodyFont,
+        caution,
+        {
+          width: 270,
+          fontSize: 19,
+          color: C.text,
+          maxChars: 16,
+          maxLines: 7,
+          lineHeight: 30,
+        }
       ),
-      left: 335,
-      top: 790,
+      left: 1184,
+      top: 330,
+    });
+
+    // =========================================
+    // BOTTOM CENTER : 핵심 개념
+    // =========================================
+
+    layers.push({
+      input: box(
+        790,
+        195,
+        "#FEFEFA",
+        "#BBD6C7",
+        22
+      ),
+      left: 330,
+      top: 785,
     });
 
     layers.push({
-      input: textSvg(
+      input: makeText(
         titleFont,
         "핵심 개념",
         {
-          width: 180,
-          fontSize: 31,
-          color: COLORS.ink,
-          maxChars: 8,
+          width: 190,
+          fontSize: 34,
+          color: C.ink,
+          maxChars: 6,
+          maxLines: 1,
         }
       ),
-      left: 375,
-      top: 807,
+      left: 372,
+      top: 801,
     });
 
-    let conceptX = 370;
+    let conceptX = 355;
 
-    concepts
-      .slice(0, 5)
-      .forEach((concept, index) => {
+    concepts.forEach(
+      (concept, i) => {
         const colors = [
-          "#CBECDD",
-          "#CFE9F8",
-          "#FBE9A8",
-          "#F6D6DF",
-          "#DED7EF",
+          "#D4EFE4",
+          "#D9ECF8",
+          "#FBE7A9",
+          "#F5D7E0",
+          "#E5DCF3",
         ];
 
         layers.push({
-          input: svgBox(
-            130,
+          input: box(
+            138,
             44,
-            colors[index],
+            colors[i],
             "none",
             16
           ),
@@ -812,93 +910,116 @@ If it explains a process, show a simple visual sequence.
         });
 
         layers.push({
-          input: textSvg(
+          input: makeText(
             titleFont,
             concept.name || "",
             {
-              width: 120,
-              fontSize: 21,
-              color: COLORS.ink,
+              width: 122,
+              fontSize: 20,
+              color: C.ink,
               maxChars: 7,
+              maxLines: 1,
             }
           ),
-          left: conceptX + 12,
+          left: conceptX + 10,
           top: 856,
         });
 
         layers.push({
-          input: textSvg(
+          input: makeText(
             bodyFont,
-            concept.description || "",
+            concept.description ||
+              "",
             {
-              width: 135,
+              width: 130,
               fontSize: 13,
-              color: COLORS.body,
-              maxChars: 12,
-              lineHeight: 19,
+              color: C.text,
+              maxChars: 10,
+              maxLines: 3,
+              lineHeight: 18,
             }
           ),
-          left: conceptX,
+          left: conceptX + 4,
           top: 908,
         });
 
-        conceptX += 145;
-      });
+        conceptX += 148;
+      }
+    );
 
-    // ======================================================
-    // 10. 시험 POINT
-    // ======================================================
+    // =========================================
+    // RIGHT BOTTOM : 시험 POINT
+    // =========================================
 
     layers.push({
-      input: svgBox(
-        330,
-        175,
-        "#FFF9F6",
-        "#E7CFC5",
-        18
+      input: box(
+        350,
+        195,
+        "#FFF9F7",
+        "#E5D1C9",
+        22
       ),
-      left: 1160,
-      top: 790,
+      left: 1145,
+      top: 785,
     });
 
     layers.push({
-      input: textSvg(
+      input: makeText(
         titleFont,
         "시험 POINT",
         {
-          width: 220,
-          fontSize: 32,
-          color: COLORS.ink,
-          maxChars: 10,
+          width: 230,
+          fontSize: 34,
+          color: C.ink,
+          maxChars: 9,
+          maxLines: 1,
         }
       ),
-      left: 1195,
-      top: 808,
+      left: 1185,
+      top: 801,
     });
 
-    const pointText =
-      testPoints
-        .map(
-          (point, index) =>
-            `${index + 1}. ${point}`
-        )
-        .join(" ");
+    let pointY = 850;
 
-    layers.push({
-      input: textSvg(
-        bodyFont,
-        pointText,
-        {
-          width: 270,
-          fontSize: 15,
-          color: COLORS.body,
-          maxChars: 21,
-          lineHeight: 22,
-        }
-      ),
-      left: 1190,
-      top: 850,
-    });
+    testPoints.forEach(
+      (point, i) => {
+        layers.push({
+          input: circleNumber(
+            i + 1,
+            [
+              "#63A7D3",
+              "#EDB94D",
+              "#E189A0",
+            ][i]
+          ),
+          left: 1175,
+          top: pointY,
+        });
+
+        layers.push({
+          input: makeText(
+            bodyFont,
+            point,
+            {
+              width: 240,
+              fontSize: 15,
+              color: C.text,
+              maxChars: 17,
+              maxLines: 2,
+              lineHeight: 21,
+            }
+          ),
+          left: 1238,
+          top: pointY + 7,
+        });
+
+        pointY += 47;
+      }
+    );
+
+    // =========================================
+    // FINAL
+    // =========================================
 
     const finalImage =
       await sharp({
@@ -906,10 +1027,11 @@ If it explains a process, show a simple visual sequence.
           width: W,
           height: H,
           channels: 4,
+
           background: {
             r: 255,
             g: 253,
-            b: 247,
+            b: 246,
             alpha: 1,
           },
         },
@@ -919,13 +1041,15 @@ If it explains a process, show a simple visual sequence.
         .toBuffer();
 
     return Response.json({
-      imageUrl: `data:image/png;base64,${finalImage.toString(
-        "base64"
-      )}`,
+      imageUrl:
+        `data:image/png;base64,` +
+        finalImage.toString(
+          "base64"
+        ),
     });
   } catch (error: any) {
     console.error(
-      "KOREAN VISUAL SUMMARY ERROR:",
+      "KOREAN SUMMARY VISUAL ERROR:",
       error
     );
 
@@ -933,11 +1057,14 @@ If it explains a process, show a simple visual sequence.
       {
         error:
           "국어 비주얼 요약 생성 중 오류가 발생했습니다.",
+
         detail:
           error?.message ||
           "알 수 없는 오류",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }
