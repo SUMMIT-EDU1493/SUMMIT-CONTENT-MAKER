@@ -9,18 +9,22 @@ type Passage = {
   source: string;
 };
 
+type SummaryFlow = {
+  label: string;
+  content: string;
+};
+
+type SummaryConcept = {
+  name: string;
+  description: string;
+};
+
 type SummaryResult = {
   passageId: string;
   title: string;
   oneLine: string;
-  flow: {
-    label: string;
-    content: string;
-  }[];
-  concepts: {
-    name: string;
-    description: string;
-  }[];
+  flow: SummaryFlow[];
+  concepts: SummaryConcept[];
   comparisonTitle: string;
   comparisonHeaders: string[];
   comparisonRows: string[][];
@@ -48,8 +52,7 @@ export default function KoreanSummaryPage() {
 
       const pdfjs = await import("pdfjs-dist");
 
-      pdfjs.GlobalWorkerOptions.workerSrc =
-        `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
 
       const buffer = await file.arrayBuffer();
 
@@ -86,16 +89,12 @@ export default function KoreanSummaryPage() {
         );
       }
 
-      const next: Passage[] = Array.isArray(data?.passages)
+      const nextPassages: Passage[] = Array.isArray(data?.passages)
         ? data.passages
         : [];
 
-      setPassages(next);
-
-      // 처음 두 지문 기본 선택
-      setSelectedIds(
-        next.slice(0, 2).map((passage) => passage.id)
-      );
+      setPassages(nextPassages);
+      setSelectedIds(nextPassages.slice(0, 2).map((item) => item.id));
     } catch (error) {
       const message =
         error instanceof Error
@@ -116,18 +115,27 @@ export default function KoreanSummaryPage() {
     );
   };
 
+  const selectAllPassages = () => {
+    setSelectedIds(passages.map((item) => item.id));
+  };
+
+  const clearAllPassages = () => {
+    setSelectedIds([]);
+  };
+
   const makeSummary = async () => {
-    const selected = passages.filter((passage) =>
+    const selectedPassages = passages.filter((passage) =>
       selectedIds.includes(passage.id)
     );
 
-    if (selected.length === 0) {
+    if (selectedPassages.length === 0) {
       alert("요약할 지문을 선택해 주세요.");
       return;
     }
 
     try {
       setGenerating(true);
+      setResults([]);
 
       const response = await fetch("/api/korean-summary-generate", {
         method: "POST",
@@ -135,7 +143,7 @@ export default function KoreanSummaryPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          passages: selected,
+          passages: selectedPassages,
         }),
       });
 
@@ -148,9 +156,7 @@ export default function KoreanSummaryPage() {
       }
 
       setResults(
-        Array.isArray(data?.summaries)
-          ? data.summaries
-          : []
+        Array.isArray(data?.summaries) ? data.summaries : []
       );
     } catch (error) {
       const message =
@@ -167,35 +173,76 @@ export default function KoreanSummaryPage() {
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-8">
       <div className="mx-auto max-w-6xl">
-        <div className="flex items-center justify-between gap-4">
-          <HomeButton />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <HomeButton />
+
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = "/korean-test-maker";
+              }}
+              className="rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-md"
+            >
+              ← 국어 메뉴로
+            </button>
+          </div>
 
           <div className="rounded-full bg-violet-100 px-4 py-2 text-xs font-black tracking-[0.16em] text-violet-700">
             KOR SUMMARY LAB
           </div>
         </div>
 
-        <section className="mt-8">
+        <section className="mt-8 rounded-[32px] bg-white p-7 shadow-sm ring-1 ring-slate-200">
           <p className="text-sm font-black tracking-[0.18em] text-violet-600">
             SUMMIT VISUAL LAB
           </p>
 
-          <h1 className="mt-2 text-4xl font-black text-slate-900 md:text-5xl">
+          <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-900 md:text-5xl">
             국어 요약.ZIP
           </h1>
 
-          <p className="mt-4 text-base font-medium leading-7 text-slate-500">
-            긴 비문학 지문을 글의 흐름, 핵심 개념, 비교 관계,
-            시험 포인트 중심으로 압축합니다.
+          <p className="mt-4 max-w-3xl text-base leading-7 text-slate-500">
+            긴 국어 지문을 보기 쉬운 비주얼 학습자료로 정리합니다.
+            글의 흐름, 핵심 개념, 비교 구조, 시험 포인트를 한눈에
+            파악할 수 있게 구성했습니다.
           </p>
+
+          <div className="mt-6 flex flex-wrap gap-2">
+            <span className="rounded-full bg-violet-50 px-4 py-2 text-sm font-bold text-violet-700">
+              글의 흐름
+            </span>
+            <span className="rounded-full bg-sky-50 px-4 py-2 text-sm font-bold text-sky-700">
+              핵심 개념
+            </span>
+            <span className="rounded-full bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700">
+              비교 정리
+            </span>
+            <span className="rounded-full bg-rose-50 px-4 py-2 text-sm font-bold text-rose-700">
+              시험 POINT
+            </span>
+          </div>
         </section>
 
-        <section className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-          <h2 className="text-xl font-black text-slate-900">
-            1. PDF 업로드
-          </h2>
+        <section className="mt-8 rounded-[32px] bg-white p-7 shadow-sm ring-1 ring-slate-200">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-black tracking-[0.16em] text-violet-600">
+                STEP 01
+              </p>
+              <h2 className="mt-1 text-2xl font-black text-slate-900">
+                PDF 업로드
+              </h2>
+            </div>
 
-          <label className="mt-5 flex cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed border-violet-200 bg-violet-50 px-6 py-10 text-center">
+            {fileName && (
+              <div className="rounded-full bg-slate-100 px-4 py-2 text-sm font-bold text-slate-600">
+                {fileName}
+              </div>
+            )}
+          </div>
+
+          <label className="mt-6 flex cursor-pointer items-center justify-center rounded-[28px] border-2 border-dashed border-violet-200 bg-violet-50 px-6 py-12 text-center transition hover:bg-violet-100">
             <input
               type="file"
               accept="application/pdf"
@@ -210,41 +257,64 @@ export default function KoreanSummaryPage() {
             />
 
             <div>
-              <p className="text-lg font-black text-violet-700">
-                {extracting
-                  ? "지문 분석 중..."
-                  : "국어 PDF 선택"}
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white text-3xl shadow-sm">
+                📄
+              </div>
+
+              <p className="mt-4 text-xl font-black text-violet-700">
+                {extracting ? "지문 분석 중..." : "국어 PDF 업로드"}
               </p>
 
-              {fileName && (
-                <p className="mt-2 text-sm font-medium text-slate-500">
-                  {fileName}
-                </p>
-              )}
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                비문학 / 설명문 / 비교 지문 등을 자동 분리해서
+                요약.ZIP으로 정리합니다.
+              </p>
             </div>
           </label>
         </section>
 
         {passages.length > 0 && (
-          <section className="mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-            <div className="flex items-center justify-between gap-4">
+          <section className="mt-8 rounded-[32px] bg-white p-7 shadow-sm ring-1 ring-slate-200">
+            <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <h2 className="text-xl font-black text-slate-900">
-                  2. 요약할 지문 선택
+                <p className="text-sm font-black tracking-[0.16em] text-violet-600">
+                  STEP 02
+                </p>
+
+                <h2 className="mt-1 text-2xl font-black text-slate-900">
+                  요약할 지문 선택
                 </h2>
 
-                <p className="mt-2 text-sm font-medium text-slate-500">
-                  이번 테스트에서는 두 개 지문을 선택해 보세요.
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  원하는 지문만 골라서 요약.ZIP을 만들 수 있습니다.
                 </p>
               </div>
 
-              <span className="rounded-full bg-violet-50 px-4 py-2 text-sm font-black text-violet-700">
-                {selectedIds.length}개 선택
-              </span>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={selectAllPassages}
+                  className="rounded-full border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-black text-violet-700"
+                >
+                  전체 선택
+                </button>
+
+                <button
+                  type="button"
+                  onClick={clearAllPassages}
+                  className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-600"
+                >
+                  전체 해제
+                </button>
+
+                <div className="rounded-full bg-slate-100 px-4 py-2 text-sm font-black text-slate-700">
+                  {selectedIds.length}개 선택
+                </div>
+              </div>
             </div>
 
-            <div className="mt-5 grid gap-4">
-              {passages.map((passage) => {
+            <div className="mt-6 grid gap-4">
+              {passages.map((passage, index) => {
                 const selected = selectedIds.includes(passage.id);
 
                 return (
@@ -252,30 +322,32 @@ export default function KoreanSummaryPage() {
                     key={passage.id}
                     type="button"
                     onClick={() => togglePassage(passage.id)}
-                    className={`rounded-2xl border p-5 text-left ${
+                    className={`rounded-[24px] border p-5 text-left transition ${
                       selected
-                        ? "border-violet-400 bg-violet-50"
-                        : "border-slate-200 bg-white"
+                        ? "border-violet-400 bg-violet-50 shadow-sm"
+                        : "border-slate-200 bg-white hover:border-violet-200 hover:bg-slate-50"
                     }`}
                   >
-                    <div className="flex gap-3">
+                    <div className="flex gap-4">
                       <div
-                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
+                        className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-black ${
                           selected
                             ? "bg-violet-600 text-white"
-                            : "border border-slate-300"
+                            : "border border-slate-300 bg-white text-slate-400"
                         }`}
                       >
-                        {selected ? "✓" : ""}
+                        {selected ? "✓" : index + 1}
                       </div>
 
-                      <div>
-                        <h3 className="font-black text-slate-900">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-lg font-black text-slate-900">
                           {passage.title}
                         </h3>
 
-                        <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-500">
-                          {passage.source}
+                        <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-500">
+                          {passage.source.length > 340
+                            ? `${passage.source.slice(0, 340)}...`
+                            : passage.source}
                         </p>
                       </div>
                     </div>
@@ -288,156 +360,218 @@ export default function KoreanSummaryPage() {
               type="button"
               onClick={makeSummary}
               disabled={generating || selectedIds.length === 0}
-              className="mt-6 w-full rounded-2xl bg-violet-600 px-6 py-4 text-lg font-black text-white disabled:opacity-40"
+              className="mt-7 w-full rounded-[22px] bg-violet-600 px-6 py-4 text-lg font-black text-white shadow-sm transition hover:bg-violet-700 disabled:opacity-40"
             >
               {generating
-                ? "요약.ZIP 만드는 중..."
+                ? "요약.ZIP 생성 중..."
                 : "선택 지문으로 요약.ZIP 만들기"}
             </button>
           </section>
         )}
 
         {results.length > 0 && (
-          <section className="mt-8 grid gap-8">
-            {results.map((result, index) => (
-              <article
-                key={`${result.passageId}-${index}`}
-                className="rounded-[32px] bg-white p-7 shadow-sm ring-1 ring-slate-200"
-              >
-                <p className="text-xs font-black tracking-[0.15em] text-violet-600">
-                  SUMMARY.ZIP {String(index + 1).padStart(2, "0")}
+          <section className="mt-10">
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black tracking-[0.16em] text-violet-600">
+                  STEP 03
                 </p>
 
-                <h2 className="mt-2 text-3xl font-black text-slate-900">
-                  {result.title}
+                <h2 className="mt-1 text-3xl font-black text-slate-900">
+                  비주얼 요약.ZIP 결과
                 </h2>
+              </div>
 
-                <div className="mt-5 rounded-2xl bg-violet-50 p-5">
-                  <p className="text-xs font-black text-violet-600">
-                    핵심 한 줄
-                  </p>
+              <div className="rounded-full bg-violet-100 px-4 py-2 text-sm font-black text-violet-700">
+                총 {results.length}개 생성
+              </div>
+            </div>
 
-                  <p className="mt-2 text-lg font-black leading-8 text-slate-900">
-                    {result.oneLine}
-                  </p>
-                </div>
+            <div className="grid gap-8">
+              {results.map((result, index) => {
+                const hasComparison =
+                  (result.comparisonHeaders?.length || 0) > 0 &&
+                  (result.comparisonRows?.length || 0) > 0;
 
-                <div className="mt-7">
-                  <h3 className="text-lg font-black text-slate-900">
-                    글의 흐름
-                  </h3>
+                return (
+                  <article
+                    key={`${result.passageId}-${index}`}
+                    className="overflow-hidden rounded-[36px] bg-white shadow-sm ring-1 ring-slate-200"
+                  >
+                    <div className="bg-gradient-to-r from-violet-600 via-fuchsia-500 to-pink-500 px-7 py-6 text-white">
+                      <p className="text-xs font-black tracking-[0.18em] text-white/80">
+                        SUMMARY.ZIP {String(index + 1).padStart(2, "0")}
+                      </p>
 
-                  <div className="mt-4 grid gap-3">
-                    {result.flow.map((item, i) => (
-                      <div
-                        key={i}
-                        className="rounded-2xl bg-slate-50 p-4"
-                      >
-                        <p className="font-black text-violet-700">
-                          {i + 1}. {item.label}
-                        </p>
+                      <h3 className="mt-2 text-3xl font-black leading-tight md:text-4xl">
+                        {result.title}
+                      </h3>
 
-                        <p className="mt-1 text-sm leading-6 text-slate-600">
-                          {item.content}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {result.concepts.length > 0 && (
-                  <div className="mt-7">
-                    <h3 className="text-lg font-black text-slate-900">
-                      핵심 개념
-                    </h3>
-
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      {result.concepts.map((concept, i) => (
-                        <div
-                          key={i}
-                          className="rounded-2xl border border-slate-200 p-4"
-                        >
-                          <p className="font-black text-slate-900">
-                            {concept.name}
-                          </p>
-
-                          <p className="mt-2 text-sm leading-6 text-slate-600">
-                            {concept.description}
-                          </p>
-                        </div>
-                      ))}
+                      <p className="mt-4 rounded-[22px] bg-white/15 px-5 py-4 text-base font-bold leading-7 text-white">
+                        {result.oneLine}
+                      </p>
                     </div>
-                  </div>
-                )}
 
-                {result.comparisonRows.length > 0 && (
-                  <div className="mt-7 overflow-x-auto">
-                    <h3 className="text-lg font-black text-slate-900">
-                      {result.comparisonTitle || "핵심 비교"}
-                    </h3>
+                    <div className="p-7">
+                      <section>
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-black tracking-[0.16em] text-violet-700">
+                            FLOW
+                          </span>
+                          <h4 className="text-xl font-black text-slate-900">
+                            글의 흐름
+                          </h4>
+                        </div>
 
-                    <table className="mt-4 w-full border-collapse text-sm">
-                      <thead>
-                        <tr>
-                          {result.comparisonHeaders.map((header) => (
-                            <th
-                              key={header}
-                              className="border border-violet-200 bg-violet-50 p-3 font-black"
+                        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                          {(result.flow || []).map((item, flowIndex) => (
+                            <div
+                              key={flowIndex}
+                              className="rounded-[24px] bg-slate-50 p-5"
                             >
-                              {header}
-                            </th>
+                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-600 text-lg font-black text-white">
+                                {flowIndex + 1}
+                              </div>
+
+                              <p className="mt-4 text-base font-black text-violet-700">
+                                {item.label}
+                              </p>
+
+                              <p className="mt-2 text-sm leading-7 text-slate-600">
+                                {item.content}
+                              </p>
+                            </div>
                           ))}
-                        </tr>
-                      </thead>
+                        </div>
+                      </section>
 
-                      <tbody>
-                        {result.comparisonRows.map((row, rowIndex) => (
-                          <tr key={rowIndex}>
-                            {row.map((cell, cellIndex) => (
-                              <td
-                                key={cellIndex}
-                                className="border border-slate-200 p-3 leading-6"
+                      {(result.concepts || []).length > 0 && (
+                        <section className="mt-9">
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-black tracking-[0.16em] text-sky-700">
+                              CONCEPT
+                            </span>
+                            <h4 className="text-xl font-black text-slate-900">
+                              핵심 개념
+                            </h4>
+                          </div>
+
+                          <div className="mt-5 grid gap-4 md:grid-cols-2">
+                            {(result.concepts || []).map((concept, conceptIndex) => (
+                              <div
+                                key={conceptIndex}
+                                className="rounded-[24px] border border-sky-100 bg-sky-50 p-5"
                               >
-                                {cell}
-                              </td>
+                                <p className="text-lg font-black text-slate-900">
+                                  {concept.name}
+                                </p>
+
+                                <p className="mt-3 text-sm leading-7 text-slate-600">
+                                  {concept.description}
+                                </p>
+                              </div>
                             ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                          </div>
+                        </section>
+                      )}
 
-                <div className="mt-7">
-                  <h3 className="text-lg font-black text-slate-900">
-                    시험 POINT
-                  </h3>
+                      {hasComparison && (
+                        <section className="mt-9">
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black tracking-[0.16em] text-amber-700">
+                              COMPARE
+                            </span>
+                            <h4 className="text-xl font-black text-slate-900">
+                              {result.comparisonTitle || "핵심 비교"}
+                            </h4>
+                          </div>
 
-                  <div className="mt-4 grid gap-2">
-                    {result.testPoints.map((point, i) => (
-                      <div
-                        key={i}
-                        className="rounded-xl bg-amber-50 px-4 py-3 text-sm font-bold leading-6"
-                      >
-                        {point}
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                          <div className="mt-5 overflow-x-auto rounded-[24px] border border-amber-100">
+                            <table className="w-full border-collapse text-sm">
+                              <thead>
+                                <tr>
+                                  {(result.comparisonHeaders || []).map((header) => (
+                                    <th
+                                      key={header}
+                                      className="border-b border-amber-100 bg-amber-50 px-4 py-3 text-left font-black text-slate-900"
+                                    >
+                                      {header}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
 
-                {result.caution && (
-                  <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 p-5">
-                    <p className="text-xs font-black text-rose-600">
-                      헷갈리기 쉬운 포인트
-                    </p>
+                              <tbody>
+                                {(result.comparisonRows || []).map((row, rowIndex) => (
+                                  <tr key={rowIndex}>
+                                    {row.map((cell, cellIndex) => (
+                                      <td
+                                        key={cellIndex}
+                                        className="border-b border-slate-100 px-4 py-3 leading-7 text-slate-600 last:border-b-0"
+                                      >
+                                        {cell}
+                                      </td>
+                                    ))}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </section>
+                      )}
 
-                    <p className="mt-2 text-sm font-bold leading-6 text-slate-700">
-                      {result.caution}
-                    </p>
-                  </div>
-                )}
-              </article>
-            ))}
+                      {(result.testPoints || []).length > 0 && (
+                        <section className="mt-9">
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-black tracking-[0.16em] text-rose-700">
+                              TEST POINT
+                            </span>
+                            <h4 className="text-xl font-black text-slate-900">
+                              시험 POINT
+                            </h4>
+                          </div>
+
+                          <div className="mt-5 grid gap-3">
+                            {(result.testPoints || []).map((point, pointIndex) => (
+                              <div
+                                key={pointIndex}
+                                className="flex gap-3 rounded-[20px] bg-rose-50 px-4 py-4"
+                              >
+                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-600 text-sm font-black text-white">
+                                  {pointIndex + 1}
+                                </div>
+
+                                <p className="text-sm font-bold leading-7 text-slate-700">
+                                  {point}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
+                      )}
+
+                      {result.caution && (
+                        <section className="mt-9">
+                          <div className="rounded-[26px] border border-slate-200 bg-slate-50 p-5">
+                            <p className="text-xs font-black tracking-[0.16em] text-slate-500">
+                              CAUTION
+                            </p>
+
+                            <h4 className="mt-2 text-lg font-black text-slate-900">
+                              헷갈리기 쉬운 포인트
+                            </h4>
+
+                            <p className="mt-3 text-sm leading-7 text-slate-600">
+                              {result.caution}
+                            </p>
+                          </div>
+                        </section>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
           </section>
         )}
       </div>
