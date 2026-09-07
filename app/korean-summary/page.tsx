@@ -27,71 +27,38 @@ type SummaryConcept = {
 
 type SummaryResult = {
   passageId: string;
-
   title: string;
-
   oneLine: string;
-
   visualPrompt?: string;
-
   visualImage?: string;
-
   flow: SummaryFlow[];
-
   concepts: SummaryConcept[];
-
   comparisonTitle: string;
-
   comparisonHeaders: string[];
-
   comparisonRows: string[][];
-
   testPoints: string[];
-
   caution: string;
 };
 
 export default function KoreanSummaryPage() {
-  const [fileName, setFileName] =
-    useState("");
+  const [fileName, setFileName] = useState("");
+  const [pdfText, setPdfText] = useState("");
 
-  const [pdfText, setPdfText] =
-    useState("");
+  const [passages, setPassages] = useState<Passage[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [results, setResults] = useState<SummaryResult[]>([]);
 
-  const [passages, setPassages] =
-    useState<Passage[]>([]);
+  const [loadingPdf, setLoadingPdf] = useState(false);
+  const [loadingPassages, setLoadingPassages] = useState(false);
+  const [loadingSummary, setLoadingSummary] = useState(false);
+  const [makingPdf, setMakingPdf] = useState(false);
 
-  const [selectedIds, setSelectedIds] =
-    useState<string[]>([]);
-
-  const [results, setResults] =
-    useState<SummaryResult[]>([]);
-
-  const [loadingPdf, setLoadingPdf] =
-    useState(false);
-
-  const [
-    loadingPassages,
-    setLoadingPassages,
-  ] = useState(false);
-
-  const [
-    loadingSummary,
-    setLoadingSummary,
-  ] = useState(false);
-
-  const [makingPdf, setMakingPdf] =
-    useState(false);
-
-  const [statusText, setStatusText] =
-    useState("");
-
-  const [errorMessage, setErrorMessage] =
-    useState("");
+  const [statusText, setStatusText] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
 
   /*
   ==================================================
-  PDF 텍스트 추출
+  PDF 읽기
   ==================================================
   */
 
@@ -99,9 +66,7 @@ export default function KoreanSummaryPage() {
     try {
       setLoadingPdf(true);
       setErrorMessage("");
-      setStatusText(
-        "PDF에서 지문을 읽는 중..."
-      );
+      setStatusText("PDF를 읽는 중...");
 
       setPdfText("");
       setPassages([]);
@@ -110,18 +75,13 @@ export default function KoreanSummaryPage() {
 
       setFileName(file.name);
 
-      const arrayBuffer =
-        await file.arrayBuffer();
+      const arrayBuffer = await file.arrayBuffer();
 
-      const loadingTask =
-        pdfjsLib.getDocument({
-          data: new Uint8Array(
-            arrayBuffer
-          ),
-        });
+      const loadingTask = pdfjsLib.getDocument({
+        data: new Uint8Array(arrayBuffer),
+      });
 
-      const pdf =
-        await loadingTask.promise;
+      const pdf = await loadingTask.promise;
 
       let fullText = "";
 
@@ -134,41 +94,39 @@ export default function KoreanSummaryPage() {
           `${pageNumber}/${pdf.numPages} 페이지 읽는 중...`
         );
 
-        const page =
-          await pdf.getPage(
-            pageNumber
-          );
+        const page = await pdf.getPage(pageNumber);
+        const content = await page.getTextContent();
 
-        const content =
-          await page.getTextContent();
+        const pageText = content.items
+          .map((item: any) => {
+            if ("str" in item) {
+              return item.str;
+            }
 
-        const pageText =
-          content.items
-            .map((item: any) => {
-              if (
-                "str" in item
-              ) {
-                return item.str;
-              }
+            return "";
+          })
+          .join(" ");
 
-              return "";
-            })
-            .join(" ");
+        fullText += `
 
-        fullText +=
-          `\n\n--- ${pageNumber}페이지 ---\n\n` +
-          pageText;
+--- ${pageNumber}페이지 ---
+
+${pageText}`;
       }
 
-      setPdfText(fullText);
+      const cleanedText = fullText.trim();
 
-      setStatusText(
-        "비문학 지문을 찾는 중..."
-      );
+      if (!cleanedText) {
+        throw new Error(
+          "PDF에서 텍스트를 읽지 못했습니다."
+        );
+      }
 
-      await extractPassages(
-        fullText
-      );
+      setPdfText(cleanedText);
+
+      setStatusText("비문학 지문을 찾는 중...");
+
+      await extractPassages(cleanedText);
     } catch (error: any) {
       console.error(
         "PDF READ ERROR:",
@@ -186,7 +144,9 @@ export default function KoreanSummaryPage() {
 
   /*
   ==================================================
-  지문 분리 API
+  지문 분리
+  중요:
+  API에는 pdfText 이름으로 보낸다.
   ==================================================
   */
 
@@ -197,25 +157,29 @@ export default function KoreanSummaryPage() {
       setLoadingPassages(true);
       setErrorMessage("");
 
-      const response =
-        await fetch(
-          "/api/korean-summary-passages",
-          {
-            method: "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-
-            body: JSON.stringify({
-              text,
-            }),
-          }
+      if (!text.trim()) {
+        throw new Error(
+          "분석할 텍스트가 없습니다."
         );
+      }
 
-      const data =
-        await response.json();
+      const response = await fetch(
+        "/api/korean-summary-passages",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify({
+            pdfText: text,
+          }),
+        }
+      );
+
+      const data = await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -225,17 +189,12 @@ export default function KoreanSummaryPage() {
         );
       }
 
-      const foundPassages:
-        Passage[] =
-        Array.isArray(
-          data?.passages
-        )
+      const foundPassages: Passage[] =
+        Array.isArray(data?.passages)
           ? data.passages
           : [];
 
-      setPassages(
-        foundPassages
-      );
+      setPassages(foundPassages);
 
       /*
       처음 두 지문 자동 선택
@@ -250,13 +209,12 @@ export default function KoreanSummaryPage() {
           )
       );
 
-      if (
-        foundPassages.length ===
-        0
-      ) {
+      if (foundPassages.length === 0) {
         setErrorMessage(
           "비문학 지문을 찾지 못했습니다."
         );
+
+        setStatusText("");
       } else {
         setStatusText(
           `${foundPassages.length}개 지문을 찾았습니다.`
@@ -273,9 +231,7 @@ export default function KoreanSummaryPage() {
           "지문을 찾는 중 오류가 발생했습니다."
       );
     } finally {
-      setLoadingPassages(
-        false
-      );
+      setLoadingPassages(false);
     }
   };
 
@@ -285,29 +241,29 @@ export default function KoreanSummaryPage() {
   ==================================================
   */
 
-  const handleFileChange =
-    async (
-      event: React.ChangeEvent<HTMLInputElement>
-    ) => {
-      const file =
-        event.target
-          .files?.[0];
+  const handleFileChange = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file =
+      event.target.files?.[0];
 
-      if (!file) return;
+    if (!file) return;
 
-      if (
-        file.type !==
-        "application/pdf"
-      ) {
-        alert(
-          "PDF 파일을 선택해줘."
-        );
+    if (
+      file.type !== "application/pdf" &&
+      !file.name
+        .toLowerCase()
+        .endsWith(".pdf")
+    ) {
+      alert(
+        "PDF 파일을 선택해줘."
+      );
 
-        return;
-      }
+      return;
+    }
 
-      await readPdf(file);
-    };
+    await readPdf(file);
+  };
 
   /*
   ==================================================
@@ -318,37 +274,24 @@ export default function KoreanSummaryPage() {
   const togglePassage = (
     id: string
   ) => {
-    setSelectedIds(
-      (prev) => {
-        if (
-          prev.includes(id)
-        ) {
-          return prev.filter(
-            (item) =>
-              item !== id
-          );
-        }
-
-        /*
-        지금은 최대 2개
-        */
-
-        if (
-          prev.length >= 2
-        ) {
-          alert(
-            "이번에는 지문 2개까지만 선택하자."
-          );
-
-          return prev;
-        }
-
-        return [
-          ...prev,
-          id,
-        ];
+    setSelectedIds((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter(
+          (item) =>
+            item !== id
+        );
       }
-    );
+
+      if (prev.length >= 2) {
+        alert(
+          "이번에는 지문 2개까지만 선택할 수 있어."
+        );
+
+        return prev;
+      }
+
+      return [...prev, id];
+    });
   };
 
   /*
@@ -357,259 +300,216 @@ export default function KoreanSummaryPage() {
   ==================================================
   */
 
-  const requestVisualImage =
-    async (
-      summary: SummaryResult
-    ): Promise<string> => {
-      const response =
-        await fetch(
-          "/api/korean-summary-visual",
-          {
-            method: "POST",
+  const requestVisualImage = async (
+    summary: SummaryResult
+  ): Promise<string> => {
+    const response = await fetch(
+      "/api/korean-summary-visual",
+      {
+        method: "POST",
 
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
 
-            body:
-              JSON.stringify({
-                title:
-                  summary.title,
+        body: JSON.stringify({
+          title:
+            summary.title,
 
-                oneLine:
-                  summary.oneLine,
+          oneLine:
+            summary.oneLine,
 
-                visualPrompt:
-                  summary.visualPrompt,
+          visualPrompt:
+            summary.visualPrompt,
 
-                flow:
-                  summary.flow,
+          flow:
+            summary.flow,
 
-                concepts:
-                  summary.concepts,
+          concepts:
+            summary.concepts,
 
-                comparisonTitle:
-                  summary.comparisonTitle,
+          comparisonTitle:
+            summary.comparisonTitle,
 
-                comparisonHeaders:
-                  summary.comparisonHeaders,
+          comparisonHeaders:
+            summary.comparisonHeaders,
 
-                comparisonRows:
-                  summary.comparisonRows,
+          comparisonRows:
+            summary.comparisonRows,
 
-                testPoints:
-                  summary.testPoints,
+          testPoints:
+            summary.testPoints,
 
-                caution:
-                  summary.caution,
-              }),
-          }
-        );
+          caution:
+            summary.caution,
+        }),
+      }
+    );
 
-      const data =
-        await response.json();
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data?.detail ||
+          data?.error ||
+          "비주얼 요약 이미지 생성에 실패했습니다."
+      );
+    }
+
+    if (!data?.imageUrl) {
+      throw new Error(
+        "생성된 비주얼 이미지가 없습니다."
+      );
+    }
+
+    return data.imageUrl;
+  };
+
+  /*
+  ==================================================
+  요약 생성
+  ==================================================
+  */
+
+  const makeSummary = async () => {
+    const selectedPassages =
+      passages.filter(
+        (passage) =>
+          selectedIds.includes(
+            passage.id
+          )
+      );
+
+    if (
+      selectedPassages.length === 0
+    ) {
+      alert(
+        "먼저 지문을 선택해줘."
+      );
+
+      return;
+    }
+
+    try {
+      setLoadingSummary(true);
+      setErrorMessage("");
+      setResults([]);
+
+      setStatusText(
+        "국어 요약.ZIP 내용을 만드는 중..."
+      );
+
+      /*
+      1. 텍스트 요약
+      */
+
+      const response = await fetch(
+        "/api/korean-summary-generate",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify({
+            passages:
+              selectedPassages,
+          }),
+        }
+      );
+
+      const data = await response.json();
 
       if (!response.ok) {
         throw new Error(
           data?.detail ||
             data?.error ||
-            "비주얼 요약 이미지 생성에 실패했습니다."
+            "국어 요약 생성에 실패했습니다."
         );
       }
 
-      if (
-        !data?.imageUrl
-      ) {
+      const summaries: SummaryResult[] =
+        Array.isArray(data?.summaries)
+          ? data.summaries
+          : [];
+
+      if (summaries.length === 0) {
         throw new Error(
-          "생성된 비주얼 이미지가 없습니다."
+          "생성된 요약 결과가 없습니다."
         );
       }
 
-      return data.imageUrl;
-    };
+      setResults(summaries);
 
-  /*
-  ==================================================
-  요약 + 비주얼 생성
-  ==================================================
-  */
+      /*
+      2. 비주얼 생성
+      */
 
-  const makeSummary =
-    async () => {
-      const selectedPassages =
-        passages.filter(
-          (passage) =>
-            selectedIds.includes(
-              passage.id
-            )
-        );
+      const completed: SummaryResult[] = [];
 
-      if (
-        selectedPassages.length ===
-        0
+      for (
+        let index = 0;
+        index < summaries.length;
+        index++
       ) {
-        alert(
-          "먼저 지문을 선택해줘."
-        );
-
-        return;
-      }
-
-      try {
-        setLoadingSummary(true);
-        setErrorMessage("");
-        setResults([]);
+        const summary =
+          summaries[index];
 
         setStatusText(
-          "국어 요약.ZIP 내용을 만드는 중..."
+          `${index + 1}/${summaries.length} 비주얼 요약 생성 중...`
         );
 
-        /*
-        1단계
-        텍스트 요약
-        */
-
-        const response =
-          await fetch(
-            "/api/korean-summary-generate",
-            {
-              method: "POST",
-
-              headers: {
-                "Content-Type":
-                  "application/json",
-              },
-
-              body:
-                JSON.stringify({
-                  passages:
-                    selectedPassages,
-                }),
-            }
-          );
-
-        const data =
-          await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data?.detail ||
-              data?.error ||
-              "국어 요약 생성에 실패했습니다."
-          );
-        }
-
-        const summaries:
-          SummaryResult[] =
-          Array.isArray(
-            data?.summaries
-          )
-            ? data.summaries
-            : [];
-
-        if (
-          summaries.length ===
-          0
-        ) {
-          throw new Error(
-            "생성된 요약 결과가 없습니다."
-          );
-        }
-
-        /*
-        텍스트 결과 먼저 표시
-        */
-
-        setResults(
-          summaries
-        );
-
-        /*
-        2단계
-        각 지문 비주얼 생성
-        */
-
-        const completed:
-          SummaryResult[] =
-          [];
-
-        for (
-          let index = 0;
-          index <
-          summaries.length;
-          index++
-        ) {
-          const summary =
-            summaries[index];
-
-          setStatusText(
-            `${index + 1}/${summaries.length} 비주얼 요약 생성 중...`
-          );
-
-          try {
-            const image =
-              await requestVisualImage(
-                summary
-              );
-
-            completed.push({
-              ...summary,
-
-              visualImage:
-                image,
-            });
-          } catch (
-            imageError
-          ) {
-            console.error(
-              "VISUAL IMAGE ERROR:",
-              imageError
+        try {
+          const image =
+            await requestVisualImage(
+              summary
             );
 
-            completed.push({
-              ...summary,
-            });
-          }
+          completed.push({
+            ...summary,
+            visualImage: image,
+          });
+        } catch (imageError) {
+          console.error(
+            "VISUAL IMAGE ERROR:",
+            imageError
+          );
 
-          /*
-          한 장 끝날 때마다 화면 갱신
-          */
-
-          setResults([
-            ...completed,
-
-            ...summaries.slice(
-              completed.length
-            ),
-          ]);
+          completed.push({
+            ...summary,
+          });
         }
 
-        setResults(
-          completed
-        );
-
-        setStatusText(
-          "두 지문 비주얼 요약 생성 완료!"
-        );
-      } catch (
-        error: any
-      ) {
-        console.error(
-          "SUMMARY ERROR:",
-          error
-        );
-
-        setErrorMessage(
-          error?.message ||
-            "국어 요약.ZIP 생성 중 오류가 발생했습니다."
-        );
-      } finally {
-        setLoadingSummary(
-          false
-        );
+        setResults([
+          ...completed,
+          ...summaries.slice(
+            completed.length
+          ),
+        ]);
       }
-    };
+
+      setResults(completed);
+
+      setStatusText(
+        `${completed.length}개 지문 비주얼 요약 완료!`
+      );
+    } catch (error: any) {
+      console.error(
+        "SUMMARY ERROR:",
+        error
+      );
+
+      setErrorMessage(
+        error?.message ||
+          "국어 요약.ZIP 생성 중 오류가 발생했습니다."
+      );
+    } finally {
+      setLoadingSummary(false);
+    }
+  };
 
   /*
   ==================================================
@@ -621,26 +521,19 @@ export default function KoreanSummaryPage() {
     src: string
   ) =>
     new Promise<HTMLImageElement>(
-      (
-        resolve,
-        reject
-      ) => {
+      (resolve, reject) => {
         const image =
           new Image();
 
-        image.onload =
-          () =>
-            resolve(
-              image
-            );
+        image.onload = () =>
+          resolve(image);
 
-        image.onerror =
-          () =>
-            reject(
-              new Error(
-                "PDF에 넣을 이미지를 불러오지 못했습니다."
-              )
-            );
+        image.onerror = () =>
+          reject(
+            new Error(
+              "PDF에 넣을 이미지를 불러오지 못했습니다."
+            )
+          );
 
         image.src = src;
       }
@@ -648,7 +541,7 @@ export default function KoreanSummaryPage() {
 
   /*
   ==================================================
-  2지문 PDF 다운로드
+  PDF 다운로드
   ==================================================
   */
 
@@ -665,8 +558,7 @@ export default function KoreanSummaryPage() {
         );
 
       if (
-        imageResults.length ===
-        0
+        imageResults.length === 0
       ) {
         alert(
           "먼저 비주얼 요약을 생성해줘."
@@ -680,7 +572,7 @@ export default function KoreanSummaryPage() {
         selectedIds.length
       ) {
         alert(
-          "아직 모든 비주얼 이미지가 생성되지 않았어."
+          "아직 모든 비주얼 요약 이미지가 완성되지 않았어."
         );
 
         return;
@@ -691,12 +583,8 @@ export default function KoreanSummaryPage() {
         setErrorMessage("");
 
         setStatusText(
-          "PDF를 만드는 중..."
+          "PDF 만드는 중..."
         );
-
-        /*
-        A4 가로
-        */
 
         const pdf =
           new jsPDF({
@@ -715,11 +603,6 @@ export default function KoreanSummaryPage() {
 
         const pageHeight =
           pdf.internal.pageSize.getHeight();
-
-        /*
-        이미지가 페이지 끝에 딱 붙지 않게
-        약간 여백
-        */
 
         const margin = 4;
 
@@ -740,9 +623,7 @@ export default function KoreanSummaryPage() {
           const item =
             imageResults[index];
 
-          if (
-            index > 0
-          ) {
+          if (index > 0) {
             pdf.addPage(
               "a4",
               "landscape"
@@ -770,10 +651,6 @@ export default function KoreanSummaryPage() {
 
           let drawHeight =
             availableHeight;
-
-          /*
-          원본 비율 유지
-          */
 
           if (
             imageRatio >
@@ -804,10 +681,6 @@ export default function KoreanSummaryPage() {
               drawHeight) /
             2;
 
-          /*
-          배경 흰색
-          */
-
           pdf.setFillColor(
             255,
             255,
@@ -834,10 +707,6 @@ export default function KoreanSummaryPage() {
           );
         }
 
-        /*
-        파일명
-        */
-
         const safeName =
           fileName
             .replace(
@@ -857,9 +726,7 @@ export default function KoreanSummaryPage() {
         setStatusText(
           `${imageResults.length}페이지 PDF 다운로드 완료!`
         );
-      } catch (
-        error: any
-      ) {
+      } catch (error: any) {
         console.error(
           "PDF ERROR:",
           error
@@ -874,12 +741,6 @@ export default function KoreanSummaryPage() {
       }
     };
 
-  /*
-  ==================================================
-  UI
-  ==================================================
-  */
-
   const completedImageCount =
     results.filter(
       (item) =>
@@ -888,9 +749,16 @@ export default function KoreanSummaryPage() {
         )
     ).length;
 
+  /*
+  ==================================================
+  화면
+  ==================================================
+  */
+
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-10">
       <div className="mx-auto max-w-7xl">
+
         {/* HEADER */}
 
         <div className="flex flex-wrap items-start justify-between gap-5">
@@ -904,13 +772,13 @@ export default function KoreanSummaryPage() {
             </h1>
 
             <p className="mt-3 text-slate-600">
-              고등 국어 비문학 지문을 한눈에 보는
-              비주얼 요약집으로 만들어줘.
+              고등 국어 비문학 지문을
+              한눈에 보는 비주얼
+              요약집으로 만들어줘.
             </p>
           </div>
 
-          {results.length >
-            0 && (
+          {results.length > 0 && (
             <button
               type="button"
               onClick={
@@ -922,7 +790,7 @@ export default function KoreanSummaryPage() {
                 completedImageCount ===
                   0
               }
-              className="rounded-2xl bg-slate-900 px-7 py-4 text-base font-black text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="rounded-2xl bg-slate-900 px-7 py-4 text-base font-black text-white shadow-lg transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               {makingPdf
                 ? "PDF 만드는 중..."
@@ -931,7 +799,7 @@ export default function KoreanSummaryPage() {
           )}
         </div>
 
-        {/* UPLOAD */}
+        {/* STEP 1 */}
 
         <section className="mt-8 rounded-3xl bg-white p-7 shadow-sm ring-1 ring-slate-200">
           <p className="text-sm font-black text-blue-600">
@@ -949,8 +817,9 @@ export default function KoreanSummaryPage() {
               </p>
 
               <p className="mt-2 text-sm text-slate-500">
-                국어 시험지 PDF를 올리면 비문학 지문을
-                자동으로 분리합니다.
+                시험지를 올리면
+                비문학 지문을 자동으로
+                찾습니다.
               </p>
 
               {fileName && (
@@ -962,7 +831,7 @@ export default function KoreanSummaryPage() {
 
             <input
               type="file"
-              accept="application/pdf"
+              accept=".pdf,application/pdf"
               className="hidden"
               onChange={
                 handleFileChange
@@ -978,10 +847,9 @@ export default function KoreanSummaryPage() {
           )}
         </section>
 
-        {/* PASSAGES */}
+        {/* STEP 2 */}
 
-        {passages.length >
-          0 && (
+        {passages.length > 0 && (
           <section className="mt-8 rounded-3xl bg-white p-7 shadow-sm ring-1 ring-slate-200">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
@@ -990,11 +858,12 @@ export default function KoreanSummaryPage() {
                 </p>
 
                 <h2 className="mt-2 text-2xl font-black text-slate-900">
-                  요약할 지문 2개 선택
+                  요약할 지문 선택
                 </h2>
 
                 <p className="mt-2 text-sm text-slate-500">
-                  최대 2개까지 선택할 수 있어.
+                  이번에는 최대
+                  2개까지 선택.
                 </p>
               </div>
 
@@ -1042,8 +911,7 @@ export default function KoreanSummaryPage() {
                             }`}
                           >
                             지문{" "}
-                            {index +
-                              1}
+                            {index + 1}
                           </p>
 
                           <h3 className="mt-2 text-xl font-black">
@@ -1085,9 +953,7 @@ export default function KoreanSummaryPage() {
 
             <button
               type="button"
-              onClick={
-                makeSummary
-              }
+              onClick={makeSummary}
               disabled={
                 loadingSummary ||
                 selectedIds.length ===
@@ -1111,11 +977,11 @@ export default function KoreanSummaryPage() {
           </div>
         )}
 
-        {/* RESULTS */}
+        {/* RESULT */}
 
-        {results.length >
-          0 && (
+        {results.length > 0 && (
           <section className="mt-10">
+
             <div className="flex flex-wrap items-center justify-between gap-5">
               <div>
                 <p className="text-sm font-black text-emerald-600">
@@ -1162,33 +1028,19 @@ export default function KoreanSummaryPage() {
                     key={`${result.passageId}-${index}`}
                     className="overflow-hidden rounded-3xl bg-white shadow-lg ring-1 ring-slate-200"
                   >
-                    <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 px-7 py-6">
-                      <div>
-                        <p className="text-xs font-black tracking-widest text-emerald-600">
-                          VISUAL
-                          SUMMARY{" "}
-                          {index +
-                            1}
-                        </p>
+                    <div className="border-b border-slate-100 px-7 py-6">
+                      <p className="text-xs font-black tracking-widest text-emerald-600">
+                        VISUAL SUMMARY{" "}
+                        {index + 1}
+                      </p>
 
-                        <h3 className="mt-2 text-2xl font-black text-slate-900">
-                          {
-                            result.title
-                          }
-                        </h3>
+                      <h3 className="mt-2 text-2xl font-black text-slate-900">
+                        {result.title}
+                      </h3>
 
-                        <p className="mt-2 text-sm font-medium text-slate-500">
-                          {
-                            result.oneLine
-                          }
-                        </p>
-                      </div>
-
-                      {result.visualImage && (
-                        <span className="rounded-full bg-emerald-100 px-4 py-2 text-xs font-black text-emerald-700">
-                          이미지 완료
-                        </span>
-                      )}
+                      <p className="mt-2 text-sm text-slate-500">
+                        {result.oneLine}
+                      </p>
                     </div>
 
                     {result.visualImage ? (
@@ -1204,23 +1056,17 @@ export default function KoreanSummaryPage() {
                         />
                       </div>
                     ) : loadingSummary ? (
-                      <div className="flex min-h-[380px] items-center justify-center bg-slate-50 p-8">
-                        <div className="text-center">
-                          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-emerald-600" />
-
-                          <p className="mt-4 font-black text-slate-700">
-                            비주얼
-                            요약 생성
-                            중...
-                          </p>
-                        </div>
+                      <div className="flex min-h-[360px] items-center justify-center bg-slate-50">
+                        <p className="font-black text-slate-600">
+                          비주얼 요약
+                          생성 중...
+                        </p>
                       </div>
                     ) : (
-                      <div className="flex min-h-[260px] items-center justify-center bg-red-50 p-8">
+                      <div className="flex min-h-[220px] items-center justify-center bg-red-50">
                         <p className="font-bold text-red-600">
                           이미지 생성에
                           실패했습니다.
-                          다시 생성해줘.
                         </p>
                       </div>
                     )}
@@ -1229,9 +1075,7 @@ export default function KoreanSummaryPage() {
               )}
             </div>
 
-            {/* BOTTOM PDF BUTTON */}
-
-            <div className="mt-10 rounded-3xl bg-slate-900 p-7 text-white shadow-xl">
+            <div className="mt-10 rounded-3xl bg-slate-900 p-7 text-white">
               <div className="flex flex-wrap items-center justify-between gap-5">
                 <div>
                   <p className="text-sm font-black text-emerald-300">
@@ -1242,12 +1086,6 @@ export default function KoreanSummaryPage() {
                     두 지문을 한
                     PDF로 저장
                   </h3>
-
-                  <p className="mt-2 text-sm text-slate-300">
-                    이미지 한 장당
-                    A4 가로 1페이지로
-                    들어갑니다.
-                  </p>
                 </div>
 
                 <button
@@ -1261,7 +1099,7 @@ export default function KoreanSummaryPage() {
                     completedImageCount ===
                       0
                   }
-                  className="rounded-2xl bg-emerald-500 px-8 py-5 text-lg font-black text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-slate-600"
+                  className="rounded-2xl bg-emerald-500 px-8 py-5 text-lg font-black text-white transition hover:bg-emerald-400 disabled:bg-slate-600"
                 >
                   {makingPdf
                     ? "PDF 만드는 중..."
@@ -1270,14 +1108,6 @@ export default function KoreanSummaryPage() {
               </div>
             </div>
           </section>
-        )}
-
-        {/* DEBUG TEXT 숨김용 */}
-
-        {false && (
-          <pre>
-            {pdfText}
-          </pre>
         )}
       </div>
     </main>
