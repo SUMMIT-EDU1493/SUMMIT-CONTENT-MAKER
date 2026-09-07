@@ -92,6 +92,17 @@ function numberValue(
   return parsed;
 }
 
+function clamp(
+  value: number,
+  min: number,
+  max: number
+) {
+  return Math.max(
+    min,
+    Math.min(max, value)
+  );
+}
+
 function parseBBox(
   value: unknown
 ): BoundingBox | null {
@@ -103,21 +114,13 @@ function parseBBox(
   }
 
   const box =
-    value as Record<
-      string,
-      unknown
-    >;
+    value as Record<string, unknown>;
 
-  const x =
-    numberValue(box.x);
-
-  const y =
-    numberValue(box.y);
-
-  const width =
+  let x = numberValue(box.x);
+  let y = numberValue(box.y);
+  let width =
     numberValue(box.width);
-
-  const height =
+  let height =
     numberValue(box.height);
 
   if (
@@ -127,27 +130,256 @@ function parseBBox(
     return null;
   }
 
+  x = clamp(x, 0, 1000);
+  y = clamp(y, 0, 1000);
+
+  width = clamp(
+    width,
+    1,
+    1000 - x
+  );
+
+  height = clamp(
+    height,
+    1,
+    1000 - y
+  );
+
   return {
-    x: Math.max(
-      0,
-      Math.min(1000, x)
-    ),
-
-    y: Math.max(
-      0,
-      Math.min(1000, y)
-    ),
-
-    width: Math.max(
-      1,
-      Math.min(1000, width)
-    ),
-
-    height: Math.max(
-      1,
-      Math.min(1000, height)
-    ),
+    x,
+    y,
+    width,
+    height,
   };
+}
+
+function parseJsonOutput(
+  output: string
+) {
+  const cleaned =
+    output
+      .replace(
+        /^```json\s*/i,
+        ""
+      )
+      .replace(
+        /^```\s*/i,
+        ""
+      )
+      .replace(
+        /```$/i,
+        ""
+      )
+      .trim();
+
+  return JSON.parse(cleaned);
+}
+
+async function refineAttachmentBBox({
+  openai,
+  pageImage,
+  questionNumber,
+  attachmentType,
+  placement,
+  description,
+}: {
+  openai: OpenAI;
+  pageImage: PageImage;
+  questionNumber: string;
+  attachmentType: QuestionAttachment["type"];
+  placement: QuestionAttachment["placement"];
+  description: string;
+}): Promise<BoundingBox | null> {
+  const prompt = `
+당신은 대한민국 국어 모의고사 PDF의
+"시각 자료 크롭 영역"만 매우 정밀하게 찾는 작업을 합니다.
+
+아래 이미지는 시험지 한 페이지입니다.
+
+찾아야 할 대상:
+
+문항 번호: ${questionNumber}
+자료 종류: ${attachmentType}
+자료 위치: ${placement}
+자료 설명: ${description}
+
+==================================================
+목표
+==================================================
+
+이 문제에 속한 시각 자료 하나만
+정확히 잘라낼 수 있는 최소 크기의 사각형을 찾으십시오.
+
+예:
+
+- 표
+- 그래프
+- 도식
+- 그림
+- 사진
+- 표 형태의 <보기>
+- 그림이 들어간 <보기>
+- 표 형태 선택지
+
+==================================================
+절대 포함하면 안 되는 것
+==================================================
+
+매우 중요합니다.
+
+크롭 영역에 아래 내용이 딸려 들어오면 실패입니다.
+
+- 바로 위 문항의 선택지
+- 이전 문항
+- 다음 문항
+- 현재 문제의 발문
+- 현재 문제의 일반 텍스트 선택지
+- 페이지 번호
+- 큰 빈 여백
+- 다른 문제의 <보기>
+- 다른 문제의 그림이나 표
+
+==================================================
+<보기> 자료
+==================================================
+
+placement가 bogi일 경우:
+
+<보기> 안에 있는
+표·그래프·그림·도식 자체만 찾으십시오.
+
+단,
+
+<보기>의 테두리 자체가 자료 구성에 반드시 필요하다면
+그 테두리까지 포함할 수 있습니다.
+
+그러나 보기 위의 발문이나
+보기 아래의 선택지는 포함하지 마십시오.
+
+==================================================
+표
+==================================================
+
+표인 경우:
+
+표의 가장 왼쪽 선부터
+가장 오른쪽 선까지,
+
+표의 가장 위쪽 선부터
+가장 아래쪽 선까지
+
+포함하십시오.
+
+표의 맨 위 제목이나 단위 표시가
+표 해석에 꼭 필요하면 포함하십시오.
+
+그러나 문제 발문은 제외하십시오.
+
+==================================================
+그림 / 도식
+==================================================
+
+그림이나 도식은
+그림의 모든 부분이 잘리지 않도록 하십시오.
+
+위나 아래가 조금이라도 잘리면 안 됩니다.
+
+==================================================
+여백
+==================================================
+
+대상을 정확히 찾은 뒤
+사방에 약간의 안전 여백만 포함하십시오.
+
+권장:
+
+좌우 약 8~15px 수준
+위아래 약 8~15px 수준
+
+너무 넓게 잡지 마십시오.
+
+==================================================
+좌표
+==================================================
+
+페이지 전체를 0~1000 좌표로 봅니다.
+
+왼쪽 위:
+x=0
+y=0
+
+오른쪽 아래:
+x=1000
+y=1000
+
+반드시 JSON만 반환하십시오.
+
+{
+  "bbox": {
+    "x": 100,
+    "y": 300,
+    "width": 600,
+    "height": 250
+  }
+}
+
+찾을 수 없으면:
+
+{
+  "bbox": null
+}
+`;
+
+  const result =
+    await openai.responses.create({
+      model: "gpt-5-mini",
+
+      input: [
+        {
+          role: "user",
+
+          content: [
+            {
+              type: "input_text",
+              text: prompt,
+            },
+
+            {
+              type: "input_image",
+              image_url:
+                pageImage.imageUrl,
+              detail: "high",
+            },
+          ],
+        },
+      ],
+    });
+
+  const output =
+    result.output_text?.trim() ??
+    "";
+
+  if (!output) {
+    return null;
+  }
+
+  try {
+    const parsed =
+      parseJsonOutput(
+        output
+      );
+
+    return parseBBox(
+      parsed?.bbox
+    );
+  } catch (error) {
+    console.error(
+      "BBOX REFINE ERROR:",
+      error
+    );
+
+    return null;
+  }
 }
 
 export async function POST(
@@ -172,12 +404,6 @@ export async function POST(
     const body =
       await request.json();
 
-    /*
-    ==================================================
-    TEXT
-    ==================================================
-    */
-
     const rawText =
       body?.text ??
       body?.pdfText ??
@@ -186,15 +412,10 @@ export async function POST(
       "";
 
     const text =
-      typeof rawText === "string"
+      typeof rawText ===
+      "string"
         ? rawText.trim()
         : "";
-
-    /*
-    ==================================================
-    PAGE IMAGES
-    ==================================================
-    */
 
     const rawPageImages: unknown[] =
       Array.isArray(
@@ -243,16 +464,6 @@ export async function POST(
             )
         );
 
-    console.log(
-      "TWIN TEXT LENGTH:",
-      text.length
-    );
-
-    console.log(
-      "TWIN PAGE IMAGES:",
-      pageImages.length
-    );
-
     if (!text) {
       return Response.json(
         {
@@ -284,61 +495,23 @@ export async function POST(
         apiKey,
       });
 
-    /*
-    ==================================================
-    PROMPT
-    ==================================================
-    */
-
     const prompt = `
 당신은 대한민국 수능 및 전국연합학력평가
-국어 시험지의 문제 내용과 편집 형식을 함께 분석하는
-전문 국어 출제자입니다.
+국어 시험지를 분석하는 전문 출제자입니다.
 
-입력 자료는 두 종류입니다.
+입력:
 
-1. PDF에서 추출한 시험지 전체 텍스트
-2. 실제 시험지 PDF 각 페이지의 이미지
+1. PDF 전체 텍스트
+2. PDF 페이지 이미지
 
-반드시 둘을 함께 사용하십시오.
+이번 단계에서는
+비문학 지문과 해당 문제를 추출하고,
+원본 시각 형식을 분석합니다.
 
-이 작업의 목적은
-쌍둥이 문제 제작 전에
-
-"원본 모의고사의 내용 구조와 시각 형식을
-정확하게 보존한 데이터"
-
-를 만드는 것입니다.
-
-새 문제는 절대로 만들지 마십시오.
+새 문제는 절대 만들지 마십시오.
 
 ==================================================
-가장 중요한 원칙
-==================================================
-
-PDF 텍스트 추출 과정에서는 다음 정보가
-사라질 수 있습니다.
-
-- 밑줄
-- 표
-- 그래프
-- 도식
-- 그림
-- <보기> 박스
-- 표 형태의 선택지
-- (가), (나)의 시각적 범위
-- ⓐ, ⓑ 등의 실제 강조
-- 문단 및 여백 구조
-
-이러한 정보는 반드시
-함께 제공된 실제 페이지 이미지를 확인해서
-판단하십시오.
-
-텍스트만 보고 존재하지 않는 형식을
-임의로 추측하지 마십시오.
-
-==================================================
-비문학 지문
+비문학
 ==================================================
 
 사회
@@ -353,31 +526,27 @@ PDF 텍스트 추출 과정에서는 다음 정보가
 설명문
 논설문
 
-등의 독립적인 비문학 지문을 추출하십시오.
+등을 우선합니다.
 
-각 지문에 딸린 문제를 정확하게 연결하십시오.
-
-문학은 비문학이 충분히 존재하는 경우
-기본적으로 제외합니다.
+문학 작품은 기본적으로 제외합니다.
 
 ==================================================
 SOURCE
 ==================================================
 
-source에는 실제 지문 원문을 넣습니다.
+source에는 실제 지문 원문만 넣습니다.
 
-삭제:
+다음은 삭제:
 
 - 문제 번호
 - 선택지
-- 시험 안내문
+- 시험 안내
 - 페이지 번호
-- 머리말
 - 인쇄 정보
 
-보존:
+다음은 보존:
 
-- 문단 구분
+- 문단
 - (가)
 - (나)
 - (다)
@@ -388,17 +557,13 @@ source에는 실제 지문 원문을 넣습니다.
 - 각주
 - 문제 풀이에 필요한 표식
 
-문단 사이는 가능하면
-\\n\\n 으로 구분하십시오.
-
-원문을 요약하거나 바꾸지 마십시오.
+지문을 요약하지 마십시오.
 
 ==================================================
 MARKERS
 ==================================================
 
-문제가 직접 참조하는 지문 표시를
-markers에 기록합니다.
+문제가 직접 참조하는 표시를 분석합니다.
 
 kind:
 
@@ -409,58 +574,40 @@ quoted
 other
 
 --------------------------------------------------
-SECTION
+(가), (나)
 --------------------------------------------------
 
-(가), (나), (다)처럼
-지문의 일정 범위를 가리키는 경우입니다.
-
-예를 들어
-
-(가) 첫 문장
-두 번째 문장
-세 번째 문장
-
-(나) 첫 문장
-
-이라면
-
 (가)의 marker.text에는
-(가) 시작부터 (나) 직전까지의
-실제 전체 원문을 넣으십시오.
-
-단순히 "(가)"만 넣으면 안 됩니다.
+(가) 시작부터 다음 구간 시작 직전까지의
+실제 전체 원문을 넣습니다.
 
 예:
 
 {
   "label": "(가)",
-  "text": "(가) 첫 문장 ... 마지막 문장",
+  "text": "(가) 전체 범위 원문",
   "kind": "section"
 }
 
 --------------------------------------------------
-UNDERLINE
+밑줄
 --------------------------------------------------
 
-실제 페이지 이미지에서 밑줄이 확인되는
-어절, 구, 문장의 정확한 원문을 기록합니다.
+페이지 이미지에서 실제 밑줄이 확인되면
+정확한 원문을 기록합니다.
 
 {
   "label": "밑줄",
-  "text": "실제로 밑줄 친 정확한 표현",
+  "text": "실제로 밑줄 친 원문",
   "kind": "underline"
 }
 
-밑줄이 이미지에서 보이지 않는다면
-억지로 만들어내지 마십시오.
+밑줄이 명확하지 않으면
+만들어내지 마십시오.
 
 --------------------------------------------------
-SYMBOL
+ⓐ
 --------------------------------------------------
-
-ⓐ, ⓑ 등의 기호가 특정 표현을
-가리키는 경우:
 
 {
   "label": "ⓐ",
@@ -469,161 +616,98 @@ SYMBOL
 }
 
 ==================================================
-표 / 그래프 / 도식 / 그림
+QUESTIONS
 ==================================================
 
-원본 페이지 이미지에서 다음 자료가 보이면
-줄글로 풀지 마십시오.
+각 문제마다:
 
-- 표
-- 그래프
-- 차트
-- 도식
-- 그림
-- 좌표
-- 데이터 박스
-- 표 형태의 <보기>
-- 표 형태의 선택지
-
-해당 시각자료는 attachments에 넣습니다.
-
-==================================================
-BBOX
-==================================================
-
-시각자료의 위치는
-페이지 전체를 기준으로
-
-왼쪽 위:
-x=0
-y=0
-
-오른쪽 아래:
-x=1000
-y=1000
-
-좌표계로 반환하십시오.
-
-예:
-
-{
-  "x": 180,
-  "y": 420,
-  "width": 580,
-  "height": 220
-}
-
-중요:
-
-bbox에는 가능하면
-시각자료 자체만 포함하십시오.
-
-다른 문제의 번호나 발문,
-선택지까지 함께 들어가지 않도록 합니다.
-
-==================================================
-PLACEMENT
-==================================================
-
-attachment가 위치하는 영역도 판단합니다.
-
-passage
-- 지문 속 자료
-
-question
-- 발문과 연결된 자료
-
+number
+stem
 bogi
-- <보기> 내부 자료
+choices
+attachments
 
-choice
-- 선택지 자체가 표나 그림인 경우
+를 추출합니다.
 
 ==================================================
 <보기>
 ==================================================
 
-<보기>의 본문은 bogi에 넣습니다.
+bogi에는
+<보기>의 텍스트 본문만 넣습니다.
 
-bogi에는 "<보기>"라는 제목을
-반복해서 넣지 마십시오.
+"<보기>"라는 제목은 넣지 않습니다.
 
-보기의 문단과 줄바꿈은
-가능하면 보존하십시오.
-
-<보기> 안에 표/그래프/도식이 있다면
-그 부분을 줄글로 변환하지 말고
-attachment로 분리합니다.
+표나 그림이 보기 안에 있으면
+그 자료를 줄글로 풀지 마십시오.
 
 ==================================================
-QUESTIONS
+ATTACHMENTS
 ==================================================
 
-questions에는 원문의 문제를
-번호 순서대로 넣습니다.
+다음 자료가 실제 페이지 이미지에 있으면
+attachments에 기록합니다.
 
-number
-- 문제 번호
+- table
+- graph
+- diagram
+- image
+- chart
+- other
 
-stem
-- 발문 전체
+placement:
 
+passage
+question
 bogi
-- 보기 본문
-- 없으면 ""
+choice
 
-choices
-- 텍스트형 선택지
+중요:
 
-attachments
-- 표/그래프/도식/이미지 등의 원본 시각자료
+이 첫 분석에서는
+bbox를 대략적으로 넣어도 됩니다.
 
-정답은 추측하지 마십시오.
+뒤 단계에서 별도로
+정밀 크롭 위치를 다시 찾습니다.
 
 ==================================================
-CHOICES
+절대 금지
 ==================================================
 
-원본 기호를 그대로 유지합니다.
+시각 자료를 줄글로 대신 쓰지 마십시오.
 
-① ...
-② ...
-③ ...
-④ ...
-⑤ ...
+예를 들어 원본이 표라면:
 
-선택지 자체가 복잡한 표라면
-억지로 텍스트로 바꾸지 않고
-placement="choice" attachment로 기록할 수 있습니다.
+A 10 20 B 30 40
+
+처럼 줄글로 변환해서
+그것만 남기면 안 됩니다.
+
+반드시 attachment도 함께 생성합니다.
 
 ==================================================
 JSON
 ==================================================
 
-반드시 JSON만 출력하십시오.
+반드시 아래 구조로만 반환합니다.
 
 {
   "groups": [
     {
       "id": "group-1",
-      "title": "짧은 지문 제목",
-      "source": "실제 지문 원문",
+      "title": "지문 제목",
+      "source": "지문 원문",
       "markers": [
         {
           "label": "(가)",
-          "text": "(가)의 전체 원문 범위",
+          "text": "(가)의 실제 전체 범위",
           "kind": "section"
-        },
-        {
-          "label": "밑줄",
-          "text": "실제로 밑줄 친 표현",
-          "kind": "underline"
         }
       ],
       "questions": [
         {
           "number": "24",
-          "stem": "원문 발문",
+          "stem": "발문",
           "bogi": "보기 본문",
           "choices": [
             "① 선택지",
@@ -638,13 +722,8 @@ JSON
               "type": "table",
               "placement": "bogi",
               "pageNumber": 1,
-              "bbox": {
-                "x": 100,
-                "y": 400,
-                "width": 700,
-                "height": 250
-              },
-              "description": "보기 안의 원본 표"
+              "bbox": null,
+              "description": "보기 안의 표"
             }
           ]
         }
@@ -653,7 +732,7 @@ JSON
   ]
 }
 
-JSON 밖의 설명은 절대 쓰지 마십시오.
+JSON 밖의 설명은 절대 하지 마십시오.
 
 ==================================================
 PDF TEXT
@@ -661,15 +740,6 @@ PDF TEXT
 
 ${text}
 `;
-
-    /*
-    ==================================================
-    MULTIMODAL CONTENT
-
-    중요:
-    input_image에는 detail이 필수
-    ==================================================
-    */
 
     const content: Array<
       | {
@@ -698,7 +768,7 @@ ${text}
         type: "input_text",
 
         text:
-          `다음 이미지는 시험지 PDF ${pageImage.pageNumber}페이지입니다.`,
+          `시험지 PDF ${pageImage.pageNumber}페이지입니다.`,
       });
 
       content.push({
@@ -707,19 +777,9 @@ ${text}
         image_url:
           pageImage.imageUrl,
 
-        /*
-        밑줄 / 표 / 도식 / 작은 기호까지
-        봐야 하므로 high
-        */
         detail: "high",
       });
     }
-
-    /*
-    ==================================================
-    OPENAI
-    ==================================================
-    */
 
     const result =
       await openai.responses.create({
@@ -743,51 +803,18 @@ ${text}
       );
     }
 
-    /*
-    ==================================================
-    JSON CLEAN
-    ==================================================
-    */
-
-    const cleanedOutput =
-      output
-        .replace(
-          /^```json\s*/i,
-          ""
-        )
-        .replace(
-          /^```\s*/i,
-          ""
-        )
-        .replace(
-          /```$/i,
-          ""
-        )
-        .trim();
-
     let parsed: unknown;
 
     try {
       parsed =
-        JSON.parse(
-          cleanedOutput
+        parseJsonOutput(
+          output
         );
     } catch {
-      console.error(
-        "TWIN JSON:",
-        cleanedOutput
-      );
-
       throw new Error(
         "원본 문제 분석 결과를 JSON으로 읽지 못했습니다."
       );
     }
-
-    /*
-    ==================================================
-    PARSED ROOT
-    ==================================================
-    */
 
     const parsedObject =
       parsed &&
@@ -806,357 +833,369 @@ ${text}
         ? parsedObject.groups
         : [];
 
-    /*
-    ==================================================
-    GROUPS
-    ==================================================
-    */
-
     const groups: TwinPassageGroup[] =
-      rawGroups
-        .map(
-          (
-            rawGroup: unknown,
-            groupIndex: number
-          ): TwinPassageGroup => {
-            const group =
-              rawGroup &&
-              typeof rawGroup ===
-                "object"
-                ? (rawGroup as Record<
-                    string,
-                    unknown
-                  >)
-                : {};
+      [];
 
-            /*
-            ==========================================
-            MARKERS
-            ==========================================
-            */
+    for (
+      let groupIndex = 0;
+      groupIndex <
+      rawGroups.length;
+      groupIndex++
+    ) {
+      const rawGroup =
+        rawGroups[
+          groupIndex
+        ];
 
-            const rawMarkers: unknown[] =
-              Array.isArray(
-                group.markers
-              )
-                ? group.markers
-                : [];
+      const group =
+        rawGroup &&
+        typeof rawGroup ===
+          "object"
+          ? (rawGroup as Record<
+              string,
+              unknown
+            >)
+          : {};
 
-            const markers: PassageMarker[] =
-              rawMarkers
-                .map(
-                  (
-                    rawMarker: unknown
-                  ): PassageMarker => {
-                    const marker =
-                      rawMarker &&
-                      typeof rawMarker ===
-                        "object"
-                        ? (rawMarker as Record<
-                            string,
-                            unknown
-                          >)
-                        : {};
-
-                    const rawKind =
-                      cleanInline(
-                        marker.kind
-                      );
-
-                    const allowedKinds: PassageMarker["kind"][] =
-                      [
-                        "section",
-                        "underline",
-                        "symbol",
-                        "quoted",
-                        "other",
-                      ];
-
-                    const kind:
-                      PassageMarker["kind"] =
-                      allowedKinds.includes(
-                        rawKind as PassageMarker["kind"]
-                      )
-                        ? (rawKind as PassageMarker["kind"])
-                        : "other";
-
-                    return {
-                      label:
-                        cleanInline(
-                          marker.label
-                        ),
-
-                      text:
-                        cleanBlock(
-                          marker.text
-                        ),
-
-                      kind,
-                    };
-                  }
-                )
-                .filter(
-                  (
-                    marker: PassageMarker
-                  ) =>
-                    Boolean(
-                      marker.label
-                    ) &&
-                    Boolean(
-                      marker.text
-                    )
-                );
-
-            /*
-            ==========================================
-            QUESTIONS
-            ==========================================
-            */
-
-            const rawQuestions: unknown[] =
-              Array.isArray(
-                group.questions
-              )
-                ? group.questions
-                : [];
-
-            const questions: SourceQuestion[] =
-              rawQuestions
-                .map(
-                  (
-                    rawQuestion: unknown,
-                    questionIndex: number
-                  ): SourceQuestion => {
-                    const question =
-                      rawQuestion &&
-                      typeof rawQuestion ===
-                        "object"
-                        ? (rawQuestion as Record<
-                            string,
-                            unknown
-                          >)
-                        : {};
-
-                    /*
-                    CHOICES
-                    */
-
-                    const rawChoices: unknown[] =
-                      Array.isArray(
-                        question.choices
-                      )
-                        ? question.choices
-                        : [];
-
-                    /*
-                    ATTACHMENTS
-                    */
-
-                    const rawAttachments: unknown[] =
-                      Array.isArray(
-                        question.attachments
-                      )
-                        ? question.attachments
-                        : [];
-
-                    const attachments: QuestionAttachment[] =
-                      rawAttachments
-                        .map(
-                          (
-                            rawAttachment: unknown,
-                            attachmentIndex: number
-                          ): QuestionAttachment => {
-                            const attachment =
-                              rawAttachment &&
-                              typeof rawAttachment ===
-                                "object"
-                                ? (rawAttachment as Record<
-                                    string,
-                                    unknown
-                                  >)
-                                : {};
-
-                            /*
-                            TYPE
-                            */
-
-                            const rawType =
-                              cleanInline(
-                                attachment.type
-                              );
-
-                            const allowedTypes: QuestionAttachment["type"][] =
-                              [
-                                "table",
-                                "graph",
-                                "diagram",
-                                "image",
-                                "chart",
-                                "other",
-                              ];
-
-                            const type:
-                              QuestionAttachment["type"] =
-                              allowedTypes.includes(
-                                rawType as QuestionAttachment["type"]
-                              )
-                                ? (rawType as QuestionAttachment["type"])
-                                : "other";
-
-                            /*
-                            PLACEMENT
-                            */
-
-                            const rawPlacement =
-                              cleanInline(
-                                attachment.placement
-                              );
-
-                            const allowedPlacements: QuestionAttachment["placement"][] =
-                              [
-                                "passage",
-                                "question",
-                                "bogi",
-                                "choice",
-                              ];
-
-                            const placement:
-                              QuestionAttachment["placement"] =
-                              allowedPlacements.includes(
-                                rawPlacement as QuestionAttachment["placement"]
-                              )
-                                ? (rawPlacement as QuestionAttachment["placement"])
-                                : "question";
-
-                            return {
-                              id:
-                                cleanInline(
-                                  attachment.id
-                                ) ||
-                                `q${questionIndex + 1}-asset-${attachmentIndex + 1}`,
-
-                              type,
-
-                              placement,
-
-                              pageNumber:
-                                numberValue(
-                                  attachment.pageNumber
-                                ),
-
-                              bbox:
-                                parseBBox(
-                                  attachment.bbox
-                                ),
-
-                              description:
-                                cleanInline(
-                                  attachment.description
-                                ),
-                            };
-                          }
-                        )
-                        .filter(
-                          (
-                            attachment: QuestionAttachment
-                          ) =>
-                            attachment.pageNumber >
-                              0 &&
-                            Boolean(
-                              attachment.bbox
-                            )
-                        );
-
-                    return {
-                      number:
-                        cleanInline(
-                          question.number
-                        ),
-
-                      stem:
-                        cleanBlock(
-                          question.stem
-                        ),
-
-                      bogi:
-                        cleanBlock(
-                          question.bogi
-                        ),
-
-                      choices:
-                        rawChoices
-                          .map(
-                            (
-                              choice: unknown
-                            ) =>
-                              cleanBlock(
-                                choice
-                              )
-                          )
-                          .filter(
-                            (
-                              choice: string
-                            ) =>
-                              Boolean(
-                                choice
-                              )
-                          ),
-
-                      attachments,
-                    };
-                  }
-                )
-                .filter(
-                  (
-                    question: SourceQuestion
-                  ) =>
-                    Boolean(
-                      question.number
-                    ) &&
-                    Boolean(
-                      question.stem
-                    )
-                );
-
-            return {
-              id:
-                cleanInline(
-                  group.id
-                ) ||
-                `group-${groupIndex + 1}`,
-
-              title:
-                cleanInline(
-                  group.title
-                ) ||
-                `비문학 지문 ${groupIndex + 1}`,
-
-              source:
-                cleanBlock(
-                  group.source
-                ),
-
-              markers,
-
-              questions,
-            };
-          }
+      const rawMarkers: unknown[] =
+        Array.isArray(
+          group.markers
         )
-        .filter(
-          (
-            group: TwinPassageGroup
-          ) =>
-            group.source.length >
-              100 &&
-            group.questions.length >
-              0
-        );
+          ? group.markers
+          : [];
 
-    /*
-    ==================================================
-    VALIDATE
-    ==================================================
-    */
+      const markers: PassageMarker[] =
+        rawMarkers
+          .map(
+            (
+              rawMarker: unknown
+            ): PassageMarker => {
+              const marker =
+                rawMarker &&
+                typeof rawMarker ===
+                  "object"
+                  ? (rawMarker as Record<
+                      string,
+                      unknown
+                    >)
+                  : {};
+
+              const rawKind =
+                cleanInline(
+                  marker.kind
+                );
+
+              const allowedKinds: PassageMarker["kind"][] =
+                [
+                  "section",
+                  "underline",
+                  "symbol",
+                  "quoted",
+                  "other",
+                ];
+
+              const kind =
+                allowedKinds.includes(
+                  rawKind as PassageMarker["kind"]
+                )
+                  ? (rawKind as PassageMarker["kind"])
+                  : "other";
+
+              return {
+                label:
+                  cleanInline(
+                    marker.label
+                  ),
+
+                text:
+                  cleanBlock(
+                    marker.text
+                  ),
+
+                kind,
+              };
+            }
+          )
+          .filter(
+            (
+              marker: PassageMarker
+            ) =>
+              Boolean(
+                marker.label
+              ) &&
+              Boolean(
+                marker.text
+              )
+          );
+
+      const rawQuestions: unknown[] =
+        Array.isArray(
+          group.questions
+        )
+          ? group.questions
+          : [];
+
+      const questions: SourceQuestion[] =
+        [];
+
+      for (
+        let questionIndex = 0;
+        questionIndex <
+        rawQuestions.length;
+        questionIndex++
+      ) {
+        const rawQuestion =
+          rawQuestions[
+            questionIndex
+          ];
+
+        const question =
+          rawQuestion &&
+          typeof rawQuestion ===
+            "object"
+            ? (rawQuestion as Record<
+                string,
+                unknown
+              >)
+            : {};
+
+        const questionNumber =
+          cleanInline(
+            question.number
+          );
+
+        const rawChoices: unknown[] =
+          Array.isArray(
+            question.choices
+          )
+            ? question.choices
+            : [];
+
+        const rawAttachments: unknown[] =
+          Array.isArray(
+            question.attachments
+          )
+            ? question.attachments
+            : [];
+
+        const attachments: QuestionAttachment[] =
+          [];
+
+        for (
+          let attachmentIndex = 0;
+          attachmentIndex <
+          rawAttachments.length;
+          attachmentIndex++
+        ) {
+          const rawAttachment =
+            rawAttachments[
+              attachmentIndex
+            ];
+
+          const attachment =
+            rawAttachment &&
+            typeof rawAttachment ===
+              "object"
+              ? (rawAttachment as Record<
+                  string,
+                  unknown
+                >)
+              : {};
+
+          const rawType =
+            cleanInline(
+              attachment.type
+            );
+
+          const allowedTypes: QuestionAttachment["type"][] =
+            [
+              "table",
+              "graph",
+              "diagram",
+              "image",
+              "chart",
+              "other",
+            ];
+
+          const type =
+            allowedTypes.includes(
+              rawType as QuestionAttachment["type"]
+            )
+              ? (rawType as QuestionAttachment["type"])
+              : "other";
+
+          const rawPlacement =
+            cleanInline(
+              attachment.placement
+            );
+
+          const allowedPlacements: QuestionAttachment["placement"][] =
+            [
+              "passage",
+              "question",
+              "bogi",
+              "choice",
+            ];
+
+          const placement =
+            allowedPlacements.includes(
+              rawPlacement as QuestionAttachment["placement"]
+            )
+              ? (rawPlacement as QuestionAttachment["placement"])
+              : "question";
+
+          const pageNumber =
+            numberValue(
+              attachment.pageNumber
+            );
+
+          const description =
+            cleanInline(
+              attachment.description
+            );
+
+          let refinedBBox:
+            BoundingBox | null =
+            null;
+
+          const pageImage =
+            pageImages.find(
+              (
+                page: PageImage
+              ) =>
+                page.pageNumber ===
+                pageNumber
+            );
+
+          if (
+            pageImage &&
+            questionNumber
+          ) {
+            refinedBBox =
+              await refineAttachmentBBox({
+                openai,
+                pageImage,
+                questionNumber,
+                attachmentType:
+                  type,
+                placement,
+                description,
+              });
+          }
+
+          attachments.push({
+            id:
+              cleanInline(
+                attachment.id
+              ) ||
+              `q${questionNumber || questionIndex + 1}-asset-${attachmentIndex + 1}`,
+
+            type,
+
+            placement,
+
+            pageNumber,
+
+            bbox:
+              refinedBBox,
+
+            description,
+          });
+        }
+
+        questions.push({
+          number:
+            questionNumber,
+
+          stem:
+            cleanBlock(
+              question.stem
+            ),
+
+          bogi:
+            cleanBlock(
+              question.bogi
+            ),
+
+          choices:
+            rawChoices
+              .map(
+                (
+                  choice: unknown
+                ) =>
+                  cleanBlock(
+                    choice
+                  )
+              )
+              .filter(
+                (
+                  choice: string
+                ) =>
+                  Boolean(
+                    choice
+                  )
+              ),
+
+          attachments:
+            attachments.filter(
+              (
+                attachment: QuestionAttachment
+              ) =>
+                attachment.pageNumber >
+                  0 &&
+                Boolean(
+                  attachment.bbox
+                )
+            ),
+        });
+      }
+
+      const cleanGroup: TwinPassageGroup =
+        {
+          id:
+            cleanInline(
+              group.id
+            ) ||
+            `group-${groupIndex + 1}`,
+
+          title:
+            cleanInline(
+              group.title
+            ) ||
+            `비문학 지문 ${groupIndex + 1}`,
+
+          source:
+            cleanBlock(
+              group.source
+            ),
+
+          markers,
+
+          questions:
+            questions.filter(
+              (
+                question: SourceQuestion
+              ) =>
+                Boolean(
+                  question.number
+                ) &&
+                Boolean(
+                  question.stem
+                )
+            ),
+        };
+
+      if (
+        cleanGroup.source
+          .length > 100 &&
+        cleanGroup.questions
+          .length > 0
+      ) {
+        groups.push(
+          cleanGroup
+        );
+      }
+    }
 
     if (
       groups.length === 0
@@ -1177,17 +1216,6 @@ ${text}
         0
       );
 
-    const markerCount =
-      groups.reduce(
-        (
-          sum: number,
-          group: TwinPassageGroup
-        ) =>
-          sum +
-          group.markers.length,
-        0
-      );
-
     const assetCount =
       groups.reduce(
         (
@@ -1201,37 +1229,12 @@ ${text}
               question: SourceQuestion
             ) =>
               questionTotal +
-              question.attachments.length,
+              question.attachments
+                .length,
             0
           ),
         0
       );
-
-    console.log(
-      "TWIN GROUP COUNT:",
-      groups.length
-    );
-
-    console.log(
-      "TWIN QUESTION COUNT:",
-      questionCount
-    );
-
-    console.log(
-      "TWIN MARKER COUNT:",
-      markerCount
-    );
-
-    console.log(
-      "TWIN ASSET COUNT:",
-      assetCount
-    );
-
-    /*
-    ==================================================
-    RESPONSE
-    ==================================================
-    */
 
     return Response.json({
       groups,
@@ -1241,8 +1244,6 @@ ${text}
           groups.length,
 
         questionCount,
-
-        markerCount,
 
         assetCount,
       },
@@ -1262,12 +1263,8 @@ ${text}
 
     return Response.json(
       {
-        error:
-          message ||
-          "쌍둥이 문제 원본 분석 중 오류가 발생했습니다.",
-
-        detail:
-          message,
+        error: message,
+        detail: message,
       },
       {
         status: 500,
