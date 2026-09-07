@@ -23,11 +23,17 @@ type SummaryResult = {
   passageId: string;
   title: string;
   oneLine: string;
+
+  visualPrompt?: string;
+  visualImage?: string;
+
   flow: SummaryFlow[];
   concepts: SummaryConcept[];
+
   comparisonTitle: string;
   comparisonHeaders: string[];
   comparisonRows: string[][];
+
   testPoints: string[];
   caution: string;
 };
@@ -52,7 +58,8 @@ export default function KoreanSummaryPage() {
 
       const pdfjs = await import("pdfjs-dist");
 
-      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+      pdfjs.GlobalWorkerOptions.workerSrc =
+        `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
 
       const buffer = await file.arrayBuffer();
 
@@ -78,7 +85,9 @@ export default function KoreanSummaryPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ sourceText }),
+        body: JSON.stringify({
+          sourceText,
+        }),
       });
 
       const data = await response.json();
@@ -94,7 +103,10 @@ export default function KoreanSummaryPage() {
         : [];
 
       setPassages(nextPassages);
-      setSelectedIds(nextPassages.slice(0, 2).map((item) => item.id));
+
+      setSelectedIds(
+        nextPassages.slice(0, 2).map((item) => item.id)
+      );
     } catch (error) {
       const message =
         error instanceof Error
@@ -155,9 +167,56 @@ export default function KoreanSummaryPage() {
         );
       }
 
-      setResults(
-        Array.isArray(data?.summaries) ? data.summaries : []
+      const summaries: SummaryResult[] = Array.isArray(data?.summaries)
+        ? data.summaries
+        : [];
+
+      // 먼저 텍스트 요약 결과부터 보여줌
+      setResults(summaries);
+
+      // 각 지문별 일러스트를 동시에 생성
+      const withImages = await Promise.all(
+        summaries.map(async (summary) => {
+          if (!summary.visualPrompt) {
+            return summary;
+          }
+
+          try {
+            const imageResponse = await fetch(
+              "/api/korean-summary-visual",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  visualPrompt: summary.visualPrompt,
+                }),
+              }
+            );
+
+            const imageData = await imageResponse.json();
+
+            if (!imageResponse.ok || !imageData?.imageUrl) {
+              return summary;
+            }
+
+            return {
+              ...summary,
+              visualImage: imageData.imageUrl,
+            };
+          } catch (error) {
+            console.error(
+              "Summary illustration error:",
+              error
+            );
+
+            return summary;
+          }
+        })
       );
+
+      setResults(withImages);
     } catch (error) {
       const message =
         error instanceof Error
@@ -182,7 +241,7 @@ export default function KoreanSummaryPage() {
               onClick={() => {
                 window.location.href = "/korean-test-maker";
               }}
-              className="rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-md"
+              className="rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
             >
               ← 국어 메뉴로
             </button>
@@ -203,23 +262,30 @@ export default function KoreanSummaryPage() {
           </h1>
 
           <p className="mt-4 max-w-3xl text-base leading-7 text-slate-500">
-            긴 국어 지문을 보기 쉬운 비주얼 학습자료로 정리합니다.
-            글의 흐름, 핵심 개념, 비교 구조, 시험 포인트를 한눈에
-            파악할 수 있게 구성했습니다.
+            긴 국어 지문을 비주얼 학습자료로 정리합니다.
+            글의 흐름, 핵심 개념, 비교 구조, 시험 포인트와 함께
+            핵심 내용을 한눈에 볼 수 있는 일러스트를 생성합니다.
           </p>
 
           <div className="mt-6 flex flex-wrap gap-2">
             <span className="rounded-full bg-violet-50 px-4 py-2 text-sm font-bold text-violet-700">
               글의 흐름
             </span>
+
             <span className="rounded-full bg-sky-50 px-4 py-2 text-sm font-bold text-sky-700">
               핵심 개념
             </span>
+
             <span className="rounded-full bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700">
               비교 정리
             </span>
+
             <span className="rounded-full bg-rose-50 px-4 py-2 text-sm font-bold text-rose-700">
               시험 POINT
+            </span>
+
+            <span className="rounded-full bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700">
+              비주얼 요약
             </span>
           </div>
         </section>
@@ -230,6 +296,7 @@ export default function KoreanSummaryPage() {
               <p className="text-sm font-black tracking-[0.16em] text-violet-600">
                 STEP 01
               </p>
+
               <h2 className="mt-1 text-2xl font-black text-slate-900">
                 PDF 업로드
               </h2>
@@ -262,12 +329,13 @@ export default function KoreanSummaryPage() {
               </div>
 
               <p className="mt-4 text-xl font-black text-violet-700">
-                {extracting ? "지문 분석 중..." : "국어 PDF 업로드"}
+                {extracting
+                  ? "지문 분석 중..."
+                  : "국어 PDF 업로드"}
               </p>
 
               <p className="mt-2 text-sm leading-6 text-slate-500">
-                비문학 / 설명문 / 비교 지문 등을 자동 분리해서
-                요약.ZIP으로 정리합니다.
+                PDF에서 비문학 지문을 자동 분리합니다.
               </p>
             </div>
           </label>
@@ -284,10 +352,6 @@ export default function KoreanSummaryPage() {
                 <h2 className="mt-1 text-2xl font-black text-slate-900">
                   요약할 지문 선택
                 </h2>
-
-                <p className="mt-2 text-sm leading-6 text-slate-500">
-                  원하는 지문만 골라서 요약.ZIP을 만들 수 있습니다.
-                </p>
               </div>
 
               <div className="flex flex-wrap gap-2">
@@ -315,17 +379,21 @@ export default function KoreanSummaryPage() {
 
             <div className="mt-6 grid gap-4">
               {passages.map((passage, index) => {
-                const selected = selectedIds.includes(passage.id);
+                const selected = selectedIds.includes(
+                  passage.id
+                );
 
                 return (
                   <button
                     key={passage.id}
                     type="button"
-                    onClick={() => togglePassage(passage.id)}
+                    onClick={() =>
+                      togglePassage(passage.id)
+                    }
                     className={`rounded-[24px] border p-5 text-left transition ${
                       selected
                         ? "border-violet-400 bg-violet-50 shadow-sm"
-                        : "border-slate-200 bg-white hover:border-violet-200 hover:bg-slate-50"
+                        : "border-slate-200 bg-white hover:border-violet-200"
                     }`}
                   >
                     <div className="flex gap-4">
@@ -344,9 +412,12 @@ export default function KoreanSummaryPage() {
                           {passage.title}
                         </h3>
 
-                        <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-500">
+                        <p className="mt-3 text-sm leading-7 text-slate-500">
                           {passage.source.length > 340
-                            ? `${passage.source.slice(0, 340)}...`
+                            ? `${passage.source.slice(
+                                0,
+                                340
+                              )}...`
                             : passage.source}
                         </p>
                       </div>
@@ -359,12 +430,15 @@ export default function KoreanSummaryPage() {
             <button
               type="button"
               onClick={makeSummary}
-              disabled={generating || selectedIds.length === 0}
+              disabled={
+                generating ||
+                selectedIds.length === 0
+              }
               className="mt-7 w-full rounded-[22px] bg-violet-600 px-6 py-4 text-lg font-black text-white shadow-sm transition hover:bg-violet-700 disabled:opacity-40"
             >
               {generating
-                ? "요약.ZIP 생성 중..."
-                : "선택 지문으로 요약.ZIP 만들기"}
+                ? "요약 + 일러스트 생성 중..."
+                : "선택 지문으로 비주얼 요약.ZIP 만들기"}
             </button>
           </section>
         )}
@@ -390,8 +464,10 @@ export default function KoreanSummaryPage() {
             <div className="grid gap-8">
               {results.map((result, index) => {
                 const hasComparison =
-                  (result.comparisonHeaders?.length || 0) > 0 &&
-                  (result.comparisonRows?.length || 0) > 0;
+                  (result.comparisonHeaders?.length ||
+                    0) > 0 &&
+                  (result.comparisonRows?.length ||
+                    0) > 0;
 
                 return (
                   <article
@@ -400,7 +476,11 @@ export default function KoreanSummaryPage() {
                   >
                     <div className="bg-gradient-to-r from-violet-600 via-fuchsia-500 to-pink-500 px-7 py-6 text-white">
                       <p className="text-xs font-black tracking-[0.18em] text-white/80">
-                        SUMMARY.ZIP {String(index + 1).padStart(2, "0")}
+                        SUMMARY.ZIP{" "}
+                        {String(index + 1).padStart(
+                          2,
+                          "0"
+                        )}
                       </p>
 
                       <h3 className="mt-2 text-3xl font-black leading-tight md:text-4xl">
@@ -412,65 +492,131 @@ export default function KoreanSummaryPage() {
                       </p>
                     </div>
 
+                    {result.visualPrompt && (
+                      <section className="bg-slate-50 px-7 py-7">
+                        <div className="mb-4 flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-black tracking-[0.16em] text-emerald-600">
+                              VISUAL SUMMARY
+                            </p>
+
+                            <h4 className="mt-1 text-xl font-black text-slate-900">
+                              그림으로 한눈에 이해하기
+                            </h4>
+                          </div>
+
+                          {!result.visualImage && (
+                            <div className="rounded-full bg-white px-4 py-2 text-xs font-bold text-slate-500 shadow-sm">
+                              일러스트 생성 중...
+                            </div>
+                          )}
+                        </div>
+
+                        {result.visualImage ? (
+                          <div className="overflow-hidden rounded-[28px] bg-white shadow-sm ring-1 ring-slate-200">
+                            <img
+                              src={
+                                result.visualImage
+                              }
+                              alt={`${result.title} 비주얼 요약`}
+                              className="w-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex aspect-[3/2] items-center justify-center rounded-[28px] bg-white ring-1 ring-slate-200">
+                            <div className="text-center">
+                              <div className="text-4xl">
+                                🎨
+                              </div>
+
+                              <p className="mt-3 text-sm font-bold text-slate-500">
+                                핵심 내용을 그림으로
+                                만드는 중입니다.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </section>
+                    )}
+
                     <div className="p-7">
                       <section>
                         <div className="flex items-center gap-2">
                           <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-black tracking-[0.16em] text-violet-700">
                             FLOW
                           </span>
+
                           <h4 className="text-xl font-black text-slate-900">
                             글의 흐름
                           </h4>
                         </div>
 
                         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                          {(result.flow || []).map((item, flowIndex) => (
-                            <div
-                              key={flowIndex}
-                              className="rounded-[24px] bg-slate-50 p-5"
-                            >
-                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-600 text-lg font-black text-white">
-                                {flowIndex + 1}
+                          {(result.flow ||
+                            []).map(
+                            (item, flowIndex) => (
+                              <div
+                                key={flowIndex}
+                                className="rounded-[24px] bg-slate-50 p-5"
+                              >
+                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-600 text-lg font-black text-white">
+                                  {flowIndex + 1}
+                                </div>
+
+                                <p className="mt-4 text-base font-black text-violet-700">
+                                  {item.label}
+                                </p>
+
+                                <p className="mt-2 text-sm leading-7 text-slate-600">
+                                  {item.content}
+                                </p>
                               </div>
-
-                              <p className="mt-4 text-base font-black text-violet-700">
-                                {item.label}
-                              </p>
-
-                              <p className="mt-2 text-sm leading-7 text-slate-600">
-                                {item.content}
-                              </p>
-                            </div>
-                          ))}
+                            )
+                          )}
                         </div>
                       </section>
 
-                      {(result.concepts || []).length > 0 && (
+                      {(result.concepts || [])
+                        .length > 0 && (
                         <section className="mt-9">
                           <div className="flex items-center gap-2">
                             <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-black tracking-[0.16em] text-sky-700">
                               CONCEPT
                             </span>
+
                             <h4 className="text-xl font-black text-slate-900">
                               핵심 개념
                             </h4>
                           </div>
 
                           <div className="mt-5 grid gap-4 md:grid-cols-2">
-                            {(result.concepts || []).map((concept, conceptIndex) => (
-                              <div
-                                key={conceptIndex}
-                                className="rounded-[24px] border border-sky-100 bg-sky-50 p-5"
-                              >
-                                <p className="text-lg font-black text-slate-900">
-                                  {concept.name}
-                                </p>
+                            {(
+                              result.concepts || []
+                            ).map(
+                              (
+                                concept,
+                                conceptIndex
+                              ) => (
+                                <div
+                                  key={
+                                    conceptIndex
+                                  }
+                                  className="rounded-[24px] border border-sky-100 bg-sky-50 p-5"
+                                >
+                                  <p className="text-lg font-black text-slate-900">
+                                    {
+                                      concept.name
+                                    }
+                                  </p>
 
-                                <p className="mt-3 text-sm leading-7 text-slate-600">
-                                  {concept.description}
-                                </p>
-                              </div>
-                            ))}
+                                  <p className="mt-3 text-sm leading-7 text-slate-600">
+                                    {
+                                      concept.description
+                                    }
+                                  </p>
+                                </div>
+                              )
+                            )}
                           </div>
                         </section>
                       )}
@@ -481,8 +627,10 @@ export default function KoreanSummaryPage() {
                             <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black tracking-[0.16em] text-amber-700">
                               COMPARE
                             </span>
+
                             <h4 className="text-xl font-black text-slate-900">
-                              {result.comparisonTitle || "핵심 비교"}
+                              {result.comparisonTitle ||
+                                "핵심 비교"}
                             </h4>
                           </div>
 
@@ -490,62 +638,106 @@ export default function KoreanSummaryPage() {
                             <table className="w-full border-collapse text-sm">
                               <thead>
                                 <tr>
-                                  {(result.comparisonHeaders || []).map((header) => (
-                                    <th
-                                      key={header}
-                                      className="border-b border-amber-100 bg-amber-50 px-4 py-3 text-left font-black text-slate-900"
-                                    >
-                                      {header}
-                                    </th>
-                                  ))}
+                                  {(
+                                    result.comparisonHeaders ||
+                                    []
+                                  ).map(
+                                    (header) => (
+                                      <th
+                                        key={
+                                          header
+                                        }
+                                        className="border-b border-amber-100 bg-amber-50 px-4 py-3 text-left font-black text-slate-900"
+                                      >
+                                        {
+                                          header
+                                        }
+                                      </th>
+                                    )
+                                  )}
                                 </tr>
                               </thead>
 
                               <tbody>
-                                {(result.comparisonRows || []).map((row, rowIndex) => (
-                                  <tr key={rowIndex}>
-                                    {row.map((cell, cellIndex) => (
-                                      <td
-                                        key={cellIndex}
-                                        className="border-b border-slate-100 px-4 py-3 leading-7 text-slate-600 last:border-b-0"
-                                      >
-                                        {cell}
-                                      </td>
-                                    ))}
-                                  </tr>
-                                ))}
+                                {(
+                                  result.comparisonRows ||
+                                  []
+                                ).map(
+                                  (
+                                    row,
+                                    rowIndex
+                                  ) => (
+                                    <tr
+                                      key={
+                                        rowIndex
+                                      }
+                                    >
+                                      {row.map(
+                                        (
+                                          cell,
+                                          cellIndex
+                                        ) => (
+                                          <td
+                                            key={
+                                              cellIndex
+                                            }
+                                            className="border-b border-slate-100 px-4 py-3 leading-7 text-slate-600"
+                                          >
+                                            {
+                                              cell
+                                            }
+                                          </td>
+                                        )
+                                      )}
+                                    </tr>
+                                  )
+                                )}
                               </tbody>
                             </table>
                           </div>
                         </section>
                       )}
 
-                      {(result.testPoints || []).length > 0 && (
+                      {(result.testPoints || [])
+                        .length > 0 && (
                         <section className="mt-9">
                           <div className="flex items-center gap-2">
                             <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-black tracking-[0.16em] text-rose-700">
                               TEST POINT
                             </span>
+
                             <h4 className="text-xl font-black text-slate-900">
                               시험 POINT
                             </h4>
                           </div>
 
                           <div className="mt-5 grid gap-3">
-                            {(result.testPoints || []).map((point, pointIndex) => (
-                              <div
-                                key={pointIndex}
-                                className="flex gap-3 rounded-[20px] bg-rose-50 px-4 py-4"
-                              >
-                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-600 text-sm font-black text-white">
-                                  {pointIndex + 1}
-                                </div>
+                            {(
+                              result.testPoints || []
+                            ).map(
+                              (
+                                point,
+                                pointIndex
+                              ) => (
+                                <div
+                                  key={
+                                    pointIndex
+                                  }
+                                  className="flex gap-3 rounded-[20px] bg-rose-50 px-4 py-4"
+                                >
+                                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-600 text-sm font-black text-white">
+                                    {
+                                      pointIndex +
+                                      1
+                                    }
+                                  </div>
 
-                                <p className="text-sm font-bold leading-7 text-slate-700">
-                                  {point}
-                                </p>
-                              </div>
-                            ))}
+                                  <p className="text-sm font-bold leading-7 text-slate-700">
+                                    {point}
+                                  </p>
+                                </div>
+                              )
+                            )}
                           </div>
                         </section>
                       )}
