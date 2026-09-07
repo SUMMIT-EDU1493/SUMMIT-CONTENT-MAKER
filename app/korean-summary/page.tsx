@@ -189,9 +189,18 @@ export default function KoreanSummaryPage() {
                 headers: {
                   "Content-Type": "application/json",
                 },
-                body: JSON.stringify({
-                  visualPrompt: summary.visualPrompt,
-                }),
+               body: JSON.stringify({
+  title: summary.title,
+  oneLine: summary.oneLine,
+  visualPrompt: summary.visualPrompt,
+  flow: summary.flow,
+  concepts: summary.concepts,
+  comparisonTitle: summary.comparisonTitle,
+  comparisonHeaders: summary.comparisonHeaders,
+  comparisonRows: summary.comparisonRows,
+  testPoints: summary.testPoints,
+  caution: summary.caution,
+}),
               }
             );
 
