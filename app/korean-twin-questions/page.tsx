@@ -41,32 +41,13 @@ type PassageMarker = {
     | "other";
 };
 
-type QuestionAttachment = {
-  id: string;
-  type:
-    | "table"
-    | "graph"
-    | "diagram"
-    | "image"
-    | "chart"
-    | "other";
-  placement:
-    | "passage"
-    | "question"
-    | "bogi"
-    | "choice";
-  pageNumber: number;
-  description: string;
-  imageUrl: string;
-};
-
 type SourceQuestion = {
   number: string;
   pageNumber: number;
   stem: string;
   bogi: string;
   choices: string[];
-  attachments: QuestionAttachment[];
+  originalImage?: string;
 };
 
 type TwinPassageGroup = {
@@ -77,168 +58,533 @@ type TwinPassageGroup = {
   questions: SourceQuestion[];
 };
 
-function DecoratedPassage({
-  source,
-  markers,
-}: {
-  source: string;
-  markers: PassageMarker[];
-}) {
-  type Piece = {
-    text: string;
-    marker?: PassageMarker;
-  };
+type NormalizedBBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
 
-  let pieces: Piece[] =
-    [
-      {
-        text:
-          source,
-      },
-    ];
+function clamp(
+  value: number,
+  min: number,
+  max: number
+) {
+  return Math.max(
+    min,
+    Math.min(max, value)
+  );
+}
 
-  const sortedMarkers =
-    [...markers].sort(
-      (
-        a,
-        b
-      ) =>
-        b.text.length -
-        a.text.length
+function normalizeText(
+  value: string
+) {
+  return value
+    .replace(/\s+/g, "")
+    .replace(/[．。]/g, ".")
+    .trim();
+}
+
+function detectQuestionNumber(
+  text: string
+) {
+  const normalized =
+    normalizeText(
+      text
     );
 
-  for (
-    const marker of sortedMarkers
+  const match =
+    normalized.match(
+      /^(\d{1,2})[.)]?$/
+    );
+
+  if (!match) {
+    return null;
+  }
+
+  return Number(
+    match[1]
+  );
+}
+
+function getColumn(
+  x: number
+) {
+  if (x < 450) {
+    return "left";
+  }
+
+  if (x > 550) {
+    return "right";
+  }
+
+  return "full";
+}
+
+function sameColumn(
+  a: PageTextItem,
+  b: PageTextItem
+) {
+  const columnA =
+    getColumn(a.x);
+
+  const columnB =
+    getColumn(b.x);
+
+  if (
+    columnA === "full" ||
+    columnB === "full"
   ) {
-    const next: Piece[] =
+    return true;
+  }
+
+  return (
+    columnA ===
+    columnB
+  );
+}
+
+function findQuestionItem(
+  questionNumber: string,
+  page: PageTextData
+) {
+  const target =
+    Number(
+      questionNumber
+    );
+
+  return (
+    page.items
+      .filter(
+        (
+          item: PageTextItem
+        ) =>
+          detectQuestionNumber(
+            item.text
+          ) === target
+      )
+      .sort(
+        (
+          a,
+          b
+        ) =>
+          a.y - b.y
+      )[0] || null
+  );
+}
+
+function detectQuestionPage(
+  questionNumber: string,
+  pageTextData: PageTextData[]
+) {
+  for (
+    const page of pageTextData
+  ) {
+    if (
+      findQuestionItem(
+        questionNumber,
+        page
+      )
+    ) {
+      return page.pageNumber;
+    }
+  }
+
+  return 0;
+}
+
+function findQuestionBBox(
+  questionNumber: string,
+  pageNumber: number,
+  pageTextData: PageTextData[]
+): NormalizedBBox {
+  const page =
+    pageTextData.find(
+      (
+        item: PageTextData
+      ) =>
+        item.pageNumber ===
+        pageNumber
+    );
+
+  if (!page) {
+    return {
+      x: 5,
+      y: 0,
+      width: 990,
+      height: 1000,
+    };
+  }
+
+  const current =
+    findQuestionItem(
+      questionNumber,
+      page
+    );
+
+  if (!current) {
+    return {
+      x: 5,
+      y: 0,
+      width: 990,
+      height: 1000,
+    };
+  }
+
+  const currentNumber =
+    Number(
+      questionNumber
+    );
+
+  const column =
+    getColumn(
+      current.x
+    );
+
+  const questionItems =
+    page.items
+      .map(
+        (
+          item: PageTextItem
+        ) => ({
+          item,
+          number:
+            detectQuestionNumber(
+              item.text
+            ),
+        })
+      )
+      .filter(
+        (
+          candidate
+        ) =>
+          candidate.number !==
+          null
+      )
+      .filter(
+        (
+          candidate
+        ) =>
+          candidate.item.y >
+            current.y + 12 &&
+          Number(
+            candidate.number
+          ) >
+            currentNumber &&
+          sameColumn(
+            current,
+            candidate.item
+          )
+      )
+      .sort(
+        (
+          a,
+          b
+        ) =>
+          a.item.y -
+          b.item.y
+      );
+
+  const next =
+    questionItems[0]
+      ?.item;
+
+  const startY =
+    clamp(
+      current.y - 18,
+      0,
+      990
+    );
+
+  const endY =
+    next
+      ? clamp(
+          next.y - 18,
+          startY + 80,
+          1000
+        )
+      : 995;
+
+  if (
+    column === "left"
+  ) {
+    return {
+      x: 5,
+      y: startY,
+      width: 495,
+      height:
+        endY -
+        startY,
+    };
+  }
+
+  if (
+    column === "right"
+  ) {
+    return {
+      x: 500,
+      y: startY,
+      width: 495,
+      height:
+        endY -
+        startY,
+    };
+  }
+
+  return {
+    x: 5,
+    y: startY,
+    width: 990,
+    height:
+      endY -
+      startY,
+  };
+}
+
+function cropImage(
+  imageUrl: string,
+  bbox: NormalizedBBox
+) {
+  return new Promise<string>(
+    (
+      resolve,
+      reject
+    ) => {
+      const image =
+        new Image();
+
+      image.onload = () => {
+        try {
+          const sourceX =
+            Math.round(
+              (bbox.x /
+                1000) *
+                image.naturalWidth
+            );
+
+          const sourceY =
+            Math.round(
+              (bbox.y /
+                1000) *
+                image.naturalHeight
+            );
+
+          const sourceWidth =
+            Math.round(
+              (bbox.width /
+                1000) *
+                image.naturalWidth
+            );
+
+          const sourceHeight =
+            Math.round(
+              (bbox.height /
+                1000) *
+                image.naturalHeight
+            );
+
+          const safeX =
+            clamp(
+              sourceX,
+              0,
+              image.naturalWidth -
+                1
+            );
+
+          const safeY =
+            clamp(
+              sourceY,
+              0,
+              image.naturalHeight -
+                1
+            );
+
+          const safeWidth =
+            clamp(
+              sourceWidth,
+              1,
+              image.naturalWidth -
+                safeX
+            );
+
+          const safeHeight =
+            clamp(
+              sourceHeight,
+              1,
+              image.naturalHeight -
+                safeY
+            );
+
+          const canvas =
+            document.createElement(
+              "canvas"
+            );
+
+          canvas.width =
+            safeWidth;
+
+          canvas.height =
+            safeHeight;
+
+          const context =
+            canvas.getContext(
+              "2d"
+            );
+
+          if (!context) {
+            reject(
+              new Error(
+                "이미지 크롭에 실패했습니다."
+              )
+            );
+
+            return;
+          }
+
+          context.fillStyle =
+            "#ffffff";
+
+          context.fillRect(
+            0,
+            0,
+            canvas.width,
+            canvas.height
+          );
+
+          context.drawImage(
+            image,
+            safeX,
+            safeY,
+            safeWidth,
+            safeHeight,
+            0,
+            0,
+            canvas.width,
+            canvas.height
+          );
+
+          resolve(
+            canvas.toDataURL(
+              "image/jpeg",
+              0.94
+            )
+          );
+        } catch (
+          error
+        ) {
+          reject(
+            error
+          );
+        }
+      };
+
+      image.onerror =
+        () => {
+          reject(
+            new Error(
+              "PDF 페이지 이미지를 불러오지 못했습니다."
+            )
+          );
+        };
+
+      image.src =
+        imageUrl;
+    }
+  );
+}
+
+async function attachOriginalQuestionImages(
+  groups: TwinPassageGroup[],
+  pageImages: PageImage[],
+  pageTextData: PageTextData[]
+) {
+  const completedGroups: TwinPassageGroup[] =
+    [];
+
+  for (
+    const group of groups
+  ) {
+    const completedQuestions: SourceQuestion[] =
       [];
 
     for (
-      const piece of pieces
+      const question of
+        group.questions
     ) {
+      let pageNumber =
+        detectQuestionPage(
+          question.number,
+          pageTextData
+        );
+
       if (
-        piece.marker ||
-        !piece.text.includes(
-          marker.text
-        )
+        pageNumber <= 0
       ) {
-        next.push(
-          piece
+        pageNumber =
+          question.pageNumber;
+      }
+
+      const pageImage =
+        pageImages.find(
+          (
+            item: PageImage
+          ) =>
+            item.pageNumber ===
+            pageNumber
+        );
+
+      if (!pageImage) {
+        completedQuestions.push(
+          {
+            ...question,
+            pageNumber,
+          }
         );
 
         continue;
       }
 
-      const index =
-        piece.text.indexOf(
-          marker.text
+      const bbox =
+        findQuestionBBox(
+          question.number,
+          pageNumber,
+          pageTextData
         );
 
-      const before =
-        piece.text.slice(
-          0,
-          index
+      try {
+        const originalImage =
+          await cropImage(
+            pageImage.imageUrl,
+            bbox
+          );
+
+        completedQuestions.push(
+          {
+            ...question,
+            pageNumber,
+            originalImage,
+          }
         );
-
-      const matched =
-        piece.text.slice(
-          index,
-          index +
-            marker.text.length
+      } catch {
+        completedQuestions.push(
+          {
+            ...question,
+            pageNumber,
+            originalImage:
+              pageImage.imageUrl,
+          }
         );
-
-      const after =
-        piece.text.slice(
-          index +
-            marker.text.length
-        );
-
-      if (before) {
-        next.push({
-          text: before,
-        });
-      }
-
-      next.push({
-        text:
-          matched,
-        marker,
-      });
-
-      if (after) {
-        next.push({
-          text: after,
-        });
       }
     }
 
-    pieces =
-      next;
+    completedGroups.push({
+      ...group,
+      questions:
+        completedQuestions,
+    });
   }
 
-  return (
-    <div className="whitespace-pre-wrap text-[16px] leading-[2.05] text-slate-950">
-      {pieces.map(
-        (
-          piece,
-          index
-        ) => {
-          if (
-            !piece.marker
-          ) {
-            return (
-              <span
-                key={
-                  index
-                }
-              >
-                {
-                  piece.text
-                }
-              </span>
-            );
-          }
-
-          if (
-            piece.marker
-              .kind ===
-              "section" ||
-            piece.marker
-              .kind ===
-              "underline" ||
-            piece.marker
-              .kind ===
-              "symbol"
-          ) {
-            return (
-              <span
-                key={
-                  index
-                }
-                className="underline decoration-[1.5px] underline-offset-[4px]"
-              >
-                {
-                  piece.text
-                }
-              </span>
-            );
-          }
-
-          return (
-            <span
-              key={
-                index
-              }
-            >
-              {
-                piece.text
-              }
-            </span>
-          );
-        }
-      )}
-    </div>
-  );
+  return completedGroups;
 }
 
 export default function KoreanTwinQuestionsPage() {
@@ -274,9 +620,17 @@ export default function KoreanTwinQuestionsPage() {
       file: File
     ) => {
       try {
-        setLoading(true);
-        setGroups([]);
-        setErrorMessage("");
+        setLoading(
+          true
+        );
+
+        setGroups(
+          []
+        );
+
+        setErrorMessage(
+          ""
+        );
 
         setFileName(
           file.name
@@ -323,7 +677,7 @@ export default function KoreanTwinQuestionsPage() {
 
           const viewport =
             page.getViewport({
-              scale: 1.7,
+              scale: 2,
             });
 
           const content =
@@ -354,25 +708,25 @@ export default function KoreanTwinQuestionsPage() {
                     );
 
                   try {
-                    const transform =
+                    const transformed =
                       pdfjsLib.Util.transform(
                         viewport.transform,
                         rawItem.transform
                       );
 
                     const x =
-                      transform[4];
+                      transformed[4];
 
                     const fontHeight =
                       Math.max(
                         1,
                         Math.abs(
-                          transform[3]
+                          transformed[3]
                         )
                       );
 
                     const y =
-                      transform[5] -
+                      transformed[5] -
                       fontHeight;
 
                     const width =
@@ -484,7 +838,7 @@ ${pageText}
             imageUrl:
               canvas.toDataURL(
                 "image/jpeg",
-                0.8
+                0.92
               ),
           });
         }
@@ -499,7 +853,7 @@ ${pageText}
         }
 
         setStatusText(
-          "원본 문제와 시각 자료를 분석하는 중..."
+          "지문과 문항을 분석하는 중..."
         );
 
         const response =
@@ -519,8 +873,6 @@ ${pageText}
                   text,
                   pdfText:
                     text,
-                  pageImages,
-                  pageTextData,
                 }),
             }
           );
@@ -534,23 +886,43 @@ ${pageText}
           throw new Error(
             data?.detail ||
               data?.error ||
-              "분석에 실패했습니다."
+              "원본 문제 분석에 실패했습니다."
           );
         }
 
-        const foundGroups =
+        const foundGroups: TwinPassageGroup[] =
           Array.isArray(
             data?.groups
           )
             ? data.groups
             : [];
 
+        if (
+          foundGroups.length ===
+          0
+        ) {
+          throw new Error(
+            "지문과 문제 세트를 찾지 못했습니다."
+          );
+        }
+
+        setStatusText(
+          "원본 문항 이미지를 만드는 중..."
+        );
+
+        const completedGroups =
+          await attachOriginalQuestionImages(
+            foundGroups,
+            pageImages,
+            pageTextData
+          );
+
         setGroups(
-          foundGroups
+          completedGroups
         );
 
         const questionCount =
-          foundGroups.reduce(
+          completedGroups.reduce(
             (
               total: number,
               group: TwinPassageGroup
@@ -561,39 +933,24 @@ ${pageText}
             0
           );
 
-        const assetCount =
-          foundGroups.reduce(
-            (
-              total: number,
-              group: TwinPassageGroup
-            ) =>
-              total +
-              group.questions.reduce(
-                (
-                  qTotal: number,
-                  question: SourceQuestion
-                ) =>
-                  qTotal +
-                  question
-                    .attachments
-                    .length,
-                0
-              ),
-            0
-          );
-
         setStatusText(
-          `${foundGroups.length}개 지문 · ${questionCount}문항 · 시각자료 ${assetCount}개 분석 완료`
+          `${completedGroups.length}개 지문 · ${questionCount}문항 분석 완료`
         );
       } catch (
         error: any
       ) {
+        console.error(
+          error
+        );
+
         setErrorMessage(
           error?.message ||
             "오류가 발생했습니다."
         );
       } finally {
-        setLoading(false);
+        setLoading(
+          false
+        );
       }
     };
 
@@ -609,153 +966,28 @@ ${pageText}
         return;
       }
 
+      if (
+        file.type !==
+          "application/pdf" &&
+        !file.name
+          .toLowerCase()
+          .endsWith(
+            ".pdf"
+          )
+      ) {
+        alert(
+          "PDF 파일을 선택해줘."
+        );
+
+        return;
+      }
+
       await readPdf(
         file
       );
 
       event.target.value =
         "";
-    };
-
-  const renderVisual =
-    (
-      attachment:
-        QuestionAttachment
-    ) => {
-      if (
-        !attachment.imageUrl
-      ) {
-        return null;
-      }
-
-      return (
-        <div
-          key={
-            attachment.id
-          }
-          className="my-6 flex justify-center"
-        >
-          <img
-            src={
-              attachment.imageUrl
-            }
-            alt={
-              attachment.description
-            }
-            className="h-auto max-h-[520px] max-w-full object-contain"
-          />
-        </div>
-      );
-    };
-
-  const renderQuestion =
-    (
-      question:
-        SourceQuestion
-    ) => {
-      const questionAssets =
-        question.attachments.filter(
-          (
-            item
-          ) =>
-            item.placement ===
-            "question"
-        );
-
-      const bogiAssets =
-        question.attachments.filter(
-          (
-            item
-          ) =>
-            item.placement ===
-            "bogi"
-        );
-
-      const choiceAssets =
-        question.attachments.filter(
-          (
-            item
-          ) =>
-            item.placement ===
-            "choice"
-        );
-
-      return (
-        <article
-          key={
-            question.number
-          }
-          className="rounded-2xl bg-white px-8 py-8 shadow-sm ring-1 ring-slate-200 md:px-11"
-        >
-          <div className="flex items-start gap-3">
-            <span className="shrink-0 text-[18px] font-black leading-8 text-slate-950">
-              {
-                question.number
-              }.
-            </span>
-
-            <p className="text-[17px] font-semibold leading-8 text-slate-950">
-              {
-                question.stem
-              }
-            </p>
-          </div>
-
-          {questionAssets.map(
-            renderVisual
-          )}
-
-          {(question.bogi ||
-            bogiAssets.length >
-              0) && (
-            <div className="mx-auto my-8 max-w-[760px] border-y border-slate-700 px-6 py-5">
-              <div className="text-center text-[15px] font-bold tracking-[0.25em]">
-                &lt; 보 기 &gt;
-              </div>
-
-              {question.bogi && (
-                <div className="mt-5 whitespace-pre-wrap text-[15px] leading-8 text-slate-950">
-                  {
-                    question.bogi
-                  }
-                </div>
-              )}
-
-              {bogiAssets.map(
-                renderVisual
-              )}
-            </div>
-          )}
-
-          {question.choices
-            .length >
-            0 && (
-            <div className="mt-7 space-y-3">
-              {question.choices.map(
-                (
-                  choice,
-                  index
-                ) => (
-                  <div
-                    key={
-                      index
-                    }
-                    className="text-[16px] leading-7 text-slate-950"
-                  >
-                    {
-                      choice
-                    }
-                  </div>
-                )
-              )}
-            </div>
-          )}
-
-          {choiceAssets.map(
-            renderVisual
-          )}
-        </article>
-      );
     };
 
   const totalQuestions =
@@ -782,7 +1014,7 @@ ${pageText}
         </h1>
 
         <p className="mt-3 text-slate-600">
-          원본 모의고사 형식을 먼저 정확히 분석합니다.
+          원본 모의고사 문항을 그대로 보존해 분석합니다.
         </p>
 
         <section className="mt-8 rounded-3xl bg-white p-7 shadow-sm ring-1 ring-slate-200">
@@ -790,7 +1022,7 @@ ${pageText}
             원본 시험 PDF
           </h2>
 
-          <label className="mt-6 flex cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
+          <label className="mt-6 flex cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center transition hover:border-purple-400 hover:bg-purple-50">
             <div>
               <p className="text-lg font-black">
                 PDF 파일 선택
@@ -798,9 +1030,7 @@ ${pageText}
 
               {fileName && (
                 <p className="mt-4 font-bold text-purple-600">
-                  {
-                    fileName
-                  }
+                  {fileName}
                 </p>
               )}
             </div>
@@ -817,33 +1047,27 @@ ${pageText}
 
           {statusText && (
             <div className="mt-5 rounded-2xl bg-blue-50 px-5 py-4 font-bold text-blue-700">
-              {
-                statusText
-              }
+              {statusText}
             </div>
           )}
         </section>
 
         {errorMessage && (
           <div className="mt-7 rounded-2xl bg-red-50 p-5 font-bold text-red-700">
-            {
-              errorMessage
-            }
+            {errorMessage}
           </div>
         )}
 
         {groups.length >
           0 && (
           <section className="mt-10">
-            <h2 className="text-3xl font-black">
+            <h2 className="text-3xl font-black text-slate-950">
               원본 문제 구조 확인
             </h2>
 
             <p className="mt-2 text-slate-500">
               총{" "}
-              {
-                totalQuestions
-              }
+              {totalQuestions}
               문항
             </p>
 
@@ -860,7 +1084,7 @@ ${pageText}
                     className="overflow-hidden rounded-[30px] bg-white shadow-sm ring-1 ring-slate-200"
                   >
                     <div className="bg-slate-950 px-8 py-6 text-white">
-                      <p className="text-xs font-black text-purple-300">
+                      <p className="text-xs font-black tracking-widest text-purple-300">
                         PASSAGE{" "}
                         {groupIndex +
                           1}
@@ -877,9 +1101,9 @@ ${pageText}
                         {group.questions
                           .map(
                             (
-                              item
+                              question
                             ) =>
-                              item.number
+                              question.number
                           )
                           .join(
                             " · "
@@ -887,25 +1111,63 @@ ${pageText}
                       </p>
                     </div>
 
-                    <div className="px-9 py-9 md:px-12">
-                      <p className="mb-5 text-xs font-black tracking-widest text-slate-400">
-                        지 문
-                      </p>
+                    <details className="border-b border-slate-200 bg-slate-50 px-8 py-5">
+                      <summary className="cursor-pointer font-bold text-slate-600">
+                        분석용 지문 텍스트 보기
+                      </summary>
 
-                      <DecoratedPassage
-                        source={
+                      <div className="mt-5 whitespace-pre-wrap text-[15px] leading-8 text-slate-800">
+                        {
                           group.source
                         }
-                        markers={
-                          group.markers ||
-                          []
-                        }
-                      />
-                    </div>
+                      </div>
+                    </details>
 
-                    <div className="space-y-7 border-t bg-slate-50 p-7 md:p-9">
+                    <div className="space-y-8 bg-slate-100 p-6 md:p-9">
                       {group.questions.map(
-                        renderQuestion
+                        (
+                          question
+                        ) => (
+                          <article
+                            key={
+                              question.number
+                            }
+                            className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200"
+                          >
+                            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                              <p className="font-black text-slate-900">
+                                {
+                                  question.number
+                                }
+                                번 원본
+                              </p>
+
+                              <p className="text-xs font-bold text-slate-400">
+                                PDF{" "}
+                                {
+                                  question.pageNumber
+                                }
+                                페이지
+                              </p>
+                            </div>
+
+                            {question.originalImage ? (
+                              <div className="bg-white p-3 md:p-5">
+                                <img
+                                  src={
+                                    question.originalImage
+                                  }
+                                  alt={`${question.number}번 원본 문제`}
+                                  className="mx-auto h-auto max-h-[1000px] max-w-full object-contain"
+                                />
+                              </div>
+                            ) : (
+                              <div className="p-8 text-center font-bold text-red-600">
+                                원본 문항 이미지를 만들지 못했습니다.
+                              </div>
+                            )}
+                          </article>
+                        )
                       )}
                     </div>
                   </section>
