@@ -2,22 +2,48 @@ import OpenAI from "openai";
 
 export const maxDuration = 300;
 
+type PassageMarker = {
+  label: string;
+  text: string;
+  kind:
+    | "section"
+    | "underline"
+    | "symbol"
+    | "quoted"
+    | "other";
+};
+
+type QuestionAttachment = {
+  type:
+    | "table"
+    | "graph"
+    | "diagram"
+    | "image"
+    | "chart"
+    | "other";
+  description: string;
+  relatedQuestion: string;
+};
+
 type SourceQuestion = {
   number: string;
   stem: string;
   bogi: string;
   choices: string[];
+  attachments: QuestionAttachment[];
 };
 
 type TwinPassageGroup = {
   id: string;
   title: string;
   source: string;
+  markers: PassageMarker[];
   questions: SourceQuestion[];
 };
 
 function cleanText(value: unknown) {
   return String(value ?? "")
+    .replace(/\u0000/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -39,13 +65,6 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-
-    /*
-    ==================================================
-    입력 호환
-    text / pdfText 둘 다 허용
-    ==================================================
-    */
 
     const rawText =
       body?.text ??
@@ -92,101 +111,48 @@ export async function POST(request: Request) {
       apiKey,
     });
 
-    /*
-    ==================================================
-    핵심 프롬프트
-    ==================================================
-    */
-
     const prompt = `
-당신은 대한민국 고등학교 국어 시험 문제를
-분석하는 전문 출제 교사입니다.
+당신은 대한민국 고등학교 국어 모의고사와
+수능형 국어 문제를 분석하는 전문 출제 교사입니다.
 
-아래 입력은 고등학교 국어 시험 PDF에서
-추출한 전체 텍스트입니다.
+아래 입력은 국어 시험 PDF에서 추출된
+전체 텍스트입니다.
 
-이번 작업의 목적은
-"쌍둥이 문제 제작을 위한 원본 문제 세트 추출"
-입니다.
+이번 단계의 목적은
+"쌍둥이 문제 제작을 위한 원본 형식 분석"입니다.
 
 절대로 새 문제를 만들지 마세요.
 
-지금 단계에서는 오직
-
-1. 비문학 지문
-2. 그 지문에 딸린 원본 문제
-3. 각 문제의 선택지
-4. 문제에 포함된 <보기>
-
-를 정확하게 묶어서 반환하세요.
+이번에는 단순히 지문과 문제만 추출하는 것이 아니라,
+실제 모의고사 형식을 재현하는 데 필요한 정보까지
+구조화해서 추출해야 합니다.
 
 ==================================================
-가장 중요한 원칙
+핵심 추출 대상
 ==================================================
 
-예를 들어 시험지가 다음 구조라면:
+각 비문학 지문마다 반드시 추출:
 
-[24~27] 다음 글을 읽고 물음에 답하시오.
-
-비문학 지문 A
-
-24. 문제
-① ...
-② ...
-③ ...
-④ ...
-⑤ ...
-
-25. 문제
-<보기>
-...
-① ...
-② ...
-③ ...
-④ ...
-⑤ ...
-
-26. 문제
-...
-
-27. 문제
-...
-
-[28~32] 문학
-
-...
-
-[33~35] 다음 글을 읽고 물음에 답하시오.
-
-비문학 지문 B
-
-33. 문제
-...
-34. 문제
-...
-35. 문제
-...
-
-이 경우 반드시 다음처럼 분리합니다.
-
-PASSAGE 1
-- 지문 A
-- 24번
-- 25번
-- 26번
-- 27번
-
-PASSAGE 2
-- 지문 B
-- 33번
-- 34번
-- 35번
+1. 지문 원문
+2. 해당 지문에 딸린 원본 문제
+3. 발문
+4. <보기>
+5. 선택지
+6. (가), (나), (다) 같은 지문 구간
+7. ⓐ, ⓑ, ⓒ 같은 지문 표식
+8. 밑줄 친 부분
+9. 따옴표로 강조된 부분
+10. 표
+11. 그래프
+12. 도식
+13. 그림 자료
+14. 문항별 부속 자료
 
 ==================================================
 비문학 우선
 ==================================================
 
-다음을 우선 추출합니다.
+다음 유형을 우선 추출하세요.
 
 - 사회
 - 경제
@@ -200,65 +166,249 @@ PASSAGE 2
 - 설명문
 - 논설문
 
-시, 소설, 고전문학 등의 문학 작품은
-이번 단계에서 기본적으로 제외합니다.
-
-비문학 지문이 여러 개 있으면
-각각 별도의 passage group으로 반환하세요.
+시, 소설, 고전문학 등은
+비문학이 있다면 기본적으로 제외합니다.
 
 ==================================================
-지문 추출 규칙
+지문 분리
 ==================================================
 
-지문 source에는
+예:
 
-실제 지문 본문만 넣으세요.
+[24~27]
+지문 A
+24번
+25번
+26번
+27번
 
-다음은 제거하세요.
+[28~32]
+문학
+
+[33~35]
+지문 B
+33번
+34번
+35번
+
+이라면:
+
+group-1
+- 지문 A
+- 24~27번
+
+group-2
+- 지문 B
+- 33~35번
+
+으로 분리하세요.
+
+==================================================
+지문 원문 보존
+==================================================
+
+source에는 실제 지문 내용만 넣으세요.
+
+제거:
 
 - 페이지 번호
-- 시험지 머리말
+- 시험지 제목
 - 영역 표시
-- "다음 글을 읽고 물음에 답하시오"
 - 문제 번호
-- 문제 문장
 - 선택지
-- 정답 표시
-- 불필요한 반복 문구
+- "다음 글을 읽고 물음에 답하시오"
+- 반복되는 머리말
+- 불필요한 인쇄 정보
 
-그러나 지문 자체의 각주나 용어 설명이
-독해에 필요한 경우에는 포함해도 됩니다.
+하지만 다음은 보존해야 합니다.
 
-지문을 요약하거나 새로 쓰지 마세요.
+- (가)
+- (나)
+- (다)
+- ⓐ
+- ⓑ
+- ⓒ
+- 지문 안의 번호 표식
+- 인용 기호
+- 문제 풀이에 필요한 각주
+- 용어 설명
+
+지문 내용을 요약하거나 바꾸지 마세요.
 
 ==================================================
-문제 추출 규칙
+markers 추출 규칙
+==================================================
+
+markers는 지문 안에서
+문항이 직접 참조하는 표시를 추출합니다.
+
+예:
+
+문제:
+"(가)에 대한 설명으로 적절하지 않은 것은?"
+
+지문:
+(가) 어떤 정책은 모든 사람에게...
+
+이 경우:
+
+{
+  "label": "(가)",
+  "text": "(가)에 해당하는 실제 지문 범위",
+  "kind": "section"
+}
+
+==================================================
+
+문제:
+"밑줄 친 ⓐ의 의미로 가장 적절한 것은?"
+
+지문:
+... ⓐ효율성이 증가한다 ...
+
+이 경우:
+
+{
+  "label": "ⓐ",
+  "text": "효율성이 증가한다",
+  "kind": "symbol"
+}
+
+==================================================
+
+문제:
+"밑줄 친 부분의 의미로 적절한 것은?"
+
+PDF 텍스트만으로 밑줄 범위를
+완전히 판단할 수 없다면
+
+억지로 추측하지 말고,
+확실히 식별 가능한 텍스트만 넣으세요.
+
+==================================================
+중요: (가), (나) 범위
+==================================================
+
+(가), (나)가 등장한다면
+단순히 "(가)" 표시만 저장하지 마세요.
+
+반드시 해당 범위의 본문 전체를
+text에 넣으세요.
+
+예:
+
+(가) 시작 문장...
+중간 문장...
+마지막 문장...
+
+(나) 시작...
+
+이 경우 (가)의 marker.text는
+(가) 시작부터 (나) 직전까지입니다.
+
+==================================================
+강조/밑줄
+==================================================
+
+PDF 추출 텍스트에서 밑줄이 사라질 수 있습니다.
+
+이 경우 문제 발문을 활용해
+가능한 범위를 찾으세요.
+
+하지만 명확하지 않다면
+허위로 생성하지 마세요.
+
+확실하지 않으면 markers에서 제외하세요.
+
+==================================================
+표 / 그래프 / 도식 / 그림
+==================================================
+
+PDF 텍스트에는 표나 도식이
+줄글처럼 섞여 나올 수 있습니다.
+
+예:
+
+A 10 20
+B 30 40
+
+처럼 보이거나,
+
+열 구조가 깨져 있어도
+문제 발문에서
+
+"위 표"
+"표에 대한 설명"
+"그래프"
+"자료"
+"그림"
+"도식"
+
+등을 참조한다면 attachments에 기록하세요.
+
+==================================================
+attachments
+==================================================
+
+문항마다 부속 자료가 있다면:
+
+{
+  "type": "table",
+  "description": "A와 B의 수치를 비교하는 2열 표",
+  "relatedQuestion": "26"
+}
+
+처럼 넣습니다.
+
+가능한 type:
+
+- table
+- graph
+- diagram
+- image
+- chart
+- other
+
+==================================================
+중요
+==================================================
+
+현재 단계에서는 실제 이미지를 생성하지 않습니다.
+
+attachments는
+"원문 PDF에 시각 자료가 있었음을 감지하고
+다음 단계에서 PDF 페이지 이미지에서 잘라낼 수 있도록
+표시하는 메타데이터"입니다.
+
+==================================================
+문제
 ==================================================
 
 questions 배열에는
-해당 지문 뒤에 붙은 원본 문제를
-문제 번호 순서대로 넣으세요.
-
-각 문제:
+원본 문제를 번호 순서대로 넣습니다.
 
 number:
-문제 번호만 넣습니다.
-예: "24"
+문제 번호
 
 stem:
-문제의 발문 전체.
-선택지는 포함하지 않습니다.
+문제 발문 전체
 
 bogi:
-문제 안에 <보기>가 있다면
-<보기> 전체 내용을 넣습니다.
-
-<보기>가 없으면 빈 문자열 "".
+<보기> 전체
+없으면 ""
 
 choices:
-선택지를 순서대로 문자열 배열로 넣습니다.
+선택지 배열
 
-예:
+attachments:
+표/그래프/도식 등이 있으면 배열
+없으면 []
+
+==================================================
+선택지
+==================================================
+
+가능하면 원본 기호를 유지하세요.
 
 [
   "① ...",
@@ -268,46 +418,34 @@ choices:
   "⑤ ..."
 ]
 
-선지가 표 형식이라면
-각 선지의 의미가 보존되도록
-하나의 문자열로 정리하세요.
+표 형식 선택지라도
+의미를 깨뜨리지 마세요.
 
 ==================================================
-중요
+정답 추측 금지
 ==================================================
 
-문제의 정답을 추측하지 마세요.
-
-정답 분석은 다음 단계에서 합니다.
-
-지금은 원문 시험의 구조를
-최대한 정확히 보존하는 것이 목표입니다.
+정답을 추측하거나 추가하지 마세요.
 
 ==================================================
-제목
+JSON 형식
 ==================================================
 
-각 지문에는 학생이 알아보기 쉬운
-짧은 제목을 새로 붙이세요.
-
-예:
-
-"기본소득과 최저소득 보장"
-
-"동물의 눈동자와 생존 전략"
-
-==================================================
-JSON 출력
-==================================================
-
-반드시 아래 형식으로만 답하세요.
+반드시 아래 구조로만 반환하세요.
 
 {
   "groups": [
     {
       "id": "group-1",
-      "title": "짧은 지문 제목",
+      "title": "짧은 제목",
       "source": "지문 원문",
+      "markers": [
+        {
+          "label": "(가)",
+          "text": "해당 범위의 원문",
+          "kind": "section"
+        }
+      ],
       "questions": [
         {
           "number": "24",
@@ -319,27 +457,22 @@ JSON 출력
             "③ 선택지",
             "④ 선택지",
             "⑤ 선택지"
-          ]
+          ],
+          "attachments": []
         }
       ]
     }
   ]
 }
 
-JSON 밖의 설명은 절대 하지 마세요.
+JSON 밖의 설명은 절대 쓰지 마세요.
 
 ==================================================
-시험지 전체 텍스트
+분석할 시험지
 ==================================================
 
 ${text}
 `;
-
-    /*
-    ==================================================
-    AI 분석
-    ==================================================
-    */
 
     const result =
       await openai.responses.create({
@@ -348,19 +481,14 @@ ${text}
       });
 
     const output =
-      result.output_text?.trim() ?? "";
+      result.output_text?.trim() ??
+      "";
 
     if (!output) {
       throw new Error(
         "원본 문제 분석 결과가 비어 있습니다."
       );
     }
-
-    /*
-    ==================================================
-    JSON 코드블록 제거
-    ==================================================
-    */
 
     const cleanedOutput =
       output
@@ -403,12 +531,6 @@ ${text}
         ? parsed.groups
         : [];
 
-    /*
-    ==================================================
-    결과 정리
-    ==================================================
-    */
-
     const groups: TwinPassageGroup[] =
       rawGroups
         .map(
@@ -416,67 +538,197 @@ ${text}
             group: any,
             groupIndex: number
           ) => {
-            const questions =
+            const rawMarkers =
+              Array.isArray(
+                group?.markers
+              )
+                ? group.markers
+                : [];
+
+            const markers: PassageMarker[] =
+              rawMarkers
+                .map(
+                  (
+                    marker: any
+                  ): PassageMarker => {
+                    const rawKind =
+                      cleanText(
+                        marker?.kind
+                      );
+
+                    const allowedKinds = [
+                      "section",
+                      "underline",
+                      "symbol",
+                      "quoted",
+                      "other",
+                    ];
+
+                    const kind =
+                      allowedKinds.includes(
+                        rawKind
+                      )
+                        ? rawKind
+                        : "other";
+
+                    return {
+                      label:
+                        cleanText(
+                          marker?.label
+                        ),
+
+                      text:
+                        cleanText(
+                          marker?.text
+                        ),
+
+                      kind:
+                        kind as PassageMarker["kind"],
+                    };
+                  }
+                )
+                .filter(
+                  (
+                    marker:
+                      PassageMarker
+                  ) =>
+                    Boolean(
+                      marker.label
+                    ) &&
+                    Boolean(
+                      marker.text
+                    )
+                );
+
+            const rawQuestions =
               Array.isArray(
                 group?.questions
               )
                 ? group.questions
-                    .map(
-                      (
-                        question: any
-                      ): SourceQuestion => {
-                        const rawChoices =
-                          Array.isArray(
-                            question?.choices
-                          )
-                            ? question.choices
-                            : [];
-
-                        return {
-                          number:
-                            cleanText(
-                              question?.number
-                            ),
-
-                          stem:
-                            cleanText(
-                              question?.stem
-                            ),
-
-                          bogi:
-                            cleanText(
-                              question?.bogi
-                            ),
-
-                          choices:
-                            rawChoices
-                              .map(
-                                (
-                                  choice: any
-                                ) =>
-                                  cleanText(
-                                    choice
-                                  )
-                              )
-                              .filter(
-                                Boolean
-                              ),
-                        };
-                      }
-                    )
-                    .filter(
-                      (
-                        question:
-                          SourceQuestion
-                      ) =>
-                        Boolean(
-                          question.number
-                        ) &&
-                        Boolean(
-                          question.stem
-                        )
-                    )
                 : [];
+
+            const questions: SourceQuestion[] =
+              rawQuestions
+                .map(
+                  (
+                    question: any
+                  ): SourceQuestion => {
+                    const rawChoices =
+                      Array.isArray(
+                        question?.choices
+                      )
+                        ? question.choices
+                        : [];
+
+                    const rawAttachments =
+                      Array.isArray(
+                        question?.attachments
+                      )
+                        ? question.attachments
+                        : [];
+
+                    const attachments: QuestionAttachment[] =
+                      rawAttachments
+                        .map(
+                          (
+                            attachment: any
+                          ): QuestionAttachment => {
+                            const rawType =
+                              cleanText(
+                                attachment?.type
+                              );
+
+                            const allowedTypes = [
+                              "table",
+                              "graph",
+                              "diagram",
+                              "image",
+                              "chart",
+                              "other",
+                            ];
+
+                            const type =
+                              allowedTypes.includes(
+                                rawType
+                              )
+                                ? rawType
+                                : "other";
+
+                            return {
+                              type:
+                                type as QuestionAttachment["type"],
+
+                              description:
+                                cleanText(
+                                  attachment?.description
+                                ),
+
+                              relatedQuestion:
+                                cleanText(
+                                  attachment?.relatedQuestion
+                                ) ||
+                                cleanText(
+                                  question?.number
+                                ),
+                            };
+                          }
+                        )
+                        .filter(
+                          (
+                            attachment:
+                              QuestionAttachment
+                          ) =>
+                            Boolean(
+                              attachment.description
+                            )
+                        );
+
+                    return {
+                      number:
+                        cleanText(
+                          question?.number
+                        ),
+
+                      stem:
+                        cleanText(
+                          question?.stem
+                        ),
+
+                      bogi:
+                        cleanText(
+                          question?.bogi
+                        ),
+
+                      choices:
+                        rawChoices
+                          .map(
+                            (
+                              choice: any
+                            ) =>
+                              cleanText(
+                                choice
+                              )
+                          )
+                          .filter(
+                            Boolean
+                          ),
+
+                      attachments,
+                    };
+                  }
+                )
+                .filter(
+                  (
+                    question:
+                      SourceQuestion
+                  ) =>
+                    Boolean(
+                      question.number
+                    ) &&
+                    Boolean(
+                      question.stem
+                    )
+                );
 
             return {
               id:
@@ -495,6 +747,8 @@ ${text}
                 cleanText(
                   group?.source
                 ),
+
+              markers,
 
               questions,
             };
@@ -528,6 +782,16 @@ ${text}
         (sum, group) =>
           sum +
           group.questions.length,
+        0
+      )
+    );
+
+    console.log(
+      "KOREAN TWIN MARKERS:",
+      groups.reduce(
+        (sum, group) =>
+          sum +
+          group.markers.length,
         0
       )
     );
