@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import HomeButton from "../components/HomeButton";
+import * as pdfjsLib from "pdfjs-dist";
+import { jsPDF } from "jspdf";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url
+).toString();
 
 type Passage = {
   id: string;
@@ -21,759 +27,1257 @@ type SummaryConcept = {
 
 type SummaryResult = {
   passageId: string;
+
   title: string;
+
   oneLine: string;
 
   visualPrompt?: string;
+
   visualImage?: string;
 
   flow: SummaryFlow[];
+
   concepts: SummaryConcept[];
 
   comparisonTitle: string;
+
   comparisonHeaders: string[];
+
   comparisonRows: string[][];
 
   testPoints: string[];
+
   caution: string;
 };
 
 export default function KoreanSummaryPage() {
-  const [fileName, setFileName] = useState("");
-  const [extracting, setExtracting] = useState(false);
+  const [fileName, setFileName] =
+    useState("");
 
-  const [passages, setPassages] = useState<Passage[]>([]);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [pdfText, setPdfText] =
+    useState("");
 
-  const [generating, setGenerating] = useState(false);
-  const [results, setResults] = useState<SummaryResult[]>([]);
+  const [passages, setPassages] =
+    useState<Passage[]>([]);
 
-  const extractPdf = async (file: File) => {
+  const [selectedIds, setSelectedIds] =
+    useState<string[]>([]);
+
+  const [results, setResults] =
+    useState<SummaryResult[]>([]);
+
+  const [loadingPdf, setLoadingPdf] =
+    useState(false);
+
+  const [
+    loadingPassages,
+    setLoadingPassages,
+  ] = useState(false);
+
+  const [
+    loadingSummary,
+    setLoadingSummary,
+  ] = useState(false);
+
+  const [makingPdf, setMakingPdf] =
+    useState(false);
+
+  const [statusText, setStatusText] =
+    useState("");
+
+  const [errorMessage, setErrorMessage] =
+    useState("");
+
+  /*
+  ==================================================
+  PDF 텍스트 추출
+  ==================================================
+  */
+
+  const readPdf = async (file: File) => {
     try {
-      setExtracting(true);
-      setFileName(file.name);
+      setLoadingPdf(true);
+      setErrorMessage("");
+      setStatusText(
+        "PDF에서 지문을 읽는 중..."
+      );
+
+      setPdfText("");
       setPassages([]);
       setSelectedIds([]);
       setResults([]);
 
-      const pdfjs = await import("pdfjs-dist");
+      setFileName(file.name);
 
-      pdfjs.GlobalWorkerOptions.workerSrc =
-        `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+      const arrayBuffer =
+        await file.arrayBuffer();
 
-      const buffer = await file.arrayBuffer();
+      const loadingTask =
+        pdfjsLib.getDocument({
+          data: new Uint8Array(
+            arrayBuffer
+          ),
+        });
 
-      const pdf = await pdfjs.getDocument({
-        data: buffer,
-      }).promise;
+      const pdf =
+        await loadingTask.promise;
 
-      let sourceText = "";
+      let fullText = "";
 
-      for (let pageNo = 1; pageNo <= pdf.numPages; pageNo++) {
-        const page = await pdf.getPage(pageNo);
-        const content = await page.getTextContent();
+      for (
+        let pageNumber = 1;
+        pageNumber <= pdf.numPages;
+        pageNumber++
+      ) {
+        setStatusText(
+          `${pageNumber}/${pdf.numPages} 페이지 읽는 중...`
+        );
 
-        const pageText = content.items
-          .map((item: any) => item.str || "")
-          .join(" ");
+        const page =
+          await pdf.getPage(
+            pageNumber
+          );
 
-        sourceText += `\n\n[PAGE ${pageNo}]\n${pageText}`;
+        const content =
+          await page.getTextContent();
+
+        const pageText =
+          content.items
+            .map((item: any) => {
+              if (
+                "str" in item
+              ) {
+                return item.str;
+              }
+
+              return "";
+            })
+            .join(" ");
+
+        fullText +=
+          `\n\n--- ${pageNumber}페이지 ---\n\n` +
+          pageText;
       }
 
-      const response = await fetch("/api/korean-summary-passages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          sourceText,
-        }),
-      });
+      setPdfText(fullText);
 
-      const data = await response.json();
+      setStatusText(
+        "비문학 지문을 찾는 중..."
+      );
+
+      await extractPassages(
+        fullText
+      );
+    } catch (error: any) {
+      console.error(
+        "PDF READ ERROR:",
+        error
+      );
+
+      setErrorMessage(
+        error?.message ||
+          "PDF를 읽는 중 오류가 발생했습니다."
+      );
+    } finally {
+      setLoadingPdf(false);
+    }
+  };
+
+  /*
+  ==================================================
+  지문 분리 API
+  ==================================================
+  */
+
+  const extractPassages = async (
+    text: string
+  ) => {
+    try {
+      setLoadingPassages(true);
+      setErrorMessage("");
+
+      const response =
+        await fetch(
+          "/api/korean-summary-passages",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              text,
+            }),
+          }
+        );
+
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data?.error || "국어 지문을 분리하지 못했습니다."
+          data?.detail ||
+            data?.error ||
+            "국어 지문 분리에 실패했습니다."
         );
       }
 
-      const nextPassages: Passage[] = Array.isArray(data?.passages)
-        ? data.passages
-        : [];
+      const foundPassages:
+        Passage[] =
+        Array.isArray(
+          data?.passages
+        )
+          ? data.passages
+          : [];
 
-      setPassages(nextPassages);
+      setPassages(
+        foundPassages
+      );
+
+      /*
+      처음 두 지문 자동 선택
+      */
 
       setSelectedIds(
-        nextPassages.slice(0, 2).map((item) => item.id)
+        foundPassages
+          .slice(0, 2)
+          .map(
+            (passage) =>
+              passage.id
+          )
       );
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "PDF 분석 중 오류가 발생했습니다.";
 
-      alert(message);
+      if (
+        foundPassages.length ===
+        0
+      ) {
+        setErrorMessage(
+          "비문학 지문을 찾지 못했습니다."
+        );
+      } else {
+        setStatusText(
+          `${foundPassages.length}개 지문을 찾았습니다.`
+        );
+      }
+    } catch (error: any) {
+      console.error(
+        "PASSAGE ERROR:",
+        error
+      );
+
+      setErrorMessage(
+        error?.message ||
+          "지문을 찾는 중 오류가 발생했습니다."
+      );
     } finally {
-      setExtracting(false);
+      setLoadingPassages(
+        false
+      );
     }
   };
 
-  const togglePassage = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id)
-        ? prev.filter((item) => item !== id)
-        : [...prev, id]
+  /*
+  ==================================================
+  파일 선택
+  ==================================================
+  */
+
+  const handleFileChange =
+    async (
+      event: React.ChangeEvent<HTMLInputElement>
+    ) => {
+      const file =
+        event.target
+          .files?.[0];
+
+      if (!file) return;
+
+      if (
+        file.type !==
+        "application/pdf"
+      ) {
+        alert(
+          "PDF 파일을 선택해줘."
+        );
+
+        return;
+      }
+
+      await readPdf(file);
+    };
+
+  /*
+  ==================================================
+  지문 선택
+  ==================================================
+  */
+
+  const togglePassage = (
+    id: string
+  ) => {
+    setSelectedIds(
+      (prev) => {
+        if (
+          prev.includes(id)
+        ) {
+          return prev.filter(
+            (item) =>
+              item !== id
+          );
+        }
+
+        /*
+        지금은 최대 2개
+        */
+
+        if (
+          prev.length >= 2
+        ) {
+          alert(
+            "이번에는 지문 2개까지만 선택하자."
+          );
+
+          return prev;
+        }
+
+        return [
+          ...prev,
+          id,
+        ];
+      }
     );
   };
 
-  const selectAllPassages = () => {
-    setSelectedIds(passages.map((item) => item.id));
-  };
+  /*
+  ==================================================
+  비주얼 이미지 생성
+  ==================================================
+  */
 
-  const clearAllPassages = () => {
-    setSelectedIds([]);
-  };
+  const requestVisualImage =
+    async (
+      summary: SummaryResult
+    ): Promise<string> => {
+      const response =
+        await fetch(
+          "/api/korean-summary-visual",
+          {
+            method: "POST",
 
-  const makeSummary = async () => {
-    const selectedPassages = passages.filter((passage) =>
-      selectedIds.includes(passage.id)
-    );
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
 
-    if (selectedPassages.length === 0) {
-      alert("요약할 지문을 선택해 주세요.");
-      return;
-    }
+            body:
+              JSON.stringify({
+                title:
+                  summary.title,
 
-    try {
-      setGenerating(true);
-      setResults([]);
+                oneLine:
+                  summary.oneLine,
 
-      const response = await fetch("/api/korean-summary-generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          passages: selectedPassages,
-        }),
-      });
+                visualPrompt:
+                  summary.visualPrompt,
 
-      const data = await response.json();
+                flow:
+                  summary.flow,
+
+                concepts:
+                  summary.concepts,
+
+                comparisonTitle:
+                  summary.comparisonTitle,
+
+                comparisonHeaders:
+                  summary.comparisonHeaders,
+
+                comparisonRows:
+                  summary.comparisonRows,
+
+                testPoints:
+                  summary.testPoints,
+
+                caution:
+                  summary.caution,
+              }),
+          }
+        );
+
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data?.error || "요약.ZIP 생성 중 오류가 발생했습니다."
+          data?.detail ||
+            data?.error ||
+            "비주얼 요약 이미지 생성에 실패했습니다."
         );
       }
 
-      const summaries: SummaryResult[] = Array.isArray(data?.summaries)
-        ? data.summaries
-        : [];
+      if (
+        !data?.imageUrl
+      ) {
+        throw new Error(
+          "생성된 비주얼 이미지가 없습니다."
+        );
+      }
 
-      // 먼저 텍스트 요약 결과부터 보여줌
-      setResults(summaries);
+      return data.imageUrl;
+    };
 
-      // 각 지문별 일러스트를 동시에 생성
-      const withImages = await Promise.all(
-        summaries.map(async (summary) => {
-          if (!summary.visualPrompt) {
-            return summary;
-          }
+  /*
+  ==================================================
+  요약 + 비주얼 생성
+  ==================================================
+  */
+
+  const makeSummary =
+    async () => {
+      const selectedPassages =
+        passages.filter(
+          (passage) =>
+            selectedIds.includes(
+              passage.id
+            )
+        );
+
+      if (
+        selectedPassages.length ===
+        0
+      ) {
+        alert(
+          "먼저 지문을 선택해줘."
+        );
+
+        return;
+      }
+
+      try {
+        setLoadingSummary(true);
+        setErrorMessage("");
+        setResults([]);
+
+        setStatusText(
+          "국어 요약.ZIP 내용을 만드는 중..."
+        );
+
+        /*
+        1단계
+        텍스트 요약
+        */
+
+        const response =
+          await fetch(
+            "/api/korean-summary-generate",
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+
+              body:
+                JSON.stringify({
+                  passages:
+                    selectedPassages,
+                }),
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data?.detail ||
+              data?.error ||
+              "국어 요약 생성에 실패했습니다."
+          );
+        }
+
+        const summaries:
+          SummaryResult[] =
+          Array.isArray(
+            data?.summaries
+          )
+            ? data.summaries
+            : [];
+
+        if (
+          summaries.length ===
+          0
+        ) {
+          throw new Error(
+            "생성된 요약 결과가 없습니다."
+          );
+        }
+
+        /*
+        텍스트 결과 먼저 표시
+        */
+
+        setResults(
+          summaries
+        );
+
+        /*
+        2단계
+        각 지문 비주얼 생성
+        */
+
+        const completed:
+          SummaryResult[] =
+          [];
+
+        for (
+          let index = 0;
+          index <
+          summaries.length;
+          index++
+        ) {
+          const summary =
+            summaries[index];
+
+          setStatusText(
+            `${index + 1}/${summaries.length} 비주얼 요약 생성 중...`
+          );
 
           try {
-            const imageResponse = await fetch(
-              "/api/korean-summary-visual",
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-               body: JSON.stringify({
-  title: summary.title,
-  oneLine: summary.oneLine,
-  visualPrompt: summary.visualPrompt,
-  flow: summary.flow,
-  concepts: summary.concepts,
-  comparisonTitle: summary.comparisonTitle,
-  comparisonHeaders: summary.comparisonHeaders,
-  comparisonRows: summary.comparisonRows,
-  testPoints: summary.testPoints,
-  caution: summary.caution,
-}),
-              }
-            );
+            const image =
+              await requestVisualImage(
+                summary
+              );
 
-            const imageData = await imageResponse.json();
-
-            if (!imageResponse.ok || !imageData?.imageUrl) {
-              return summary;
-            }
-
-            return {
+            completed.push({
               ...summary,
-              visualImage: imageData.imageUrl,
-            };
-          } catch (error) {
+
+              visualImage:
+                image,
+            });
+          } catch (
+            imageError
+          ) {
             console.error(
-              "Summary illustration error:",
-              error
+              "VISUAL IMAGE ERROR:",
+              imageError
             );
 
-            return summary;
+            completed.push({
+              ...summary,
+            });
           }
-        })
-      );
 
-      setResults(withImages);
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "요약.ZIP 생성 중 오류가 발생했습니다.";
+          /*
+          한 장 끝날 때마다 화면 갱신
+          */
 
-      alert(message);
-    } finally {
-      setGenerating(false);
-    }
-  };
+          setResults([
+            ...completed,
+
+            ...summaries.slice(
+              completed.length
+            ),
+          ]);
+        }
+
+        setResults(
+          completed
+        );
+
+        setStatusText(
+          "두 지문 비주얼 요약 생성 완료!"
+        );
+      } catch (
+        error: any
+      ) {
+        console.error(
+          "SUMMARY ERROR:",
+          error
+        );
+
+        setErrorMessage(
+          error?.message ||
+            "국어 요약.ZIP 생성 중 오류가 발생했습니다."
+        );
+      } finally {
+        setLoadingSummary(
+          false
+        );
+      }
+    };
+
+  /*
+  ==================================================
+  이미지 로딩
+  ==================================================
+  */
+
+  const loadImage = (
+    src: string
+  ) =>
+    new Promise<HTMLImageElement>(
+      (
+        resolve,
+        reject
+      ) => {
+        const image =
+          new Image();
+
+        image.onload =
+          () =>
+            resolve(
+              image
+            );
+
+        image.onerror =
+          () =>
+            reject(
+              new Error(
+                "PDF에 넣을 이미지를 불러오지 못했습니다."
+              )
+            );
+
+        image.src = src;
+      }
+    );
+
+  /*
+  ==================================================
+  2지문 PDF 다운로드
+  ==================================================
+  */
+
+  const downloadSummaryPdf =
+    async () => {
+      const imageResults =
+        results.filter(
+          (item) =>
+            typeof item.visualImage ===
+              "string" &&
+            item.visualImage.startsWith(
+              "data:image"
+            )
+        );
+
+      if (
+        imageResults.length ===
+        0
+      ) {
+        alert(
+          "먼저 비주얼 요약을 생성해줘."
+        );
+
+        return;
+      }
+
+      if (
+        imageResults.length <
+        selectedIds.length
+      ) {
+        alert(
+          "아직 모든 비주얼 이미지가 생성되지 않았어."
+        );
+
+        return;
+      }
+
+      try {
+        setMakingPdf(true);
+        setErrorMessage("");
+
+        setStatusText(
+          "PDF를 만드는 중..."
+        );
+
+        /*
+        A4 가로
+        */
+
+        const pdf =
+          new jsPDF({
+            orientation:
+              "landscape",
+
+            unit: "mm",
+
+            format: "a4",
+
+            compress: true,
+          });
+
+        const pageWidth =
+          pdf.internal.pageSize.getWidth();
+
+        const pageHeight =
+          pdf.internal.pageSize.getHeight();
+
+        /*
+        이미지가 페이지 끝에 딱 붙지 않게
+        약간 여백
+        */
+
+        const margin = 4;
+
+        const availableWidth =
+          pageWidth -
+          margin * 2;
+
+        const availableHeight =
+          pageHeight -
+          margin * 2;
+
+        for (
+          let index = 0;
+          index <
+          imageResults.length;
+          index++
+        ) {
+          const item =
+            imageResults[index];
+
+          if (
+            index > 0
+          ) {
+            pdf.addPage(
+              "a4",
+              "landscape"
+            );
+          }
+
+          const imageData =
+            item.visualImage as string;
+
+          const image =
+            await loadImage(
+              imageData
+            );
+
+          const imageRatio =
+            image.width /
+            image.height;
+
+          const pageRatio =
+            availableWidth /
+            availableHeight;
+
+          let drawWidth =
+            availableWidth;
+
+          let drawHeight =
+            availableHeight;
+
+          /*
+          원본 비율 유지
+          */
+
+          if (
+            imageRatio >
+            pageRatio
+          ) {
+            drawWidth =
+              availableWidth;
+
+            drawHeight =
+              availableWidth /
+              imageRatio;
+          } else {
+            drawHeight =
+              availableHeight;
+
+            drawWidth =
+              availableHeight *
+              imageRatio;
+          }
+
+          const x =
+            (pageWidth -
+              drawWidth) /
+            2;
+
+          const y =
+            (pageHeight -
+              drawHeight) /
+            2;
+
+          /*
+          배경 흰색
+          */
+
+          pdf.setFillColor(
+            255,
+            255,
+            255
+          );
+
+          pdf.rect(
+            0,
+            0,
+            pageWidth,
+            pageHeight,
+            "F"
+          );
+
+          pdf.addImage(
+            imageData,
+            "PNG",
+            x,
+            y,
+            drawWidth,
+            drawHeight,
+            undefined,
+            "FAST"
+          );
+        }
+
+        /*
+        파일명
+        */
+
+        const safeName =
+          fileName
+            .replace(
+              /\.pdf$/i,
+              ""
+            )
+            .replace(
+              /[\\/:*?"<>|]/g,
+              "_"
+            ) ||
+          "국어";
+
+        pdf.save(
+          `${safeName}_국어요약ZIP.pdf`
+        );
+
+        setStatusText(
+          `${imageResults.length}페이지 PDF 다운로드 완료!`
+        );
+      } catch (
+        error: any
+      ) {
+        console.error(
+          "PDF ERROR:",
+          error
+        );
+
+        setErrorMessage(
+          error?.message ||
+            "PDF 생성 중 오류가 발생했습니다."
+        );
+      } finally {
+        setMakingPdf(false);
+      }
+    };
+
+  /*
+  ==================================================
+  UI
+  ==================================================
+  */
+
+  const completedImageCount =
+    results.filter(
+      (item) =>
+        Boolean(
+          item.visualImage
+        )
+    ).length;
 
   return (
-    <main className="min-h-screen bg-slate-50 px-5 py-8">
-      <div className="mx-auto max-w-6xl">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <HomeButton />
+    <main className="min-h-screen bg-slate-50 px-5 py-10">
+      <div className="mx-auto max-w-7xl">
+        {/* HEADER */}
 
+        <div className="flex flex-wrap items-start justify-between gap-5">
+          <div>
+            <p className="text-sm font-black tracking-widest text-emerald-600">
+              SUMMIT VISUAL LAB
+            </p>
+
+            <h1 className="mt-2 text-4xl font-black text-slate-900">
+              국어 요약.ZIP
+            </h1>
+
+            <p className="mt-3 text-slate-600">
+              고등 국어 비문학 지문을 한눈에 보는
+              비주얼 요약집으로 만들어줘.
+            </p>
+          </div>
+
+          {results.length >
+            0 && (
             <button
               type="button"
-              onClick={() => {
-                window.location.href = "/korean-test-maker";
-              }}
-              className="rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
+              onClick={
+                downloadSummaryPdf
+              }
+              disabled={
+                makingPdf ||
+                loadingSummary ||
+                completedImageCount ===
+                  0
+              }
+              className="rounded-2xl bg-slate-900 px-7 py-4 text-base font-black text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
-              ← 국어 메뉴로
+              {makingPdf
+                ? "PDF 만드는 중..."
+                : `PDF 다운로드 · ${completedImageCount}페이지`}
             </button>
-          </div>
-
-          <div className="rounded-full bg-violet-100 px-4 py-2 text-xs font-black tracking-[0.16em] text-violet-700">
-            KOR SUMMARY LAB
-          </div>
+          )}
         </div>
 
-        <section className="mt-8 rounded-[32px] bg-white p-7 shadow-sm ring-1 ring-slate-200">
-          <p className="text-sm font-black tracking-[0.18em] text-violet-600">
-            SUMMIT VISUAL LAB
+        {/* UPLOAD */}
+
+        <section className="mt-8 rounded-3xl bg-white p-7 shadow-sm ring-1 ring-slate-200">
+          <p className="text-sm font-black text-blue-600">
+            STEP 1
           </p>
 
-          <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-900 md:text-5xl">
-            국어 요약.ZIP
-          </h1>
+          <h2 className="mt-2 text-2xl font-black text-slate-900">
+            시험 PDF 올리기
+          </h2>
 
-          <p className="mt-4 max-w-3xl text-base leading-7 text-slate-500">
-            긴 국어 지문을 비주얼 학습자료로 정리합니다.
-            글의 흐름, 핵심 개념, 비교 구조, 시험 포인트와 함께
-            핵심 내용을 한눈에 볼 수 있는 일러스트를 생성합니다.
-          </p>
-
-          <div className="mt-6 flex flex-wrap gap-2">
-            <span className="rounded-full bg-violet-50 px-4 py-2 text-sm font-bold text-violet-700">
-              글의 흐름
-            </span>
-
-            <span className="rounded-full bg-sky-50 px-4 py-2 text-sm font-bold text-sky-700">
-              핵심 개념
-            </span>
-
-            <span className="rounded-full bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700">
-              비교 정리
-            </span>
-
-            <span className="rounded-full bg-rose-50 px-4 py-2 text-sm font-bold text-rose-700">
-              시험 POINT
-            </span>
-
-            <span className="rounded-full bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700">
-              비주얼 요약
-            </span>
-          </div>
-        </section>
-
-        <section className="mt-8 rounded-[32px] bg-white p-7 shadow-sm ring-1 ring-slate-200">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <label className="mt-5 flex cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center transition hover:border-blue-400 hover:bg-blue-50">
             <div>
-              <p className="text-sm font-black tracking-[0.16em] text-violet-600">
-                STEP 01
+              <p className="text-lg font-black text-slate-800">
+                PDF 파일 선택
               </p>
 
-              <h2 className="mt-1 text-2xl font-black text-slate-900">
-                PDF 업로드
-              </h2>
+              <p className="mt-2 text-sm text-slate-500">
+                국어 시험지 PDF를 올리면 비문학 지문을
+                자동으로 분리합니다.
+              </p>
+
+              {fileName && (
+                <p className="mt-4 font-bold text-blue-600">
+                  {fileName}
+                </p>
+              )}
             </div>
 
-            {fileName && (
-              <div className="rounded-full bg-slate-100 px-4 py-2 text-sm font-bold text-slate-600">
-                {fileName}
-              </div>
-            )}
-          </div>
-
-          <label className="mt-6 flex cursor-pointer items-center justify-center rounded-[28px] border-2 border-dashed border-violet-200 bg-violet-50 px-6 py-12 text-center transition hover:bg-violet-100">
             <input
               type="file"
               accept="application/pdf"
               className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-
-                if (file) {
-                  extractPdf(file);
-                }
-              }}
+              onChange={
+                handleFileChange
+              }
             />
-
-            <div>
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white text-3xl shadow-sm">
-                📄
-              </div>
-
-              <p className="mt-4 text-xl font-black text-violet-700">
-                {extracting
-                  ? "지문 분석 중..."
-                  : "국어 PDF 업로드"}
-              </p>
-
-              <p className="mt-2 text-sm leading-6 text-slate-500">
-                PDF에서 비문학 지문을 자동 분리합니다.
-              </p>
-            </div>
           </label>
+
+          {(loadingPdf ||
+            loadingPassages) && (
+            <div className="mt-5 rounded-2xl bg-blue-50 px-5 py-4 font-bold text-blue-700">
+              {statusText}
+            </div>
+          )}
         </section>
 
-        {passages.length > 0 && (
-          <section className="mt-8 rounded-[32px] bg-white p-7 shadow-sm ring-1 ring-slate-200">
-            <div className="flex flex-wrap items-start justify-between gap-4">
+        {/* PASSAGES */}
+
+        {passages.length >
+          0 && (
+          <section className="mt-8 rounded-3xl bg-white p-7 shadow-sm ring-1 ring-slate-200">
+            <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
-                <p className="text-sm font-black tracking-[0.16em] text-violet-600">
-                  STEP 02
+                <p className="text-sm font-black text-purple-600">
+                  STEP 2
                 </p>
 
-                <h2 className="mt-1 text-2xl font-black text-slate-900">
-                  요약할 지문 선택
+                <h2 className="mt-2 text-2xl font-black text-slate-900">
+                  요약할 지문 2개 선택
                 </h2>
+
+                <p className="mt-2 text-sm text-slate-500">
+                  최대 2개까지 선택할 수 있어.
+                </p>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={selectAllPassages}
-                  className="rounded-full border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-black text-violet-700"
-                >
-                  전체 선택
-                </button>
-
-                <button
-                  type="button"
-                  onClick={clearAllPassages}
-                  className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-600"
-                >
-                  전체 해제
-                </button>
-
-                <div className="rounded-full bg-slate-100 px-4 py-2 text-sm font-black text-slate-700">
-                  {selectedIds.length}개 선택
-                </div>
+              <div className="rounded-full bg-purple-100 px-5 py-2 text-sm font-black text-purple-700">
+                {selectedIds.length}
+                /2 선택
               </div>
             </div>
 
-            <div className="mt-6 grid gap-4">
-              {passages.map((passage, index) => {
-                const selected = selectedIds.includes(
-                  passage.id
-                );
+            <div className="mt-6 grid gap-4 lg:grid-cols-2">
+              {passages.map(
+                (
+                  passage,
+                  index
+                ) => {
+                  const selected =
+                    selectedIds.includes(
+                      passage.id
+                    );
 
-                return (
-                  <button
-                    key={passage.id}
-                    type="button"
-                    onClick={() =>
-                      togglePassage(passage.id)
-                    }
-                    className={`rounded-[24px] border p-5 text-left transition ${
-                      selected
-                        ? "border-violet-400 bg-violet-50 shadow-sm"
-                        : "border-slate-200 bg-white hover:border-violet-200"
-                    }`}
-                  >
-                    <div className="flex gap-4">
-                      <div
-                        className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-black ${
+                  return (
+                    <button
+                      key={
+                        passage.id
+                      }
+                      type="button"
+                      onClick={() =>
+                        togglePassage(
+                          passage.id
+                        )
+                      }
+                      className={`rounded-3xl p-6 text-left transition ${
+                        selected
+                          ? "bg-slate-900 text-white shadow-lg ring-4 ring-purple-200"
+                          : "bg-slate-50 text-slate-900 ring-1 ring-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p
+                            className={`text-xs font-black ${
+                              selected
+                                ? "text-purple-300"
+                                : "text-purple-600"
+                            }`}
+                          >
+                            지문{" "}
+                            {index +
+                              1}
+                          </p>
+
+                          <h3 className="mt-2 text-xl font-black">
+                            {
+                              passage.title
+                            }
+                          </h3>
+                        </div>
+
+                        <div
+                          className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-black ${
+                            selected
+                              ? "bg-purple-400 text-white"
+                              : "bg-white text-slate-400 ring-1 ring-slate-200"
+                          }`}
+                        >
+                          {selected
+                            ? "✓"
+                            : ""}
+                        </div>
+                      </div>
+
+                      <p
+                        className={`mt-4 line-clamp-4 text-sm leading-6 ${
                           selected
-                            ? "bg-violet-600 text-white"
-                            : "border border-slate-300 bg-white text-slate-400"
+                            ? "text-slate-300"
+                            : "text-slate-500"
                         }`}
                       >
-                        {selected ? "✓" : index + 1}
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <h3 className="text-lg font-black text-slate-900">
-                          {passage.title}
-                        </h3>
-
-                        <p className="mt-3 text-sm leading-7 text-slate-500">
-                          {passage.source.length > 340
-                            ? `${passage.source.slice(
-                                0,
-                                340
-                              )}...`
-                            : passage.source}
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
+                        {
+                          passage.source
+                        }
+                      </p>
+                    </button>
+                  );
+                }
+              )}
             </div>
 
             <button
               type="button"
-              onClick={makeSummary}
-              disabled={
-                generating ||
-                selectedIds.length === 0
+              onClick={
+                makeSummary
               }
-              className="mt-7 w-full rounded-[22px] bg-violet-600 px-6 py-4 text-lg font-black text-white shadow-sm transition hover:bg-violet-700 disabled:opacity-40"
+              disabled={
+                loadingSummary ||
+                selectedIds.length ===
+                  0
+              }
+              className="mt-7 w-full rounded-2xl bg-emerald-600 px-7 py-5 text-lg font-black text-white shadow-lg transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
-              {generating
-                ? "요약 + 일러스트 생성 중..."
-                : "선택 지문으로 비주얼 요약.ZIP 만들기"}
+              {loadingSummary
+                ? statusText ||
+                  "요약.ZIP 만드는 중..."
+                : `${selectedIds.length}개 지문 요약.ZIP 만들기`}
             </button>
           </section>
         )}
 
-        {results.length > 0 && (
+        {/* ERROR */}
+
+        {errorMessage && (
+          <div className="mt-8 rounded-2xl bg-red-50 p-5 font-bold text-red-700 ring-1 ring-red-200">
+            {errorMessage}
+          </div>
+        )}
+
+        {/* RESULTS */}
+
+        {results.length >
+          0 && (
           <section className="mt-10">
-            <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-5">
               <div>
-                <p className="text-sm font-black tracking-[0.16em] text-violet-600">
-                  STEP 03
+                <p className="text-sm font-black text-emerald-600">
+                  VISUAL SUMMARY
                 </p>
 
-                <h2 className="mt-1 text-3xl font-black text-slate-900">
-                  비주얼 요약.ZIP 결과
+                <h2 className="mt-2 text-3xl font-black text-slate-900">
+                  국어 요약.ZIP 결과
                 </h2>
               </div>
 
-              <div className="rounded-full bg-violet-100 px-4 py-2 text-sm font-black text-violet-700">
-                총 {results.length}개 생성
-              </div>
+              <button
+                type="button"
+                onClick={
+                  downloadSummaryPdf
+                }
+                disabled={
+                  makingPdf ||
+                  loadingSummary ||
+                  completedImageCount ===
+                    0
+                }
+                className="rounded-2xl bg-slate-900 px-7 py-4 font-black text-white shadow-lg transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {makingPdf
+                  ? "PDF 만드는 중..."
+                  : `PDF 다운로드 · ${completedImageCount}페이지`}
+              </button>
             </div>
 
-            <div className="grid gap-8">
-              {results.map((result, index) => {
-                const hasComparison =
-                  (result.comparisonHeaders?.length ||
-                    0) > 0 &&
-                  (result.comparisonRows?.length ||
-                    0) > 0;
+            {loadingSummary && (
+              <div className="mt-5 rounded-2xl bg-amber-50 px-5 py-4 font-bold text-amber-700">
+                {statusText}
+              </div>
+            )}
 
-                return (
+            <div className="mt-7 space-y-10">
+              {results.map(
+                (
+                  result,
+                  index
+                ) => (
                   <article
                     key={`${result.passageId}-${index}`}
-                    className="overflow-hidden rounded-[36px] bg-white shadow-sm ring-1 ring-slate-200"
+                    className="overflow-hidden rounded-3xl bg-white shadow-lg ring-1 ring-slate-200"
                   >
-                    <div className="bg-gradient-to-r from-violet-600 via-fuchsia-500 to-pink-500 px-7 py-6 text-white">
-                      <p className="text-xs font-black tracking-[0.18em] text-white/80">
-                        SUMMARY.ZIP{" "}
-                        {String(index + 1).padStart(
-                          2,
-                          "0"
-                        )}
-                      </p>
+                    <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 px-7 py-6">
+                      <div>
+                        <p className="text-xs font-black tracking-widest text-emerald-600">
+                          VISUAL
+                          SUMMARY{" "}
+                          {index +
+                            1}
+                        </p>
 
-                      <h3 className="mt-2 text-3xl font-black leading-tight md:text-4xl">
-                        {result.title}
-                      </h3>
+                        <h3 className="mt-2 text-2xl font-black text-slate-900">
+                          {
+                            result.title
+                          }
+                        </h3>
 
-                      <p className="mt-4 rounded-[22px] bg-white/15 px-5 py-4 text-base font-bold leading-7 text-white">
-                        {result.oneLine}
-                      </p>
+                        <p className="mt-2 text-sm font-medium text-slate-500">
+                          {
+                            result.oneLine
+                          }
+                        </p>
+                      </div>
+
+                      {result.visualImage && (
+                        <span className="rounded-full bg-emerald-100 px-4 py-2 text-xs font-black text-emerald-700">
+                          이미지 완료
+                        </span>
+                      )}
                     </div>
 
-                    {result.visualPrompt && (
-                      <section className="bg-slate-50 px-7 py-7">
-                        <div className="mb-4 flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-xs font-black tracking-[0.16em] text-emerald-600">
-                              VISUAL SUMMARY
-                            </p>
+                    {result.visualImage ? (
+                      <div className="bg-slate-100 p-4 md:p-7">
+                        <img
+                          src={
+                            result.visualImage
+                          }
+                          alt={
+                            result.title
+                          }
+                          className="mx-auto w-full rounded-2xl shadow-sm"
+                        />
+                      </div>
+                    ) : loadingSummary ? (
+                      <div className="flex min-h-[380px] items-center justify-center bg-slate-50 p-8">
+                        <div className="text-center">
+                          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-emerald-600" />
 
-                            <h4 className="mt-1 text-xl font-black text-slate-900">
-                              그림으로 한눈에 이해하기
-                            </h4>
-                          </div>
-
-                          {!result.visualImage && (
-                            <div className="rounded-full bg-white px-4 py-2 text-xs font-bold text-slate-500 shadow-sm">
-                              일러스트 생성 중...
-                            </div>
-                          )}
+                          <p className="mt-4 font-black text-slate-700">
+                            비주얼
+                            요약 생성
+                            중...
+                          </p>
                         </div>
-
-                        {result.visualImage ? (
-                          <div className="overflow-hidden rounded-[28px] bg-white shadow-sm ring-1 ring-slate-200">
-                            <img
-                              src={
-                                result.visualImage
-                              }
-                              alt={`${result.title} 비주얼 요약`}
-                              className="w-full object-cover"
-                            />
-                          </div>
-                        ) : (
-                          <div className="flex aspect-[3/2] items-center justify-center rounded-[28px] bg-white ring-1 ring-slate-200">
-                            <div className="text-center">
-                              <div className="text-4xl">
-                                🎨
-                              </div>
-
-                              <p className="mt-3 text-sm font-bold text-slate-500">
-                                핵심 내용을 그림으로
-                                만드는 중입니다.
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                      </section>
+                      </div>
+                    ) : (
+                      <div className="flex min-h-[260px] items-center justify-center bg-red-50 p-8">
+                        <p className="font-bold text-red-600">
+                          이미지 생성에
+                          실패했습니다.
+                          다시 생성해줘.
+                        </p>
+                      </div>
                     )}
-
-                    <div className="p-7">
-                      <section>
-                        <div className="flex items-center gap-2">
-                          <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-black tracking-[0.16em] text-violet-700">
-                            FLOW
-                          </span>
-
-                          <h4 className="text-xl font-black text-slate-900">
-                            글의 흐름
-                          </h4>
-                        </div>
-
-                        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                          {(result.flow ||
-                            []).map(
-                            (item, flowIndex) => (
-                              <div
-                                key={flowIndex}
-                                className="rounded-[24px] bg-slate-50 p-5"
-                              >
-                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-600 text-lg font-black text-white">
-                                  {flowIndex + 1}
-                                </div>
-
-                                <p className="mt-4 text-base font-black text-violet-700">
-                                  {item.label}
-                                </p>
-
-                                <p className="mt-2 text-sm leading-7 text-slate-600">
-                                  {item.content}
-                                </p>
-                              </div>
-                            )
-                          )}
-                        </div>
-                      </section>
-
-                      {(result.concepts || [])
-                        .length > 0 && (
-                        <section className="mt-9">
-                          <div className="flex items-center gap-2">
-                            <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-black tracking-[0.16em] text-sky-700">
-                              CONCEPT
-                            </span>
-
-                            <h4 className="text-xl font-black text-slate-900">
-                              핵심 개념
-                            </h4>
-                          </div>
-
-                          <div className="mt-5 grid gap-4 md:grid-cols-2">
-                            {(
-                              result.concepts || []
-                            ).map(
-                              (
-                                concept,
-                                conceptIndex
-                              ) => (
-                                <div
-                                  key={
-                                    conceptIndex
-                                  }
-                                  className="rounded-[24px] border border-sky-100 bg-sky-50 p-5"
-                                >
-                                  <p className="text-lg font-black text-slate-900">
-                                    {
-                                      concept.name
-                                    }
-                                  </p>
-
-                                  <p className="mt-3 text-sm leading-7 text-slate-600">
-                                    {
-                                      concept.description
-                                    }
-                                  </p>
-                                </div>
-                              )
-                            )}
-                          </div>
-                        </section>
-                      )}
-
-                      {hasComparison && (
-                        <section className="mt-9">
-                          <div className="flex items-center gap-2">
-                            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black tracking-[0.16em] text-amber-700">
-                              COMPARE
-                            </span>
-
-                            <h4 className="text-xl font-black text-slate-900">
-                              {result.comparisonTitle ||
-                                "핵심 비교"}
-                            </h4>
-                          </div>
-
-                          <div className="mt-5 overflow-x-auto rounded-[24px] border border-amber-100">
-                            <table className="w-full border-collapse text-sm">
-                              <thead>
-                                <tr>
-                                  {(
-                                    result.comparisonHeaders ||
-                                    []
-                                  ).map(
-                                    (header) => (
-                                      <th
-                                        key={
-                                          header
-                                        }
-                                        className="border-b border-amber-100 bg-amber-50 px-4 py-3 text-left font-black text-slate-900"
-                                      >
-                                        {
-                                          header
-                                        }
-                                      </th>
-                                    )
-                                  )}
-                                </tr>
-                              </thead>
-
-                              <tbody>
-                                {(
-                                  result.comparisonRows ||
-                                  []
-                                ).map(
-                                  (
-                                    row,
-                                    rowIndex
-                                  ) => (
-                                    <tr
-                                      key={
-                                        rowIndex
-                                      }
-                                    >
-                                      {row.map(
-                                        (
-                                          cell,
-                                          cellIndex
-                                        ) => (
-                                          <td
-                                            key={
-                                              cellIndex
-                                            }
-                                            className="border-b border-slate-100 px-4 py-3 leading-7 text-slate-600"
-                                          >
-                                            {
-                                              cell
-                                            }
-                                          </td>
-                                        )
-                                      )}
-                                    </tr>
-                                  )
-                                )}
-                              </tbody>
-                            </table>
-                          </div>
-                        </section>
-                      )}
-
-                      {(result.testPoints || [])
-                        .length > 0 && (
-                        <section className="mt-9">
-                          <div className="flex items-center gap-2">
-                            <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-black tracking-[0.16em] text-rose-700">
-                              TEST POINT
-                            </span>
-
-                            <h4 className="text-xl font-black text-slate-900">
-                              시험 POINT
-                            </h4>
-                          </div>
-
-                          <div className="mt-5 grid gap-3">
-                            {(
-                              result.testPoints || []
-                            ).map(
-                              (
-                                point,
-                                pointIndex
-                              ) => (
-                                <div
-                                  key={
-                                    pointIndex
-                                  }
-                                  className="flex gap-3 rounded-[20px] bg-rose-50 px-4 py-4"
-                                >
-                                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-600 text-sm font-black text-white">
-                                    {
-                                      pointIndex +
-                                      1
-                                    }
-                                  </div>
-
-                                  <p className="text-sm font-bold leading-7 text-slate-700">
-                                    {point}
-                                  </p>
-                                </div>
-                              )
-                            )}
-                          </div>
-                        </section>
-                      )}
-
-                      {result.caution && (
-                        <section className="mt-9">
-                          <div className="rounded-[26px] border border-slate-200 bg-slate-50 p-5">
-                            <p className="text-xs font-black tracking-[0.16em] text-slate-500">
-                              CAUTION
-                            </p>
-
-                            <h4 className="mt-2 text-lg font-black text-slate-900">
-                              헷갈리기 쉬운 포인트
-                            </h4>
-
-                            <p className="mt-3 text-sm leading-7 text-slate-600">
-                              {result.caution}
-                            </p>
-                          </div>
-                        </section>
-                      )}
-                    </div>
                   </article>
-                );
-              })}
+                )
+              )}
+            </div>
+
+            {/* BOTTOM PDF BUTTON */}
+
+            <div className="mt-10 rounded-3xl bg-slate-900 p-7 text-white shadow-xl">
+              <div className="flex flex-wrap items-center justify-between gap-5">
+                <div>
+                  <p className="text-sm font-black text-emerald-300">
+                    PDF EXPORT
+                  </p>
+
+                  <h3 className="mt-2 text-2xl font-black">
+                    두 지문을 한
+                    PDF로 저장
+                  </h3>
+
+                  <p className="mt-2 text-sm text-slate-300">
+                    이미지 한 장당
+                    A4 가로 1페이지로
+                    들어갑니다.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={
+                    downloadSummaryPdf
+                  }
+                  disabled={
+                    makingPdf ||
+                    loadingSummary ||
+                    completedImageCount ===
+                      0
+                  }
+                  className="rounded-2xl bg-emerald-500 px-8 py-5 text-lg font-black text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-slate-600"
+                >
+                  {makingPdf
+                    ? "PDF 만드는 중..."
+                    : `${completedImageCount}페이지 PDF 다운로드`}
+                </button>
+              </div>
             </div>
           </section>
+        )}
+
+        {/* DEBUG TEXT 숨김용 */}
+
+        {false && (
+          <pre>
+            {pdfText}
+          </pre>
         )}
       </div>
     </main>
