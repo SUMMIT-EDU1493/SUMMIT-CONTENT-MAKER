@@ -1,126 +1,464 @@
 import OpenAI from "openai";
 
-export async function POST(req: Request) {
+export const maxDuration = 300;
+
+type PassageResult = {
+  id: string;
+  title: string;
+  source: string;
+};
+
+export async function POST(request: Request) {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
 
     if (!apiKey) {
       return Response.json(
-        { error: "OPENAI_API_KEY가 설정되어 있지 않습니다." },
-        { status: 500 }
+        {
+          error:
+            "OPENAI_API_KEY가 설정되어 있지 않습니다.",
+        },
+        {
+          status: 500,
+        }
       );
     }
 
-    const body = await req.json();
+    /*
+    ==================================================
+    요청 데이터 받기
+    ==================================================
 
-    const sourceText =
-      typeof body?.sourceText === "string"
-        ? body.sourceText.trim()
+    프론트 코드가 어떤 이름을 사용하더라도
+    받을 수 있도록 여러 필드를 모두 허용한다.
+    */
+
+    const body = await request.json();
+
+    const rawText =
+      body?.text ??
+      body?.pdfText ??
+      body?.sourceText ??
+      body?.content ??
+      "";
+
+    const text =
+      typeof rawText === "string"
+        ? rawText.trim()
         : "";
 
-    if (!sourceText) {
+    console.log(
+      "KOREAN PASSAGE INPUT LENGTH:",
+      text.length
+    );
+
+    /*
+    ==================================================
+    텍스트 확인
+    ==================================================
+    */
+
+    if (!text) {
       return Response.json(
-        { error: "분석할 PDF 텍스트가 없습니다." },
-        { status: 400 }
+        {
+          error:
+            "분석할 텍스트가 없습니다.",
+          detail:
+            "PDF 텍스트가 API까지 전달되지 않았습니다.",
+        },
+        {
+          status: 400,
+        }
       );
     }
 
-    const openai = new OpenAI({ apiKey });
+    /*
+    텍스트가 지나치게 짧으면
+    PDF 추출 자체가 실패한 것으로 판단
+    */
+
+    if (text.length < 30) {
+      return Response.json(
+        {
+          error:
+            "PDF에서 충분한 텍스트를 읽지 못했습니다.",
+          detail:
+            `현재 추출된 텍스트 길이: ${text.length}자`,
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const openai =
+      new OpenAI({
+        apiKey,
+      });
+
+    /*
+    ==================================================
+    지문 분리 프롬프트
+    ==================================================
+    */
 
     const prompt = `
-당신은 대한민국 고등학교 국어 시험지 분석 전문가입니다.
+당신은 대한민국 고등학교 국어 시험지를 분석하는
+전문 국어 교사입니다.
 
-아래 텍스트는 고등학교 국어 시험 PDF에서 추출한 텍스트입니다.
+아래 텍스트는 PDF 시험지에서 추출한 전체 텍스트입니다.
 
-학생이 읽는 '본문 지문'만 찾아 각각 분리하세요.
+당신의 임무는 시험 문제를 푸는 것이 아닙니다.
 
-[중요 규칙]
+시험지 안에서
+"독립적으로 요약할 가치가 있는 비문학 지문"
+만 정확하게 찾아 분리하세요.
 
-- 문제 번호와 선택지는 제거합니다.
-- "24. 윗글을..." 같은 문제는 제외합니다.
-- <보기> 문제 자료도 원칙적으로 제외합니다.
-- 본문의 각주·용어 설명은 본문 이해에 필요하면 유지합니다.
-- 서로 다른 독립 지문은 각각 분리합니다.
-- [24~27], [33~35]처럼 문제 묶음 앞에 제시된 본문을 하나의 지문으로 봅니다.
-- 문학 작품과 비문학 설명문을 구분합니다.
-- 이번 요약.ZIP은 우선 비문학 지문을 대상으로 하므로
-  설명문, 논설문, 과학·사회·인문 지문을 우선 추출합니다.
-- 원문 내용을 요약하거나 고쳐 쓰지 마세요.
-- OCR 또는 PDF 추출 과정에서 생긴 단순 줄바꿈만 자연스럽게 연결합니다.
-- 본문 문장을 임의로 추가하지 마세요.
+==================================================
+가장 중요한 목표
+==================================================
 
-각 지문의 title은 내용을 알아볼 수 있는 짧은 제목으로 작성합니다.
+우리는 이 결과를 이용해
+"고등 국어 비주얼 요약.ZIP"
+을 만들 것입니다.
+
+따라서 반드시:
+
+1. 지문 본문만 추출
+2. 문제와 선택지는 제거
+3. <보기> 문제 자료는 제거
+4. 정답 선택지는 제거
+5. 문제 번호는 제거
+6. 시험 안내 문구는 제거
+7. 페이지 번호는 제거
+8. 독립적인 비문학 지문끼리 분리
+
+해야 합니다.
+
+==================================================
+우선 추출할 글
+==================================================
+
+다음 분야를 우선합니다.
+
+- 사회
+- 경제
+- 과학
+- 기술
+- 철학
+- 인문
+- 예술 이론
+- 언어
+- 독서론
+- 설명문
+- 논설문
+
+==================================================
+문학 처리
+==================================================
+
+소설, 시, 고전문학 등의 작품 본문은
+이번 요약.ZIP에서는 기본적으로 제외합니다.
+
+비문학 지문이 존재한다면
+비문학을 우선하여 반환하세요.
+
+==================================================
+시험 문제 제거 규칙
+==================================================
+
+다음과 같은 부분은 지문에 포함하지 마세요.
 
 예:
-"최저소득보장제와 기본소득제"
-"동물의 눈동자 모양과 생존 방식"
 
-JSON만 반환하세요.
+24. 윗글을 바탕으로...
+25. 윗글에 대한 이해로...
+①
+②
+③
+④
+⑤
+
+<보기>
+...
+
+[24~27] 다음 글을 읽고 물음에 답하시오.
+
+이때
+
+"[24~27] 다음 글을 읽고 물음에 답하시오."
+
+같은 안내문은 삭제하지만,
+
+그 뒤의 실제 지문 내용은 반드시 보존합니다.
+
+==================================================
+지문 경계 판단
+==================================================
+
+시험지에는 여러 지문이 있을 수 있습니다.
+
+예:
+
+[24~27]
+지문 A
+문제들
+
+[28~32]
+문학 지문
+문제들
+
+[33~35]
+지문 B
+문제들
+
+이 경우
+
+지문 A와 지문 B를
+서로 다른 passage로 반환하세요.
+
+문학은 비문학이 충분하다면 제외하세요.
+
+==================================================
+지문 내용 보존
+==================================================
+
+중요:
+
+지문 내용을 요약하지 마세요.
+
+원문의 의미와 순서를 유지하세요.
+
+문장을 마음대로 새로 쓰지 마세요.
+
+다만 PDF 추출 때문에 생긴
+
+- 불필요한 줄바꿈
+- 페이지 번호
+- 문제 번호
+- 선택지
+- 반복된 머리말
+
+등은 정리해도 됩니다.
+
+지문 이해에 실제로 필요한
+각주나 용어 설명은 보존할 수 있습니다.
+
+==================================================
+제목 생성
+==================================================
+
+각 지문에는 학생이 알아보기 쉬운
+짧은 제목을 새로 붙이세요.
+
+예:
+
+- 기본소득과 최저소득 보장
+- 동물의 눈동자 모양과 생존 전략
+- 예술 작품과 맥락적 이해
+
+제목은 너무 길지 않게 만드세요.
+
+==================================================
+반환 개수
+==================================================
+
+독립적인 비문학 지문이 여러 개라면
+가능한 지문들을 각각 반환하세요.
+
+특히 시험지에
+서로 독립적인 비문학 지문이 2개 이상 있으면
+하나로 합치지 마세요.
+
+==================================================
+JSON 형식
+==================================================
+
+반드시 아래 JSON 형식으로만 답하세요.
 
 {
   "passages": [
     {
-      "title": "지문 제목",
-      "source": "원문 전체"
+      "id": "passage-1",
+      "title": "짧은 제목",
+      "source": "정리된 원문 지문 전체"
+    },
+    {
+      "id": "passage-2",
+      "title": "짧은 제목",
+      "source": "정리된 원문 지문 전체"
     }
   ]
 }
 
-[PDF 추출 텍스트]
+JSON 밖의 설명은 절대 쓰지 마세요.
 
-${sourceText}
+==================================================
+분석할 시험지 텍스트
+==================================================
+
+${text}
 `;
 
-    const response = await openai.responses.create({
-      model: "gpt-5-mini",
-      input: prompt,
-    });
+    /*
+    ==================================================
+    OpenAI 분석
+    ==================================================
+    */
 
-    const raw = response.output_text?.trim();
+    const result =
+      await openai.responses.create({
+        model: "gpt-5-mini",
+        input: prompt,
+      });
 
-    if (!raw) {
-      throw new Error("지문 분석 결과가 없습니다.");
+    const output =
+      result.output_text?.trim() ||
+      "";
+
+    if (!output) {
+      throw new Error(
+        "지문 분석 결과가 비어 있습니다."
+      );
     }
 
-    const cleaned = raw
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/\s*```$/i, "")
-      .trim();
+    /*
+    ==================================================
+    JSON 코드블록 제거
+    ==================================================
+    */
 
-    const parsed = JSON.parse(cleaned);
+    const cleaned =
+      output
+        .replace(
+          /^```json\s*/i,
+          ""
+        )
+        .replace(
+          /^```\s*/i,
+          ""
+        )
+        .replace(
+          /```$/i,
+          ""
+        )
+        .trim();
 
-    const passages = Array.isArray(parsed?.passages)
-      ? parsed.passages
-          .filter(
-            (item: any) =>
-              typeof item?.source === "string" &&
-              item.source.trim()
-          )
-          .map((item: any, index: number) => ({
-            id: `kor-passage-${Date.now()}-${index}`,
-            title:
-              typeof item.title === "string"
-                ? item.title.trim()
-                : `국어 지문 ${index + 1}`,
-            source: item.source.trim(),
-          }))
-      : [];
+    let parsed: any;
+
+    try {
+      parsed =
+        JSON.parse(cleaned);
+    } catch {
+      console.error(
+        "PASSAGE JSON PARSE ERROR:",
+        cleaned
+      );
+
+      throw new Error(
+        "지문 분석 결과를 JSON으로 읽지 못했습니다."
+      );
+    }
+
+    /*
+    ==================================================
+    결과 정리
+    ==================================================
+    */
+
+    const rawPassages =
+      Array.isArray(
+        parsed?.passages
+      )
+        ? parsed.passages
+        : [];
+
+    const passages: PassageResult[] =
+      rawPassages
+        .map(
+          (
+            item: any,
+            index: number
+          ) => {
+            const source =
+              String(
+                item?.source ||
+                  ""
+              )
+                .replace(
+                  /\s+/g,
+                  " "
+                )
+                .trim();
+
+            const title =
+              String(
+                item?.title ||
+                  `지문 ${index + 1}`
+              )
+                .replace(
+                  /\s+/g,
+                  " "
+                )
+                .trim();
+
+            const id =
+              String(
+                item?.id ||
+                  `passage-${index + 1}`
+              ).trim();
+
+            return {
+              id,
+              title,
+              source,
+            };
+          }
+        )
+        .filter(
+          (
+            item: PassageResult
+          ) =>
+            item.source.length >
+            100
+        );
+
+    if (
+      passages.length ===
+      0
+    ) {
+      throw new Error(
+        "분석 가능한 비문학 지문을 찾지 못했습니다."
+      );
+    }
+
+    console.log(
+      "KOREAN PASSAGES FOUND:",
+      passages.length
+    );
 
     return Response.json({
       passages,
     });
-  } catch (error) {
-    console.error("Korean passage extraction error:", error);
+  } catch (error: any) {
+    console.error(
+      "KOREAN SUMMARY PASSAGES ERROR:",
+      error
+    );
 
     return Response.json(
       {
         error:
-          error instanceof Error
-            ? error.message
-            : "국어 지문 분리 중 오류가 발생했습니다.",
+          error?.message ||
+          "국어 지문 분석 중 오류가 발생했습니다.",
+
+        detail:
+          error?.message ||
+          "알 수 없는 오류",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }

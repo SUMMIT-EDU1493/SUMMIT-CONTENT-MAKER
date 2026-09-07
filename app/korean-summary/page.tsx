@@ -56,12 +56,6 @@ export default function KoreanSummaryPage() {
   const [statusText, setStatusText] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
-  /*
-  ==================================================
-  PDF 읽기
-  ==================================================
-  */
-
   const readPdf = async (file: File) => {
     try {
       setLoadingPdf(true);
@@ -111,7 +105,8 @@ export default function KoreanSummaryPage() {
 
 --- ${pageNumber}페이지 ---
 
-${pageText}`;
+${pageText}
+`;
       }
 
       const cleanedText = fullText.trim();
@@ -128,10 +123,7 @@ ${pageText}`;
 
       await extractPassages(cleanedText);
     } catch (error: any) {
-      console.error(
-        "PDF READ ERROR:",
-        error
-      );
+      console.error("PDF READ ERROR:", error);
 
       setErrorMessage(
         error?.message ||
@@ -142,22 +134,14 @@ ${pageText}`;
     }
   };
 
-  /*
-  ==================================================
-  지문 분리
-  중요:
-  API에는 pdfText 이름으로 보낸다.
-  ==================================================
-  */
-
-  const extractPassages = async (
-    text: string
-  ) => {
+  const extractPassages = async (text: string) => {
     try {
       setLoadingPassages(true);
       setErrorMessage("");
 
-      if (!text.trim()) {
+      const cleaned = text.trim();
+
+      if (!cleaned) {
         throw new Error(
           "분석할 텍스트가 없습니다."
         );
@@ -169,12 +153,12 @@ ${pageText}`;
           method: "POST",
 
           headers: {
-            "Content-Type":
-              "application/json",
+            "Content-Type": "application/json",
           },
 
           body: JSON.stringify({
-            pdfText: text,
+            text: cleaned,
+            pdfText: cleaned,
           }),
         }
       );
@@ -196,17 +180,10 @@ ${pageText}`;
 
       setPassages(foundPassages);
 
-      /*
-      처음 두 지문 자동 선택
-      */
-
       setSelectedIds(
         foundPassages
           .slice(0, 2)
-          .map(
-            (passage) =>
-              passage.id
-          )
+          .map((passage) => passage.id)
       );
 
       if (foundPassages.length === 0) {
@@ -221,10 +198,7 @@ ${pageText}`;
         );
       }
     } catch (error: any) {
-      console.error(
-        "PASSAGE ERROR:",
-        error
-      );
+      console.error("PASSAGE ERROR:", error);
 
       setErrorMessage(
         error?.message ||
@@ -235,51 +209,28 @@ ${pageText}`;
     }
   };
 
-  /*
-  ==================================================
-  파일 선택
-  ==================================================
-  */
-
   const handleFileChange = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
-    const file =
-      event.target.files?.[0];
+    const file = event.target.files?.[0];
 
     if (!file) return;
 
     if (
       file.type !== "application/pdf" &&
-      !file.name
-        .toLowerCase()
-        .endsWith(".pdf")
+      !file.name.toLowerCase().endsWith(".pdf")
     ) {
-      alert(
-        "PDF 파일을 선택해줘."
-      );
-
+      alert("PDF 파일을 선택해줘.");
       return;
     }
 
     await readPdf(file);
   };
 
-  /*
-  ==================================================
-  지문 선택
-  ==================================================
-  */
-
-  const togglePassage = (
-    id: string
-  ) => {
+  const togglePassage = (id: string) => {
     setSelectedIds((prev) => {
       if (prev.includes(id)) {
-        return prev.filter(
-          (item) =>
-            item !== id
-        );
+        return prev.filter((item) => item !== id);
       }
 
       if (prev.length >= 2) {
@@ -294,12 +245,6 @@ ${pageText}`;
     });
   };
 
-  /*
-  ==================================================
-  비주얼 이미지 생성
-  ==================================================
-  */
-
   const requestVisualImage = async (
     summary: SummaryResult
   ): Promise<string> => {
@@ -309,38 +254,23 @@ ${pageText}`;
         method: "POST",
 
         headers: {
-          "Content-Type":
-            "application/json",
+          "Content-Type": "application/json",
         },
 
         body: JSON.stringify({
-          title:
-            summary.title,
-
-          oneLine:
-            summary.oneLine,
-
-          visualPrompt:
-            summary.visualPrompt,
-
-          flow:
-            summary.flow,
-
-          concepts:
-            summary.concepts,
-
+          title: summary.title,
+          oneLine: summary.oneLine,
+          visualPrompt: summary.visualPrompt,
+          flow: summary.flow,
+          concepts: summary.concepts,
           comparisonTitle:
             summary.comparisonTitle,
-
           comparisonHeaders:
             summary.comparisonHeaders,
-
           comparisonRows:
             summary.comparisonRows,
-
           testPoints:
             summary.testPoints,
-
           caution:
             summary.caution,
         }),
@@ -366,28 +296,14 @@ ${pageText}`;
     return data.imageUrl;
   };
 
-  /*
-  ==================================================
-  요약 생성
-  ==================================================
-  */
-
   const makeSummary = async () => {
     const selectedPassages =
-      passages.filter(
-        (passage) =>
-          selectedIds.includes(
-            passage.id
-          )
+      passages.filter((passage) =>
+        selectedIds.includes(passage.id)
       );
 
-    if (
-      selectedPassages.length === 0
-    ) {
-      alert(
-        "먼저 지문을 선택해줘."
-      );
-
+    if (selectedPassages.length === 0) {
+      alert("먼저 지문을 선택해줘.");
       return;
     }
 
@@ -400,23 +316,17 @@ ${pageText}`;
         "국어 요약.ZIP 내용을 만드는 중..."
       );
 
-      /*
-      1. 텍스트 요약
-      */
-
       const response = await fetch(
         "/api/korean-summary-generate",
         {
           method: "POST",
 
           headers: {
-            "Content-Type":
-              "application/json",
+            "Content-Type": "application/json",
           },
 
           body: JSON.stringify({
-            passages:
-              selectedPassages,
+            passages: selectedPassages,
           }),
         }
       );
@@ -444,10 +354,6 @@ ${pageText}`;
 
       setResults(summaries);
 
-      /*
-      2. 비주얼 생성
-      */
-
       const completed: SummaryResult[] = [];
 
       for (
@@ -455,8 +361,7 @@ ${pageText}`;
         index < summaries.length;
         index++
       ) {
-        const summary =
-          summaries[index];
+        const summary = summaries[index];
 
         setStatusText(
           `${index + 1}/${summaries.length} 비주얼 요약 생성 중...`
@@ -464,9 +369,7 @@ ${pageText}`;
 
         try {
           const image =
-            await requestVisualImage(
-              summary
-            );
+            await requestVisualImage(summary);
 
           completed.push({
             ...summary,
@@ -497,10 +400,7 @@ ${pageText}`;
         `${completed.length}개 지문 비주얼 요약 완료!`
       );
     } catch (error: any) {
-      console.error(
-        "SUMMARY ERROR:",
-        error
-      );
+      console.error("SUMMARY ERROR:", error);
 
       setErrorMessage(
         error?.message ||
@@ -511,19 +411,12 @@ ${pageText}`;
     }
   };
 
-  /*
-  ==================================================
-  이미지 로딩
-  ==================================================
-  */
-
   const loadImage = (
     src: string
   ) =>
     new Promise<HTMLImageElement>(
       (resolve, reject) => {
-        const image =
-          new Image();
+        const image = new Image();
 
         image.onload = () =>
           resolve(image);
@@ -539,228 +432,197 @@ ${pageText}`;
       }
     );
 
-  /*
-  ==================================================
-  PDF 다운로드
-  ==================================================
-  */
+  const downloadSummaryPdf = async () => {
+    const imageResults =
+      results.filter(
+        (item) =>
+          typeof item.visualImage ===
+            "string" &&
+          item.visualImage.startsWith(
+            "data:image"
+          )
+      );
 
-  const downloadSummaryPdf =
-    async () => {
-      const imageResults =
-        results.filter(
-          (item) =>
-            typeof item.visualImage ===
-              "string" &&
-            item.visualImage.startsWith(
-              "data:image"
-            )
-        );
+    if (imageResults.length === 0) {
+      alert(
+        "먼저 비주얼 요약을 생성해줘."
+      );
+      return;
+    }
 
-      if (
-        imageResults.length === 0
+    if (
+      imageResults.length <
+      selectedIds.length
+    ) {
+      alert(
+        "아직 모든 비주얼 요약 이미지가 완성되지 않았어."
+      );
+      return;
+    }
+
+    try {
+      setMakingPdf(true);
+      setErrorMessage("");
+
+      setStatusText(
+        "PDF 만드는 중..."
+      );
+
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+        compress: true,
+      });
+
+      const pageWidth =
+        pdf.internal.pageSize.getWidth();
+
+      const pageHeight =
+        pdf.internal.pageSize.getHeight();
+
+      const margin = 4;
+
+      const availableWidth =
+        pageWidth - margin * 2;
+
+      const availableHeight =
+        pageHeight - margin * 2;
+
+      for (
+        let index = 0;
+        index < imageResults.length;
+        index++
       ) {
-        alert(
-          "먼저 비주얼 요약을 생성해줘."
-        );
+        const item =
+          imageResults[index];
 
-        return;
-      }
-
-      if (
-        imageResults.length <
-        selectedIds.length
-      ) {
-        alert(
-          "아직 모든 비주얼 요약 이미지가 완성되지 않았어."
-        );
-
-        return;
-      }
-
-      try {
-        setMakingPdf(true);
-        setErrorMessage("");
-
-        setStatusText(
-          "PDF 만드는 중..."
-        );
-
-        const pdf =
-          new jsPDF({
-            orientation:
-              "landscape",
-
-            unit: "mm",
-
-            format: "a4",
-
-            compress: true,
-          });
-
-        const pageWidth =
-          pdf.internal.pageSize.getWidth();
-
-        const pageHeight =
-          pdf.internal.pageSize.getHeight();
-
-        const margin = 4;
-
-        const availableWidth =
-          pageWidth -
-          margin * 2;
-
-        const availableHeight =
-          pageHeight -
-          margin * 2;
-
-        for (
-          let index = 0;
-          index <
-          imageResults.length;
-          index++
-        ) {
-          const item =
-            imageResults[index];
-
-          if (index > 0) {
-            pdf.addPage(
-              "a4",
-              "landscape"
-            );
-          }
-
-          const imageData =
-            item.visualImage as string;
-
-          const image =
-            await loadImage(
-              imageData
-            );
-
-          const imageRatio =
-            image.width /
-            image.height;
-
-          const pageRatio =
-            availableWidth /
-            availableHeight;
-
-          let drawWidth =
-            availableWidth;
-
-          let drawHeight =
-            availableHeight;
-
-          if (
-            imageRatio >
-            pageRatio
-          ) {
-            drawWidth =
-              availableWidth;
-
-            drawHeight =
-              availableWidth /
-              imageRatio;
-          } else {
-            drawHeight =
-              availableHeight;
-
-            drawWidth =
-              availableHeight *
-              imageRatio;
-          }
-
-          const x =
-            (pageWidth -
-              drawWidth) /
-            2;
-
-          const y =
-            (pageHeight -
-              drawHeight) /
-            2;
-
-          pdf.setFillColor(
-            255,
-            255,
-            255
-          );
-
-          pdf.rect(
-            0,
-            0,
-            pageWidth,
-            pageHeight,
-            "F"
-          );
-
-          pdf.addImage(
-            imageData,
-            "PNG",
-            x,
-            y,
-            drawWidth,
-            drawHeight,
-            undefined,
-            "FAST"
+        if (index > 0) {
+          pdf.addPage(
+            "a4",
+            "landscape"
           );
         }
 
-        const safeName =
-          fileName
-            .replace(
-              /\.pdf$/i,
-              ""
-            )
-            .replace(
-              /[\\/:*?"<>|]/g,
-              "_"
-            ) ||
-          "국어";
+        const imageData =
+          item.visualImage as string;
 
-        pdf.save(
-          `${safeName}_국어요약ZIP.pdf`
+        const image =
+          await loadImage(
+            imageData
+          );
+
+        const imageRatio =
+          image.width /
+          image.height;
+
+        const pageRatio =
+          availableWidth /
+          availableHeight;
+
+        let drawWidth =
+          availableWidth;
+
+        let drawHeight =
+          availableHeight;
+
+        if (
+          imageRatio >
+          pageRatio
+        ) {
+          drawWidth =
+            availableWidth;
+
+          drawHeight =
+            availableWidth /
+            imageRatio;
+        } else {
+          drawHeight =
+            availableHeight;
+
+          drawWidth =
+            availableHeight *
+            imageRatio;
+        }
+
+        const x =
+          (pageWidth -
+            drawWidth) /
+          2;
+
+        const y =
+          (pageHeight -
+            drawHeight) /
+          2;
+
+        pdf.setFillColor(
+          255,
+          255,
+          255
         );
 
-        setStatusText(
-          `${imageResults.length}페이지 PDF 다운로드 완료!`
-        );
-      } catch (error: any) {
-        console.error(
-          "PDF ERROR:",
-          error
+        pdf.rect(
+          0,
+          0,
+          pageWidth,
+          pageHeight,
+          "F"
         );
 
-        setErrorMessage(
-          error?.message ||
-            "PDF 생성 중 오류가 발생했습니다."
+        pdf.addImage(
+          imageData,
+          "PNG",
+          x,
+          y,
+          drawWidth,
+          drawHeight,
+          undefined,
+          "FAST"
         );
-      } finally {
-        setMakingPdf(false);
       }
-    };
+
+      const safeName =
+        fileName
+          .replace(
+            /\.pdf$/i,
+            ""
+          )
+          .replace(
+            /[\\/:*?"<>|]/g,
+            "_"
+          ) ||
+        "국어";
+
+      pdf.save(
+        `${safeName}_국어요약ZIP.pdf`
+      );
+
+      setStatusText(
+        `${imageResults.length}페이지 PDF 다운로드 완료!`
+      );
+    } catch (error: any) {
+      console.error(
+        "PDF ERROR:",
+        error
+      );
+
+      setErrorMessage(
+        error?.message ||
+          "PDF 생성 중 오류가 발생했습니다."
+      );
+    } finally {
+      setMakingPdf(false);
+    }
+  };
 
   const completedImageCount =
-    results.filter(
-      (item) =>
-        Boolean(
-          item.visualImage
-        )
+    results.filter((item) =>
+      Boolean(item.visualImage)
     ).length;
-
-  /*
-  ==================================================
-  화면
-  ==================================================
-  */
 
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-10">
       <div className="mx-auto max-w-7xl">
-
-        {/* HEADER */}
-
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>
             <p className="text-sm font-black tracking-widest text-emerald-600">
@@ -773,8 +635,8 @@ ${pageText}`;
 
             <p className="mt-3 text-slate-600">
               고등 국어 비문학 지문을
-              한눈에 보는 비주얼
-              요약집으로 만들어줘.
+              한눈에 보는 비주얼 요약집으로
+              만들어줘.
             </p>
           </div>
 
@@ -799,8 +661,6 @@ ${pageText}`;
           )}
         </div>
 
-        {/* STEP 1 */}
-
         <section className="mt-8 rounded-3xl bg-white p-7 shadow-sm ring-1 ring-slate-200">
           <p className="text-sm font-black text-blue-600">
             STEP 1
@@ -817,9 +677,8 @@ ${pageText}`;
               </p>
 
               <p className="mt-2 text-sm text-slate-500">
-                시험지를 올리면
-                비문학 지문을 자동으로
-                찾습니다.
+                시험지를 올리면 비문학
+                지문을 자동으로 찾습니다.
               </p>
 
               {fileName && (
@@ -847,8 +706,6 @@ ${pageText}`;
           )}
         </section>
 
-        {/* STEP 2 */}
-
         {passages.length > 0 && (
           <section className="mt-8 rounded-3xl bg-white p-7 shadow-sm ring-1 ring-slate-200">
             <div className="flex flex-wrap items-end justify-between gap-4">
@@ -862,8 +719,7 @@ ${pageText}`;
                 </h2>
 
                 <p className="mt-2 text-sm text-slate-500">
-                  이번에는 최대
-                  2개까지 선택.
+                  최대 2개까지 선택.
                 </p>
               </div>
 
@@ -969,19 +825,14 @@ ${pageText}`;
           </section>
         )}
 
-        {/* ERROR */}
-
         {errorMessage && (
           <div className="mt-8 rounded-2xl bg-red-50 p-5 font-bold text-red-700 ring-1 ring-red-200">
             {errorMessage}
           </div>
         )}
 
-        {/* RESULT */}
-
         {results.length > 0 && (
           <section className="mt-10">
-
             <div className="flex flex-wrap items-center justify-between gap-5">
               <div>
                 <p className="text-sm font-black text-emerald-600">
@@ -1058,15 +909,13 @@ ${pageText}`;
                     ) : loadingSummary ? (
                       <div className="flex min-h-[360px] items-center justify-center bg-slate-50">
                         <p className="font-black text-slate-600">
-                          비주얼 요약
-                          생성 중...
+                          비주얼 요약 생성 중...
                         </p>
                       </div>
                     ) : (
                       <div className="flex min-h-[220px] items-center justify-center bg-red-50">
                         <p className="font-bold text-red-600">
-                          이미지 생성에
-                          실패했습니다.
+                          이미지 생성에 실패했습니다.
                         </p>
                       </div>
                     )}
@@ -1083,9 +932,13 @@ ${pageText}`;
                   </p>
 
                   <h3 className="mt-2 text-2xl font-black">
-                    두 지문을 한
-                    PDF로 저장
+                    두 지문을 한 PDF로 저장
                   </h3>
+
+                  <p className="mt-2 text-sm text-slate-300">
+                    비주얼 이미지 한 장당
+                    PDF 한 페이지로 들어갑니다.
+                  </p>
                 </div>
 
                 <button
