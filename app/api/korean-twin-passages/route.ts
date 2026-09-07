@@ -1,10 +1,24 @@
 import OpenAI from "openai";
+import sharp from "sharp";
 
 export const maxDuration = 300;
 
 type PageImage = {
   pageNumber: number;
   imageUrl: string;
+};
+
+type PageTextItem = {
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type PageTextData = {
+  pageNumber: number;
+  items: PageTextItem[];
 };
 
 type PassageMarker = {
@@ -18,7 +32,7 @@ type PassageMarker = {
     | "other";
 };
 
-type BoundingBox = {
+type NormalizedBBox = {
   x: number;
   y: number;
   width: number;
@@ -27,7 +41,6 @@ type BoundingBox = {
 
 type QuestionAttachment = {
   id: string;
-
   type:
     | "table"
     | "graph"
@@ -35,20 +48,19 @@ type QuestionAttachment = {
     | "image"
     | "chart"
     | "other";
-
   placement:
     | "passage"
     | "question"
     | "bogi"
     | "choice";
-
   pageNumber: number;
-  bbox: BoundingBox | null;
   description: string;
+  imageUrl: string;
 };
 
 type SourceQuestion = {
   number: string;
+  pageNumber: number;
   stem: string;
   bogi: string;
   choices: string[];
@@ -105,7 +117,7 @@ function clamp(
 
 function parseBBox(
   value: unknown
-): BoundingBox | null {
+): NormalizedBBox | null {
   if (
     !value ||
     typeof value !== "object"
@@ -113,15 +125,23 @@ function parseBBox(
     return null;
   }
 
-  const box =
-    value as Record<string, unknown>;
+  const raw =
+    value as Record<
+      string,
+      unknown
+    >;
 
-  let x = numberValue(box.x);
-  let y = numberValue(box.y);
-  let width =
-    numberValue(box.width);
-  let height =
-    numberValue(box.height);
+  const x =
+    numberValue(raw.x);
+
+  const y =
+    numberValue(raw.y);
+
+  const width =
+    numberValue(raw.width);
+
+  const height =
+    numberValue(raw.height);
 
   if (
     width <= 0 ||
@@ -130,26 +150,19 @@ function parseBBox(
     return null;
   }
 
-  x = clamp(x, 0, 1000);
-  y = clamp(y, 0, 1000);
-
-  width = clamp(
-    width,
-    1,
-    1000 - x
-  );
-
-  height = clamp(
-    height,
-    1,
-    1000 - y
-  );
-
   return {
-    x,
-    y,
-    width,
-    height,
+    x: clamp(x, 0, 1000),
+    y: clamp(y, 0, 1000),
+    width: clamp(
+      width,
+      1,
+      1000
+    ),
+    height: clamp(
+      height,
+      1,
+      1000
+    ),
   };
 }
 
@@ -175,134 +188,402 @@ function parseJsonOutput(
   return JSON.parse(cleaned);
 }
 
-async function refineAttachmentBBox({
+function dataUrlToBuffer(
+  dataUrl: string
+) {
+  const commaIndex =
+    dataUrl.indexOf(",");
+
+  if (
+    commaIndex === -1
+  ) {
+    throw new Error(
+      "이미지 데이터 형식이 올바르지 않습니다."
+    );
+  }
+
+  const base64 =
+    dataUrl.slice(
+      commaIndex + 1
+    );
+
+  return Buffer.from(
+    base64,
+    "base64"
+  );
+}
+
+function bufferToDataUrl(
+  buffer: Buffer,
+  mimeType = "image/jpeg"
+) {
+  return `data:${mimeType};base64,${buffer.toString(
+    "base64"
+  )}`;
+}
+
+async function cropNormalizedImage(
+  imageUrl: string,
+  bbox: NormalizedBBox,
+  padding = 0
+) {
+  const input =
+    dataUrlToBuffer(
+      imageUrl
+    );
+
+  const image =
+    sharp(input);
+
+  const metadata =
+    await image.metadata();
+
+  const imageWidth =
+    metadata.width || 1;
+
+  const imageHeight =
+    metadata.height || 1;
+
+  let left =
+    Math.round(
+      (bbox.x / 1000) *
+        imageWidth
+    );
+
+  let top =
+    Math.round(
+      (bbox.y / 1000) *
+        imageHeight
+    );
+
+  let width =
+    Math.round(
+      (bbox.width /
+        1000) *
+        imageWidth
+    );
+
+  let height =
+    Math.round(
+      (bbox.height /
+        1000) *
+        imageHeight
+    );
+
+  left = Math.max(
+    0,
+    left - padding
+  );
+
+  top = Math.max(
+    0,
+    top - padding
+  );
+
+  width = Math.min(
+    imageWidth - left,
+    width +
+      padding * 2
+  );
+
+  height = Math.min(
+    imageHeight - top,
+    height +
+      padding * 2
+  );
+
+  if (
+    width <= 0 ||
+    height <= 0
+  ) {
+    throw new Error(
+      "이미지 크롭 범위가 올바르지 않습니다."
+    );
+  }
+
+  const output =
+    await image
+      .extract({
+        left,
+        top,
+        width,
+        height,
+      })
+      .jpeg({
+        quality: 94,
+      })
+      .toBuffer();
+
+  return bufferToDataUrl(
+    output
+  );
+}
+
+function isQuestionNumberText(
+  text: string,
+  number: string
+) {
+  const cleaned =
+    text
+      .replace(/\s+/g, "")
+      .trim();
+
+  const escaped =
+    number.replace(
+      /[.*+?^${}()|[\]\\]/g,
+      "\\$&"
+    );
+
+  const regex =
+    new RegExp(
+      `^${escaped}[\\.\\)]?$`
+    );
+
+  return regex.test(
+    cleaned
+  );
+}
+
+function findQuestionPage(
+  questionNumber: string,
+  pageTextData: PageTextData[]
+) {
+  for (
+    const page of pageTextData
+  ) {
+    const found =
+      page.items.some(
+        (item) =>
+          isQuestionNumberText(
+            item.text,
+            questionNumber
+          )
+      );
+
+    if (found) {
+      return page.pageNumber;
+    }
+  }
+
+  return 0;
+}
+
+function findQuestionRegion(
+  questionNumber: string,
+  pageNumber: number,
+  pageTextData: PageTextData[]
+): NormalizedBBox {
+  const page =
+    pageTextData.find(
+      (item) =>
+        item.pageNumber ===
+        pageNumber
+    );
+
+  if (
+    !page ||
+    page.items.length === 0
+  ) {
+    return {
+      x: 30,
+      y: 0,
+      width: 940,
+      height: 1000,
+    };
+  }
+
+  const sorted =
+    [...page.items].sort(
+      (a, b) => {
+        if (
+          Math.abs(
+            a.y - b.y
+          ) < 4
+        ) {
+          return (
+            a.x - b.x
+          );
+        }
+
+        return (
+          a.y - b.y
+        );
+      }
+    );
+
+  const current =
+    sorted.find(
+      (item) =>
+        isQuestionNumberText(
+          item.text,
+          questionNumber
+        )
+    );
+
+  if (!current) {
+    return {
+      x: 30,
+      y: 0,
+      width: 940,
+      height: 1000,
+    };
+  }
+
+  const currentNumber =
+    Number(
+      questionNumber
+    );
+
+  let nextY = 990;
+
+  if (
+    Number.isFinite(
+      currentNumber
+    )
+  ) {
+    const nextCandidates =
+      sorted.filter(
+        (item) => {
+          const value =
+            item.text
+              .replace(
+                /\s+/g,
+                ""
+              )
+              .match(
+                /^(\d+)[\.\)]?$/
+              );
+
+          if (!value) {
+            return false;
+          }
+
+          const number =
+            Number(
+              value[1]
+            );
+
+          return (
+            number >
+              currentNumber &&
+            item.y >
+              current.y + 10
+          );
+        }
+      );
+
+    if (
+      nextCandidates.length >
+      0
+    ) {
+      nextY =
+        nextCandidates[0].y -
+        8;
+    }
+  }
+
+  const startY =
+    clamp(
+      current.y - 12,
+      0,
+      990
+    );
+
+  const endY =
+    clamp(
+      nextY,
+      startY + 50,
+      1000
+    );
+
+  return {
+    x: 25,
+    y: startY,
+    width: 950,
+    height:
+      endY - startY,
+  };
+}
+
+async function findVisualInsideQuestion({
   openai,
-  pageImage,
+  questionCrop,
   questionNumber,
-  attachmentType,
+  type,
   placement,
   description,
 }: {
   openai: OpenAI;
-  pageImage: PageImage;
+  questionCrop: string;
   questionNumber: string;
-  attachmentType: QuestionAttachment["type"];
+  type: QuestionAttachment["type"];
   placement: QuestionAttachment["placement"];
   description: string;
-}): Promise<BoundingBox | null> {
+}) {
   const prompt = `
-당신은 대한민국 국어 모의고사 PDF의
-"시각 자료 크롭 영역"만 매우 정밀하게 찾는 작업을 합니다.
+이 이미지는 국어 모의고사의 ${questionNumber}번 문항 영역만 잘라낸 이미지입니다.
 
-아래 이미지는 시험지 한 페이지입니다.
+이 안에서 "텍스트 발문이나 일반 선택지"가 아니라
+실제 시각 자료만 정확히 찾으세요.
 
-찾아야 할 대상:
+찾는 자료:
 
-문항 번호: ${questionNumber}
-자료 종류: ${attachmentType}
-자료 위치: ${placement}
-자료 설명: ${description}
+종류: ${type}
+위치: ${placement}
+설명: ${description}
 
 ==================================================
-목표
+시각 자료로 인정
 ==================================================
 
-이 문제에 속한 시각 자료 하나만
-정확히 잘라낼 수 있는 최소 크기의 사각형을 찾으십시오.
-
-예:
+다음은 시각 자료입니다.
 
 - 표
 - 그래프
 - 도식
 - 그림
 - 사진
-- 표 형태의 <보기>
-- 그림이 들어간 <보기>
+- 좌표 그림
 - 표 형태 선택지
+- 그림이 포함된 <보기>
+- 표가 포함된 <보기>
 
 ==================================================
-절대 포함하면 안 되는 것
+시각 자료가 아님
 ==================================================
 
-매우 중요합니다.
+다음은 크롭하면 안 됩니다.
 
-크롭 영역에 아래 내용이 딸려 들어오면 실패입니다.
-
-- 바로 위 문항의 선택지
-- 이전 문항
-- 다음 문항
-- 현재 문제의 발문
-- 현재 문제의 일반 텍스트 선택지
-- 페이지 번호
-- 큰 빈 여백
-- 다른 문제의 <보기>
-- 다른 문제의 그림이나 표
+- 일반 발문
+- 일반 줄글
+- 순수 텍스트 <보기>
+- 일반 선택지 ①~⑤
+- 문제 번호
+- 앞뒤 설명 문장
 
 ==================================================
-<보기> 자료
+중요
 ==================================================
 
-placement가 bogi일 경우:
+표라면 표 전체를 포함하세요.
 
-<보기> 안에 있는
-표·그래프·그림·도식 자체만 찾으십시오.
+표 제목이나 단위가
+표 해석에 필요하면 함께 포함하세요.
 
-단,
+그림이라면 그림 전체가
+위아래 좌우 어느 쪽도 잘리지 않게 하세요.
 
-<보기>의 테두리 자체가 자료 구성에 반드시 필요하다면
-그 테두리까지 포함할 수 있습니다.
+<보기> 안에 그림이나 표가 있는 경우
+그 시각 자료만 포함하세요.
 
-그러나 보기 위의 발문이나
-보기 아래의 선택지는 포함하지 마십시오.
-
-==================================================
-표
-==================================================
-
-표인 경우:
-
-표의 가장 왼쪽 선부터
-가장 오른쪽 선까지,
-
-표의 가장 위쪽 선부터
-가장 아래쪽 선까지
-
-포함하십시오.
-
-표의 맨 위 제목이나 단위 표시가
-표 해석에 꼭 필요하면 포함하십시오.
-
-그러나 문제 발문은 제외하십시오.
-
-==================================================
-그림 / 도식
-==================================================
-
-그림이나 도식은
-그림의 모든 부분이 잘리지 않도록 하십시오.
-
-위나 아래가 조금이라도 잘리면 안 됩니다.
-
-==================================================
-여백
-==================================================
-
-대상을 정확히 찾은 뒤
-사방에 약간의 안전 여백만 포함하십시오.
-
-권장:
-
-좌우 약 8~15px 수준
-위아래 약 8~15px 수준
-
-너무 넓게 잡지 마십시오.
+발문이나 선택지는 제외하세요.
 
 ==================================================
 좌표
 ==================================================
 
-페이지 전체를 0~1000 좌표로 봅니다.
+현재 잘라낸 문항 이미지 전체를
+0~1000 좌표로 봅니다.
 
 왼쪽 위:
 x=0
@@ -312,27 +593,33 @@ y=0
 x=1000
 y=1000
 
-반드시 JSON만 반환하십시오.
+자료를 찾았으면:
 
 {
+  "found": true,
   "bbox": {
     "x": 100,
-    "y": 300,
-    "width": 600,
-    "height": 250
+    "y": 250,
+    "width": 700,
+    "height": 300
   }
 }
 
-찾을 수 없으면:
+실제 시각 자료가 없고
+순수 텍스트만 있다면:
 
 {
+  "found": false,
   "bbox": null
 }
+
+반드시 JSON만 출력하세요.
 `;
 
   const result =
     await openai.responses.create({
-      model: "gpt-5-mini",
+      model:
+        "gpt-5-mini",
 
       input: [
         {
@@ -340,15 +627,19 @@ y=1000
 
           content: [
             {
-              type: "input_text",
-              text: prompt,
+              type:
+                "input_text",
+              text:
+                prompt,
             },
 
             {
-              type: "input_image",
+              type:
+                "input_image",
               image_url:
-                pageImage.imageUrl,
-              detail: "high",
+                questionCrop,
+              detail:
+                "high",
             },
           ],
         },
@@ -369,15 +660,17 @@ y=1000
         output
       );
 
+    if (
+      parsed?.found !==
+      true
+    ) {
+      return null;
+    }
+
     return parseBBox(
       parsed?.bbox
     );
-  } catch (error) {
-    console.error(
-      "BBOX REFINE ERROR:",
-      error
-    );
-
+  } catch {
     return null;
   }
 }
@@ -407,8 +700,6 @@ export async function POST(
     const rawText =
       body?.text ??
       body?.pdfText ??
-      body?.sourceText ??
-      body?.content ??
       "";
 
     const text =
@@ -428,13 +719,13 @@ export async function POST(
       rawPageImages
         .map(
           (
-            item: unknown
+            raw: unknown
           ): PageImage => {
-            const page =
-              item &&
-              typeof item ===
+            const item =
+              raw &&
+              typeof raw ===
                 "object"
-                ? (item as Record<
+                ? (raw as Record<
                     string,
                     unknown
                   >)
@@ -443,12 +734,12 @@ export async function POST(
             return {
               pageNumber:
                 numberValue(
-                  page.pageNumber
+                  item.pageNumber
                 ),
 
               imageUrl:
                 cleanInline(
-                  page.imageUrl
+                  item.imageUrl
                 ),
             };
           }
@@ -463,6 +754,99 @@ export async function POST(
               "data:image"
             )
         );
+
+    const rawPageTextData: unknown[] =
+      Array.isArray(
+        body?.pageTextData
+      )
+        ? body.pageTextData
+        : [];
+
+    const pageTextData: PageTextData[] =
+      rawPageTextData.map(
+        (
+          raw: unknown
+        ): PageTextData => {
+          const page =
+            raw &&
+            typeof raw ===
+              "object"
+              ? (raw as Record<
+                  string,
+                  unknown
+                >)
+              : {};
+
+          const rawItems: unknown[] =
+            Array.isArray(
+              page.items
+            )
+              ? page.items
+              : [];
+
+          const items: PageTextItem[] =
+            rawItems
+              .map(
+                (
+                  rawItem: unknown
+                ): PageTextItem => {
+                  const item =
+                    rawItem &&
+                    typeof rawItem ===
+                      "object"
+                      ? (rawItem as Record<
+                          string,
+                          unknown
+                        >)
+                      : {};
+
+                  return {
+                    text:
+                      cleanInline(
+                        item.text
+                      ),
+
+                    x:
+                      numberValue(
+                        item.x
+                      ),
+
+                    y:
+                      numberValue(
+                        item.y
+                      ),
+
+                    width:
+                      numberValue(
+                        item.width
+                      ),
+
+                    height:
+                      numberValue(
+                        item.height
+                      ),
+                  };
+                }
+              )
+              .filter(
+                (
+                  item: PageTextItem
+                ) =>
+                  Boolean(
+                    item.text
+                  )
+              );
+
+          return {
+            pageNumber:
+              numberValue(
+                page.pageNumber
+              ),
+
+            items,
+          };
+        }
+      );
 
     if (!text) {
       return Response.json(
@@ -496,55 +880,49 @@ export async function POST(
       });
 
     const prompt = `
-당신은 대한민국 수능 및 전국연합학력평가
-국어 시험지를 분석하는 전문 출제자입니다.
+당신은 대한민국 국어 모의고사 분석 전문가입니다.
 
-입력:
+PDF 전체 텍스트와 실제 시험지 페이지 이미지를 함께 보고
+비문학 지문과 해당 문제를 추출하세요.
 
-1. PDF 전체 텍스트
-2. PDF 페이지 이미지
-
-이번 단계에서는
-비문학 지문과 해당 문제를 추출하고,
-원본 시각 형식을 분석합니다.
-
-새 문제는 절대 만들지 마십시오.
+새 문제는 만들지 마세요.
 
 ==================================================
-비문학
+중요
 ==================================================
 
-사회
-경제
-과학
-기술
-철학
-인문
-언어
-독서
-예술 이론
-설명문
-논설문
+이번 출력에서는
+"실제 시각 자료가 존재하는지"를 매우 엄격하게 판단합니다.
 
-등을 우선합니다.
+시각 자료:
 
-문학 작품은 기본적으로 제외합니다.
+- 표
+- 그래프
+- 그림
+- 도식
+- 사진
+- 표 형태 선택지
+- 그림/표가 포함된 <보기>
+
+시각 자료가 아닌 것:
+
+- 순수 텍스트 <보기>
+- 일반 줄글
+- 일반 발문
+- 일반 선택지
+
+순수 텍스트 <보기>를
+attachment로 만들면 안 됩니다.
 
 ==================================================
-SOURCE
+지문
 ==================================================
 
-source에는 실제 지문 원문만 넣습니다.
+source에는 원문 지문만 넣으세요.
 
-다음은 삭제:
+문제 번호, 발문, 선택지는 제거하세요.
 
-- 문제 번호
-- 선택지
-- 시험 안내
-- 페이지 번호
-- 인쇄 정보
-
-다음은 보존:
+다음은 보존하세요.
 
 - 문단
 - (가)
@@ -555,15 +933,12 @@ source에는 실제 지문 원문만 넣습니다.
 - ⓒ
 - 인용
 - 각주
-- 문제 풀이에 필요한 표식
-
-지문을 요약하지 마십시오.
 
 ==================================================
 MARKERS
 ==================================================
 
-문제가 직접 참조하는 표시를 분석합니다.
+문제가 참조하는 지문 표식을 추출하세요.
 
 kind:
 
@@ -573,123 +948,61 @@ symbol
 quoted
 other
 
---------------------------------------------------
-(가), (나)
---------------------------------------------------
+(가), (나)의 경우
+해당 구간 전체 원문을 text에 넣으세요.
 
-(가)의 marker.text에는
-(가) 시작부터 다음 구간 시작 직전까지의
-실제 전체 원문을 넣습니다.
-
-예:
-
-{
-  "label": "(가)",
-  "text": "(가) 전체 범위 원문",
-  "kind": "section"
-}
-
---------------------------------------------------
-밑줄
---------------------------------------------------
-
-페이지 이미지에서 실제 밑줄이 확인되면
-정확한 원문을 기록합니다.
-
-{
-  "label": "밑줄",
-  "text": "실제로 밑줄 친 원문",
-  "kind": "underline"
-}
-
-밑줄이 명확하지 않으면
-만들어내지 마십시오.
-
---------------------------------------------------
-ⓐ
---------------------------------------------------
-
-{
-  "label": "ⓐ",
-  "text": "실제로 ⓐ가 표시된 표현",
-  "kind": "symbol"
-}
+실제 페이지 이미지에 밑줄이 있으면
+그 정확한 원문을 underline marker로 넣으세요.
 
 ==================================================
-QUESTIONS
+문제
 ==================================================
 
-각 문제마다:
+각 문제:
 
 number
+pageNumber
 stem
 bogi
 choices
 attachments
 
-를 추출합니다.
-
 ==================================================
-<보기>
+BOGI
 ==================================================
 
-bogi에는
-<보기>의 텍스트 본문만 넣습니다.
+순수 텍스트 <보기>:
 
-"<보기>"라는 제목은 넣지 않습니다.
+bogi에 텍스트만 넣으세요.
+attachment는 만들지 마세요.
 
-표나 그림이 보기 안에 있으면
-그 자료를 줄글로 풀지 마십시오.
+표나 그림이 포함된 <보기>:
+
+텍스트 설명은 bogi에,
+실제 표나 그림은 attachment로 분리하세요.
+
+표 자체의 셀 내용을
+bogi에서 줄글로 반복하지 마세요.
 
 ==================================================
 ATTACHMENTS
 ==================================================
 
-다음 자료가 실제 페이지 이미지에 있으면
-attachments에 기록합니다.
+실제 표/그래프/그림/도식이 있을 때만 만드세요.
 
-- table
-- graph
-- diagram
-- image
-- chart
-- other
+bbox는 여기서 만들지 않습니다.
 
-placement:
+다음 정보만 반환하세요.
 
-passage
-question
-bogi
-choice
-
-중요:
-
-이 첫 분석에서는
-bbox를 대략적으로 넣어도 됩니다.
-
-뒤 단계에서 별도로
-정밀 크롭 위치를 다시 찾습니다.
-
-==================================================
-절대 금지
-==================================================
-
-시각 자료를 줄글로 대신 쓰지 마십시오.
-
-예를 들어 원본이 표라면:
-
-A 10 20 B 30 40
-
-처럼 줄글로 변환해서
-그것만 남기면 안 됩니다.
-
-반드시 attachment도 함께 생성합니다.
+id
+type
+placement
+pageNumber
+description
 
 ==================================================
 JSON
 ==================================================
-
-반드시 아래 구조로만 반환합니다.
 
 {
   "groups": [
@@ -697,33 +1010,27 @@ JSON
       "id": "group-1",
       "title": "지문 제목",
       "source": "지문 원문",
-      "markers": [
-        {
-          "label": "(가)",
-          "text": "(가)의 실제 전체 범위",
-          "kind": "section"
-        }
-      ],
+      "markers": [],
       "questions": [
         {
-          "number": "24",
+          "number": "25",
+          "pageNumber": 1,
           "stem": "발문",
-          "bogi": "보기 본문",
+          "bogi": "순수 텍스트 보기라면 여기",
           "choices": [
-            "① 선택지",
-            "② 선택지",
-            "③ 선택지",
-            "④ 선택지",
-            "⑤ 선택지"
+            "① ...",
+            "② ...",
+            "③ ...",
+            "④ ...",
+            "⑤ ..."
           ],
           "attachments": [
             {
-              "id": "q24-table-1",
+              "id": "q25-table-1",
               "type": "table",
               "placement": "bogi",
               "pageNumber": 1,
-              "bbox": null,
-              "description": "보기 안의 표"
+              "description": "가구별 소득을 나타낸 표"
             }
           ]
         }
@@ -732,7 +1039,7 @@ JSON
   ]
 }
 
-JSON 밖의 설명은 절대 하지 마십시오.
+반드시 JSON만 출력하세요.
 
 ==================================================
 PDF TEXT
@@ -743,51 +1050,59 @@ ${text}
 
     const content: Array<
       | {
-          type: "input_text";
+          type:
+            "input_text";
           text: string;
         }
       | {
-          type: "input_image";
+          type:
+            "input_image";
           image_url: string;
           detail:
-            | "auto"
             | "low"
-            | "high";
+            | "high"
+            | "auto";
         }
     > = [
       {
-        type: "input_text",
+        type:
+          "input_text",
         text: prompt,
       },
     ];
 
     for (
-      const pageImage of pageImages
+      const page of pageImages
     ) {
       content.push({
-        type: "input_text",
+        type:
+          "input_text",
 
         text:
-          `시험지 PDF ${pageImage.pageNumber}페이지입니다.`,
+          `PDF ${page.pageNumber}페이지`,
       });
 
       content.push({
-        type: "input_image",
+        type:
+          "input_image",
 
         image_url:
-          pageImage.imageUrl,
+          page.imageUrl,
 
-        detail: "high",
+        detail:
+          "high",
       });
     }
 
     const result =
       await openai.responses.create({
-        model: "gpt-5-mini",
+        model:
+          "gpt-5-mini",
 
         input: [
           {
-            role: "user",
+            role:
+              "user",
             content,
           },
         ],
@@ -803,34 +1118,16 @@ ${text}
       );
     }
 
-    let parsed: unknown;
-
-    try {
-      parsed =
-        parseJsonOutput(
-          output
-        );
-    } catch {
-      throw new Error(
-        "원본 문제 분석 결과를 JSON으로 읽지 못했습니다."
+    const parsed =
+      parseJsonOutput(
+        output
       );
-    }
-
-    const parsedObject =
-      parsed &&
-      typeof parsed ===
-        "object"
-        ? (parsed as Record<
-            string,
-            unknown
-          >)
-        : {};
 
     const rawGroups: unknown[] =
       Array.isArray(
-        parsedObject.groups
+        parsed?.groups
       )
-        ? parsedObject.groups
+        ? parsed.groups
         : [];
 
     const groups: TwinPassageGroup[] =
@@ -959,10 +1256,25 @@ ${text}
               >)
             : {};
 
-        const questionNumber =
+        const number =
           cleanInline(
             question.number
           );
+
+        let pageNumber =
+          numberValue(
+            question.pageNumber
+          );
+
+        if (
+          pageNumber <= 0
+        ) {
+          pageNumber =
+            findQuestionPage(
+              number,
+              pageTextData
+            );
+        }
 
         const rawChoices: unknown[] =
           Array.isArray(
@@ -982,21 +1294,21 @@ ${text}
           [];
 
         for (
-          let attachmentIndex = 0;
-          attachmentIndex <
+          let assetIndex = 0;
+          assetIndex <
           rawAttachments.length;
-          attachmentIndex++
+          assetIndex++
         ) {
-          const rawAttachment =
+          const rawAsset =
             rawAttachments[
-              attachmentIndex
+              assetIndex
             ];
 
-          const attachment =
-            rawAttachment &&
-            typeof rawAttachment ===
+          const asset =
+            rawAsset &&
+            typeof rawAsset ===
               "object"
-              ? (rawAttachment as Record<
+              ? (rawAsset as Record<
                   string,
                   unknown
                 >)
@@ -1004,7 +1316,7 @@ ${text}
 
           const rawType =
             cleanInline(
-              attachment.type
+              asset.type
             );
 
           const allowedTypes: QuestionAttachment["type"][] =
@@ -1026,7 +1338,7 @@ ${text}
 
           const rawPlacement =
             cleanInline(
-              attachment.placement
+              asset.placement
             );
 
           const allowedPlacements: QuestionAttachment["placement"][] =
@@ -1044,68 +1356,92 @@ ${text}
               ? (rawPlacement as QuestionAttachment["placement"])
               : "question";
 
-          const pageNumber =
+          const assetPageNumber =
             numberValue(
-              attachment.pageNumber
+              asset.pageNumber,
+              pageNumber
             );
-
-          const description =
-            cleanInline(
-              attachment.description
-            );
-
-          let refinedBBox:
-            BoundingBox | null =
-            null;
 
           const pageImage =
             pageImages.find(
               (
-                page: PageImage
+                item: PageImage
               ) =>
-                page.pageNumber ===
-                pageNumber
+                item.pageNumber ===
+                assetPageNumber
             );
 
-          if (
-            pageImage &&
-            questionNumber
-          ) {
-            refinedBBox =
-              await refineAttachmentBBox({
-                openai,
-                pageImage,
-                questionNumber,
-                attachmentType:
-                  type,
-                placement,
-                description,
-              });
+          if (!pageImage) {
+            continue;
           }
+
+          const questionRegion =
+            findQuestionRegion(
+              number,
+              assetPageNumber,
+              pageTextData
+            );
+
+          const questionCrop =
+            await cropNormalizedImage(
+              pageImage.imageUrl,
+              questionRegion,
+              8
+            );
+
+          const visualBBox =
+            await findVisualInsideQuestion({
+              openai,
+              questionCrop,
+              questionNumber:
+                number,
+              type,
+              placement,
+              description:
+                cleanInline(
+                  asset.description
+                ),
+            });
+
+          if (!visualBBox) {
+            continue;
+          }
+
+          const finalImage =
+            await cropNormalizedImage(
+              questionCrop,
+              visualBBox,
+              14
+            );
 
           attachments.push({
             id:
               cleanInline(
-                attachment.id
+                asset.id
               ) ||
-              `q${questionNumber || questionIndex + 1}-asset-${attachmentIndex + 1}`,
+              `q${number}-asset-${assetIndex + 1}`,
 
             type,
 
             placement,
 
-            pageNumber,
+            pageNumber:
+              assetPageNumber,
 
-            bbox:
-              refinedBBox,
+            description:
+              cleanInline(
+                asset.description
+              ),
 
-            description,
+            imageUrl:
+              finalImage,
           });
         }
 
         questions.push({
-          number:
-            questionNumber,
+          number,
+
+          pageNumber,
 
           stem:
             cleanBlock(
@@ -1136,21 +1472,11 @@ ${text}
                   )
               ),
 
-          attachments:
-            attachments.filter(
-              (
-                attachment: QuestionAttachment
-              ) =>
-                attachment.pageNumber >
-                  0 &&
-                Boolean(
-                  attachment.bbox
-                )
-            ),
+          attachments,
         });
       }
 
-      const cleanGroup: TwinPassageGroup =
+      const resultGroup: TwinPassageGroup =
         {
           id:
             cleanInline(
@@ -1186,13 +1512,15 @@ ${text}
         };
 
       if (
-        cleanGroup.source
-          .length > 100 &&
-        cleanGroup.questions
-          .length > 0
+        resultGroup.source
+          .length >
+          100 &&
+        resultGroup.questions
+          .length >
+          0
       ) {
         groups.push(
-          cleanGroup
+          resultGroup
         );
       }
     }
@@ -1205,54 +1533,14 @@ ${text}
       );
     }
 
-    const questionCount =
-      groups.reduce(
-        (
-          sum: number,
-          group: TwinPassageGroup
-        ) =>
-          sum +
-          group.questions.length,
-        0
-      );
-
-    const assetCount =
-      groups.reduce(
-        (
-          total: number,
-          group: TwinPassageGroup
-        ) =>
-          total +
-          group.questions.reduce(
-            (
-              questionTotal: number,
-              question: SourceQuestion
-            ) =>
-              questionTotal +
-              question.attachments
-                .length,
-            0
-          ),
-        0
-      );
-
     return Response.json({
       groups,
-
-      stats: {
-        groupCount:
-          groups.length,
-
-        questionCount,
-
-        assetCount,
-      },
     });
   } catch (
     error: unknown
   ) {
     console.error(
-      "KOREAN TWIN PASSAGES ERROR:",
+      "KOREAN TWIN ERROR:",
       error
     );
 
