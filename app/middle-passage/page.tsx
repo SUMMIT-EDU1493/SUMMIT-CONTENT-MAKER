@@ -940,9 +940,7 @@ ${pageText}
           `앞표지 1장 + 써밋네컷 ${nextWorkItems.length}장 + 뒷표지 1장 생성 완료`
         );
 
-        scrollTo(
-          "final-image-gallery"
-        );
+
       } catch (error: any) {
         console.error(error);
 
@@ -2823,6 +2821,24 @@ ${pageText}
                 장 + 뒷표지 1장
               </p>
 
+              {(!frontCoverImage ||
+                !backCoverImage) && (
+                <div className="mt-5 rounded-xl border border-purple-300/30 bg-white/10 p-4 text-center">
+                  <p className="font-black text-purple-100">
+                    최종 PDF를 준비하고 있습니다.
+                  </p>
+
+                  <p className="mt-1 text-sm text-slate-300">
+                    앞표지와 뒷표지가 자동으로 완성되면 다운로드 버튼이 활성화됩니다.
+                  </p>
+
+                  <div className="mt-3 flex items-center justify-center gap-2 text-sm font-bold text-purple-200">
+                    <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-purple-300" />
+                    표지 자동 생성 대기 중
+                  </div>
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={
@@ -2833,10 +2849,13 @@ ${pageText}
                   !frontCoverImage ||
                   !backCoverImage
                 }
-                className="mt-5 w-full rounded-xl bg-purple-500 px-6 py-4 text-lg font-black text-white transition active:scale-[0.99] disabled:opacity-40"
+                className="mt-5 w-full rounded-xl bg-purple-500 px-6 py-4 text-lg font-black text-white transition active:scale-[0.99] disabled:cursor-wait disabled:opacity-50"
               >
                 {makingPdf
                   ? "PDF 만드는 중..."
+                  : !frontCoverImage ||
+                    !backCoverImage
+                  ? "표지 자동 완성 후 다운로드 가능"
                   : `PDF 다운로드 · 총 ${totalPdfPages}페이지`}
               </button>
             </div>
