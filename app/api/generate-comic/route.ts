@@ -319,11 +319,54 @@ SPEECH BUBBLES
 
 Use natural comic-style speech bubbles.
 
-Text should be:
-- large
-- bold enough to read
-- visually clear
-- not tiny worksheet text
+VERY IMPORTANT:
+The speech bubble text must be EASY TO READ.
+
+Text must be:
+
+- LARGE
+- BOLD
+- THICK STROKE
+- HIGH CONTRAST
+- clearly readable on a mobile phone screen
+- noticeably larger than ordinary comic lettering
+- not thin
+- not delicate
+- not tiny
+- not light-weight typography
+
+Use a strong bold Korean comic/webtoon font appearance.
+
+Prefer a heavy sans-serif or bold rounded comic lettering style.
+
+Do NOT use:
+
+- thin handwriting
+- light font weight
+- tiny captions
+- narrow delicate lettering
+- faint gray lettering
+
+Speech bubble lettering should visually feel approximately
+18-24pt relative to a printed educational worksheet,
+not tiny manga lettering.
+
+If a dialogue line is long,
+make the speech bubble larger rather than shrinking the text.
+
+Never shrink important dialogue until it becomes hard to read.
+
+The Korean text and English words in parentheses
+must be equally clear and bold.
+
+Examples such as:
+
+선택(choice)
+행동(behavior)
+영향(influence)
+기본 설정(default)
+
+must be clearly readable.
 
 Each speech bubble tail must clearly point
 to the correct speaker.
