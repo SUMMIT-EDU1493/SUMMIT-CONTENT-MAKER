@@ -511,7 +511,7 @@ ${pageText}
             passages[index];
 
           setStatusText(
-            `${index + 1}/${passages.length} · ${passage.title}`
+            `전체 설계 중 (${index + 1}/${passages.length}) · ${passage.title}`
           );
 
           const data =
@@ -765,6 +765,21 @@ ${pageText}
         setImageProgress(
           "전체 이미지 생성 완료"
         );
+
+        setStatusText(
+          "전체 이미지 생성이 완료되었습니다."
+        );
+
+        setTimeout(() => {
+          document
+            .getElementById(
+              "generated-image-gallery"
+            )
+            ?.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+        }, 300);
       } catch (error: any) {
         console.error(error);
 
@@ -2562,6 +2577,89 @@ ${pageText}
                 </button>
               )}
             </div>
+
+            {generatedImageCount > 0 && (
+              <section
+                id="generated-image-gallery"
+                className="mt-10 scroll-mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200"
+              >
+                <div className="flex flex-wrap items-end justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-bold text-purple-600">
+                      GENERATED COMICS
+                    </p>
+
+                    <h3 className="mt-1 text-2xl font-black text-slate-900">
+                      생성된 써밋네컷 확인
+                    </h3>
+
+                    <p className="mt-2 text-sm text-slate-500">
+                      이미지 생성이 끝난 뒤 여기서 한 번에 확인할 수 있습니다.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={addAllImagesToWorkBox}
+                    className={`rounded-xl px-5 py-3 font-black transition-all active:scale-[0.97] ${
+                      allAddedFeedback
+                        ? "bg-emerald-600 text-white"
+                        : "bg-purple-100 text-purple-700 ring-1 ring-purple-200"
+                    }`}
+                  >
+                    {allAddedFeedback
+                      ? "전체 작업함 담기 완료 ✓"
+                      : `전체 이미지 PDF 작업함에 담기 · ${generatedImageCount}장`}
+                  </button>
+                </div>
+
+                <div className="mt-6 grid gap-6 md:grid-cols-2">
+                  {plans
+                    .filter((plan) => Boolean(plan.image))
+                    .map((plan, index) => (
+                      <div
+                        key={plan.id}
+                        className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"
+                      >
+                        <div className="px-4 py-3">
+                          <p className="text-xs font-bold text-purple-600">
+                            써밋네컷 {index + 1}
+                          </p>
+
+                          <h4 className="mt-1 font-black text-slate-900">
+                            {plan.summary}
+                          </h4>
+                        </div>
+
+                        <img
+                          src={plan.image}
+                          alt={`써밋네컷 ${index + 1}`}
+                          className="w-full"
+                        />
+
+                        <div className="p-4">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              addToWorkBox(plan.id)
+                            }
+                            disabled={isPlanInWorkBox(plan)}
+                            className={`w-full rounded-xl px-4 py-3 font-black transition-all active:scale-[0.97] ${
+                              isPlanInWorkBox(plan)
+                                ? "bg-emerald-100 text-emerald-700"
+                                : "bg-slate-900 text-white"
+                            }`}
+                          >
+                            {isPlanInWorkBox(plan)
+                              ? "PDF 작업함에 담김 ✓"
+                              : "PDF 작업함에 담기"}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </section>
+            )}
 
             <section className="mt-10 rounded-3xl bg-amber-50 p-6 ring-1 ring-amber-200">
               <p className="text-sm font-bold text-amber-600">
