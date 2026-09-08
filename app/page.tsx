@@ -1504,7 +1504,7 @@ export default function Home() {
                 </div>
 
                 <h2 className="mt-5 text-5xl font-black text-slate-900">
-                  중등
+                  중등 영어
                 </h2>
 
                 <p className="mt-3 text-lg font-bold text-slate-600">
@@ -1540,7 +1540,7 @@ export default function Home() {
                 </div>
 
                 <h2 className="mt-5 text-5xl font-black text-slate-900">
-                  고등
+                  고등 영어
                 </h2>
 
                 <p className="mt-3 text-lg font-bold text-slate-600">
@@ -1608,7 +1608,7 @@ export default function Home() {
                 </div>
 
                 <h2 className="mt-5 whitespace-nowrap text-[36px] font-black leading-tight text-slate-900 md:text-[40px]">
-                  고등국어
+                  고등 국어
                 </h2>
 
                 <p className="mt-3 text-lg font-bold text-slate-600">
