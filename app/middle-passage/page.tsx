@@ -97,6 +97,17 @@ export default function MiddlePassagePage() {
     setLoadingAllImages,
   ] = useState(false);
 
+  const [
+    loadingBackCover,
+    setLoadingBackCover,
+  ] = useState(false);
+
+  const [backCoverImage, setBackCoverImage] =
+    useState("");
+
+  const [backCoverText, setBackCoverText] =
+    useState("");
+
   const [makingPdf, setMakingPdf] =
     useState(false);
 
@@ -113,6 +124,35 @@ export default function MiddlePassagePage() {
     setErrorMessage,
   ] = useState("");
 
+  const [
+    addedPlanId,
+    setAddedPlanId,
+  ] = useState("");
+
+  const [
+    allAddedFeedback,
+    setAllAddedFeedback,
+  ] = useState(false);
+
+  const goToContentSelection = () => {
+    if (
+      document.referrer &&
+      document.referrer.startsWith(
+        window.location.origin
+      )
+    ) {
+      window.history.back();
+      return;
+    }
+
+    window.location.href = "/";
+  };
+
+  const resetBackCover = () => {
+    setBackCoverImage("");
+    setBackCoverText("");
+  };
+
   const readPdf = async (file: File) => {
     try {
       setLoadingPdf(true);
@@ -121,6 +161,7 @@ export default function MiddlePassagePage() {
       setPassages([]);
       setPlans([]);
       setWorkItems([]);
+      resetBackCover();
       setFileName(file.name);
 
       setStatusText(
@@ -144,8 +185,7 @@ export default function MiddlePassagePage() {
 
       for (
         let pageNumber = 1;
-        pageNumber <=
-        pdf.numPages;
+        pageNumber <= pdf.numPages;
         pageNumber++
       ) {
         setStatusText(
@@ -225,6 +265,7 @@ ${pageText}
         setPassages([]);
         setPlans([]);
         setWorkItems([]);
+        resetBackCover();
 
         setStatusText(
           "교재에서 영어 본문을 찾는 중..."
@@ -355,6 +396,7 @@ ${pageText}
       );
 
       setErrorMessage("");
+      resetBackCover();
 
       setStatusText(
         `"${passage.title}" 설계 중...`
@@ -453,6 +495,8 @@ ${pageText}
 
         setErrorMessage("");
         setPlans([]);
+        setWorkItems([]);
+        resetBackCover();
 
         const newPlans: PassagePlan[] =
           [];
@@ -584,16 +628,15 @@ ${pageText}
 
     try {
       setErrorMessage("");
+      resetBackCover();
 
       setPlans((prev) =>
         prev.map((item) =>
           item.id === planId
             ? {
                 ...item,
-
                 loadingImage:
                   true,
-
                 image: "",
               }
             : item
@@ -608,10 +651,8 @@ ${pageText}
           item.id === planId
             ? {
                 ...item,
-
                 loadingImage:
                   false,
-
                 image,
               }
             : item
@@ -625,7 +666,6 @@ ${pageText}
           item.id === planId
             ? {
                 ...item,
-
                 loadingImage:
                   false,
               }
@@ -674,6 +714,7 @@ ${pageText}
         );
 
         setErrorMessage("");
+        resetBackCover();
 
         for (
           let index = 0;
@@ -694,7 +735,6 @@ ${pageText}
               target.id
                 ? {
                     ...item,
-
                     loadingImage:
                       true,
                   }
@@ -713,10 +753,8 @@ ${pageText}
               target.id
                 ? {
                     ...item,
-
                     loadingImage:
                       false,
-
                     image,
                   }
                 : item
@@ -738,7 +776,6 @@ ${pageText}
         setPlans((prev) =>
           prev.map((item) => ({
             ...item,
-
             loadingImage:
               false,
           }))
@@ -750,18 +787,113 @@ ${pageText}
       }
     };
 
+  const generateBackCover =
+    async () => {
+      if (
+        plans.length === 0
+      ) {
+        alert(
+          "먼저 써밋네컷 설계안을 만들어 주세요."
+        );
+
+        return;
+      }
+
+      if (
+        generatedImageCount === 0
+      ) {
+        alert(
+          "먼저 써밋네컷 이미지를 생성해 주세요."
+        );
+
+        return;
+      }
+
+      try {
+        setLoadingBackCover(
+          true
+        );
+
+        setErrorMessage("");
+
+        const response =
+          await fetch(
+            "/api/generate-cheer-page",
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+
+              body: JSON.stringify({
+                plans: plans.map(
+                  (plan) => ({
+                    title:
+                      plan.title,
+
+                    summary:
+                      plan.summary,
+
+                    panels:
+                      plan.panels,
+                  })
+                ),
+              }),
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data?.detail ||
+              data?.error ||
+              "뒷표지 생성에 실패했습니다."
+          );
+        }
+
+        if (!data?.image) {
+          throw new Error(
+            "뒷표지 이미지가 없습니다."
+          );
+        }
+
+        setBackCoverImage(
+          data.image
+        );
+
+        setBackCoverText(
+          data.cheerText || ""
+        );
+      } catch (error: any) {
+        console.error(error);
+
+        setErrorMessage(
+          error?.message ||
+            "뒷표지 생성 중 오류가 발생했습니다."
+        );
+      } finally {
+        setLoadingBackCover(
+          false
+        );
+      }
+    };
+
   const updateSummary = (
     planId: string,
     value: string
   ) => {
+    resetBackCover();
+
     setPlans((prev) =>
       prev.map((plan) =>
         plan.id === planId
           ? {
               ...plan,
-
               summary: value,
-
               image: "",
             }
           : plan
@@ -774,6 +906,8 @@ ${pageText}
     panelIndex: number,
     value: string
   ) => {
+    resetBackCover();
+
     setPlans((prev) =>
       prev.map((plan) => {
         if (
@@ -792,15 +926,12 @@ ${pageText}
           ...panels[
             panelIndex
           ],
-
           scene: value,
         };
 
         return {
           ...plan,
-
           panels,
-
           image: "",
         };
       })
@@ -812,6 +943,8 @@ ${pageText}
     panelIndex: number,
     value: string
   ) => {
+    resetBackCover();
+
     setPlans((prev) =>
       prev.map((plan) => {
         if (
@@ -830,16 +963,13 @@ ${pageText}
           ...panels[
             panelIndex
           ],
-
           characters:
             value,
         };
 
         return {
           ...plan,
-
           panels,
-
           image: "",
         };
       })
@@ -855,6 +985,8 @@ ${pageText}
       | "text",
     value: string
   ) => {
+    resetBackCover();
+
     setPlans((prev) =>
       prev.map((plan) => {
         if (
@@ -879,7 +1011,6 @@ ${pageText}
           ...dialogue[
             dialogueIndex
           ],
-
           [field]:
             value,
         };
@@ -890,15 +1021,12 @@ ${pageText}
           ...panels[
             panelIndex
           ],
-
           dialogue,
         };
 
         return {
           ...plan,
-
           panels,
-
           image: "",
         };
       })
@@ -909,6 +1037,8 @@ ${pageText}
     planId: string,
     panelIndex: number
   ) => {
+    resetBackCover();
+
     setPlans((prev) =>
       prev.map((plan) => {
         if (
@@ -942,9 +1072,7 @@ ${pageText}
 
         return {
           ...plan,
-
           panels,
-
           image: "",
         };
       })
@@ -956,6 +1084,8 @@ ${pageText}
     panelIndex: number,
     dialogueIndex: number
   ) => {
+    resetBackCover();
+
     setPlans((prev) =>
       prev.map((plan) => {
         if (
@@ -987,9 +1117,7 @@ ${pageText}
 
         return {
           ...plan,
-
           panels,
-
           image: "",
         };
       })
@@ -1014,6 +1142,22 @@ ${pageText}
           passageId
       )
     );
+
+    resetBackCover();
+  };
+
+  const isPlanInWorkBox = (
+    plan: PassagePlan
+  ) => {
+    if (!plan.image) {
+      return false;
+    }
+
+    return workItems.some(
+      (item) =>
+        item.image ===
+        plan.image
+    );
   };
 
   const addToWorkBox = (
@@ -1032,17 +1176,16 @@ ${pageText}
       return;
     }
 
-    const alreadyAdded =
-      workItems.some(
-        (item) =>
-          item.image ===
-          plan.image
+    if (
+      isPlanInWorkBox(plan)
+    ) {
+      setAddedPlanId(
+        planId
       );
 
-    if (alreadyAdded) {
-      alert(
-        "이 이미지는 이미 PDF 작업함에 들어가 있어."
-      );
+      setTimeout(() => {
+        setAddedPlanId("");
+      }, 900);
 
       return;
     }
@@ -1063,6 +1206,14 @@ ${pageText}
           plan.image,
       },
     ]);
+
+    setAddedPlanId(
+      planId
+    );
+
+    setTimeout(() => {
+      setAddedPlanId("");
+    }, 1200);
   };
 
   const addAllImagesToWorkBox =
@@ -1105,9 +1256,15 @@ ${pageText}
       if (
         newItems.length === 0
       ) {
-        alert(
-          "새로 작업함에 넣을 이미지가 없어."
+        setAllAddedFeedback(
+          true
         );
+
+        setTimeout(() => {
+          setAllAddedFeedback(
+            false
+          );
+        }, 1200);
 
         return;
       }
@@ -1117,9 +1274,15 @@ ${pageText}
         ...newItems,
       ]);
 
-      alert(
-        `${newItems.length}장을 PDF 작업함에 추가했어.`
+      setAllAddedFeedback(
+        true
       );
+
+      setTimeout(() => {
+        setAllAddedFeedback(
+          false
+        );
+      }, 1500);
     };
 
   const removeWorkItem = (
@@ -1254,6 +1417,7 @@ ${pageText}
 
       const topLine = [
         schoolName.trim(),
+
         gradeName.trim()
           ? `${gradeName.trim()}학년`
           : "",
@@ -1620,6 +1784,16 @@ ${pageText}
         return;
       }
 
+      if (
+        !backCoverImage
+      ) {
+        alert(
+          "먼저 뒷표지를 생성해 주세요."
+        );
+
+        return;
+      }
+
       try {
         setMakingPdf(true);
 
@@ -1676,12 +1850,24 @@ ${pageText}
           );
         }
 
+        pdf.addPage(
+          "a4",
+          "landscape"
+        );
+
+        addImagePageToPdf(
+          pdf,
+          backCoverImage
+        );
+
         const baseName =
           [
             schoolName.trim(),
+
             gradeName.trim()
               ? `${gradeName.trim()}학년`
               : "",
+
             lessonName.trim(),
           ]
             .filter(Boolean)
@@ -1711,13 +1897,23 @@ ${pageText}
     ).length;
 
   const totalPdfPages =
-    1 + workItems.length;
+    2 + workItems.length;
 
   return (
     <main className="min-h-screen bg-[#f7f4ea] px-5 py-8">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-6">
+        <div className="mb-6 flex flex-wrap gap-3">
           <HomeButton />
+
+          <button
+            type="button"
+            onClick={
+              goToContentSelection
+            }
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-black text-slate-600 shadow-sm transition hover:border-emerald-400 hover:text-emerald-700 active:scale-95"
+          >
+            ← 컨텐츠 선택
+          </button>
         </div>
 
         <div className="flex flex-wrap items-start justify-between gap-5">
@@ -2025,39 +2221,24 @@ ${pageText}
 
         {plans.length > 0 && (
           <section className="mt-10">
-            <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <p className="text-sm font-bold text-purple-600">
-                  SUMMIT FOUR-CUT EDITOR
-                </p>
+            <div className="mb-6">
+              <p className="text-sm font-bold text-purple-600">
+                SUMMIT FOUR-CUT EDITOR
+              </p>
 
-                <h2 className="mt-1 text-3xl font-black">
-                  써밋네컷 설계안
-                </h2>
+              <h2 className="mt-1 text-3xl font-black">
+                써밋네컷 설계안
+              </h2>
 
-                <p className="mt-2 text-slate-600">
-                  현재{" "}
-                  {plans.length}개
-                  설계안 · 이미지{" "}
-                  {
-                    generatedImageCount
-                  }
-                  개 생성됨
-                </p>
-              </div>
-
-              {generatedImageCount >
-                0 && (
-                <button
-                  type="button"
-                  onClick={
-                    addAllImagesToWorkBox
-                  }
-                  className="rounded-xl bg-purple-100 px-5 py-3 font-black text-purple-700 ring-1 ring-purple-200"
-                >
-                  생성 이미지 전체 작업함에 담기
-                </button>
-              )}
+              <p className="mt-2 text-slate-600">
+                현재{" "}
+                {plans.length}개
+                설계안 · 이미지{" "}
+                {
+                  generatedImageCount
+                }
+                개 생성됨
+              </p>
             </div>
 
             <div className="space-y-10">
@@ -2142,8 +2323,7 @@ ${pageText}
                                   updateScene(
                                     plan.id,
                                     panelIndex,
-                                    e.target
-                                      .value
+                                    e.target.value
                                   )
                                 }
                                 rows={4}
@@ -2162,8 +2342,7 @@ ${pageText}
                                   updateCharacters(
                                     plan.id,
                                     panelIndex,
-                                    e.target
-                                      .value
+                                    e.target.value
                                   )
                                 }
                                 rows={3}
@@ -2182,49 +2361,52 @@ ${pageText}
                                       }
                                       className="rounded-xl bg-purple-50 p-4"
                                     >
-                                      <div className="grid gap-2 md:grid-cols-[140px_1fr]">
-                                        <input
-                                          value={
-                                            dialogue.speaker
-                                          }
-                                          onChange={(
-                                            e
-                                          ) =>
-                                            updateDialogue(
-                                              plan.id,
-                                              panelIndex,
-                                              dialogueIndex,
-                                              "speaker",
-                                              e
-                                                .target
-                                                .value
-                                            )
-                                          }
-                                          placeholder="화자"
-                                          className="rounded-lg border border-purple-200 px-3 py-2 font-bold"
-                                        />
+                                      <label className="text-xs font-black text-purple-700">
+                                        화자
+                                      </label>
 
-                                        <input
-                                          value={
-                                            dialogue.text
-                                          }
-                                          onChange={(
-                                            e
-                                          ) =>
-                                            updateDialogue(
-                                              plan.id,
-                                              panelIndex,
-                                              dialogueIndex,
-                                              "text",
-                                              e
-                                                .target
-                                                .value
-                                            )
-                                          }
-                                          placeholder="대사"
-                                          className="rounded-lg border border-purple-200 px-3 py-2"
-                                        />
-                                      </div>
+                                      <input
+                                        value={
+                                          dialogue.speaker
+                                        }
+                                        onChange={(
+                                          e
+                                        ) =>
+                                          updateDialogue(
+                                            plan.id,
+                                            panelIndex,
+                                            dialogueIndex,
+                                            "speaker",
+                                            e.target.value
+                                          )
+                                        }
+                                        placeholder="화자"
+                                        className="mt-1 w-full rounded-lg border border-purple-200 px-3 py-2 font-bold"
+                                      />
+
+                                      <label className="mt-3 block text-xs font-black text-purple-700">
+                                        대사
+                                      </label>
+
+                                      <textarea
+                                        value={
+                                          dialogue.text
+                                        }
+                                        onChange={(
+                                          e
+                                        ) =>
+                                          updateDialogue(
+                                            plan.id,
+                                            panelIndex,
+                                            dialogueIndex,
+                                            "text",
+                                            e.target.value
+                                          )
+                                        }
+                                        placeholder="대사"
+                                        rows={4}
+                                        className="mt-1 min-h-[110px] w-full resize-y rounded-lg border border-purple-200 px-3 py-3 leading-6"
+                                      />
 
                                       <button
                                         type="button"
@@ -2272,7 +2454,7 @@ ${pageText}
                           plan.loadingImage ||
                           loadingAllImages
                         }
-                        className="mt-6 w-full rounded-xl bg-purple-600 px-6 py-4 text-lg font-black text-white disabled:opacity-50"
+                        className="mt-6 w-full rounded-xl bg-purple-600 px-6 py-4 text-lg font-black text-white transition active:scale-[0.99] disabled:opacity-50"
                       >
                         {plan.loadingImage
                           ? "이미지 생성 중..."
@@ -2301,9 +2483,30 @@ ${pageText}
                                 plan.id
                               )
                             }
-                            className="mt-4 w-full rounded-xl bg-slate-900 px-5 py-4 font-black text-white"
+                            disabled={
+                              isPlanInWorkBox(
+                                plan
+                              )
+                            }
+                            className={`mt-4 w-full rounded-xl px-5 py-4 font-black transition-all duration-150 active:scale-[0.97] ${
+                              isPlanInWorkBox(
+                                plan
+                              )
+                                ? "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200"
+                                : addedPlanId ===
+                                  plan.id
+                                ? "scale-[0.98] bg-emerald-600 text-white"
+                                : "bg-slate-900 text-white hover:bg-purple-700"
+                            }`}
                           >
-                            PDF 작업함에 담기
+                            {isPlanInWorkBox(
+                              plan
+                            )
+                              ? "PDF 작업함에 담김 ✓"
+                              : addedPlanId ===
+                                plan.id
+                              ? "담기 완료 ✓"
+                              : "PDF 작업함에 담기"}
                           </button>
                         </div>
                       )}
@@ -2319,7 +2522,7 @@ ${pageText}
               </p>
 
               <h3 className="mt-1 text-2xl font-black">
-                설계안 확인 다 했어?
+                설계안 확인이 모두 끝났나요?
               </h3>
 
               <button
@@ -2330,7 +2533,7 @@ ${pageText}
                 disabled={
                   loadingAllImages
                 }
-                className="mt-5 w-full rounded-xl bg-purple-500 px-6 py-4 text-lg font-black text-white disabled:opacity-50"
+                className="mt-5 w-full rounded-xl bg-purple-500 px-6 py-4 text-lg font-black text-white transition active:scale-[0.99] disabled:opacity-50"
               >
                 {loadingAllImages
                   ? `전체 이미지 생성 중 · ${imageProgress}`
@@ -2339,7 +2542,84 @@ ${pageText}
                       generatedImageCount
                     }개 남음`}
               </button>
+
+              {generatedImageCount >
+                0 && (
+                <button
+                  type="button"
+                  onClick={
+                    addAllImagesToWorkBox
+                  }
+                  className={`mt-3 w-full rounded-xl px-6 py-4 text-lg font-black transition-all active:scale-[0.97] ${
+                    allAddedFeedback
+                      ? "bg-emerald-500 text-white"
+                      : "bg-white text-slate-900"
+                  }`}
+                >
+                  {allAddedFeedback
+                    ? "전체 작업함 담기 완료 ✓"
+                    : `생성된 이미지 전체 PDF 작업함에 담기 · ${generatedImageCount}장`}
+                </button>
+              )}
             </div>
+
+            <section className="mt-10 rounded-3xl bg-amber-50 p-6 ring-1 ring-amber-200">
+              <p className="text-sm font-bold text-amber-600">
+                BACK COVER
+              </p>
+
+              <h3 className="mt-1 text-2xl font-black text-slate-900">
+                뒷표지
+              </h3>
+
+              <p className="mt-2 text-sm text-slate-600">
+                이 Lesson에 등장한 캐릭터들을 활용해 마지막 뒷표지를 만듭니다.
+              </p>
+
+              <p className="mt-1 text-xs text-slate-500">
+                뒷표지 생성은 AI 이미지 1장을 사용합니다.
+              </p>
+
+              <button
+                type="button"
+                onClick={
+                  generateBackCover
+                }
+                disabled={
+                  loadingBackCover ||
+                  generatedImageCount ===
+                    0
+                }
+                className="mt-5 w-full rounded-xl bg-amber-500 px-6 py-4 text-lg font-black text-white transition active:scale-[0.99] disabled:opacity-50"
+              >
+                {loadingBackCover
+                  ? "뒷표지 생성 중..."
+                  : backCoverImage
+                  ? "뒷표지 다시 생성"
+                  : "뒷표지 생성"}
+              </button>
+
+              {backCoverImage && (
+                <div className="mt-6">
+                  {backCoverText && (
+                    <p className="mb-3 text-center text-sm font-bold text-slate-500">
+                      사용된 응원 문구 ·{" "}
+                      {
+                        backCoverText
+                      }
+                    </p>
+                  )}
+
+                  <img
+                    src={
+                      backCoverImage
+                    }
+                    alt="써밋네컷 뒷표지"
+                    className="w-full rounded-2xl"
+                  />
+                </div>
+              )}
+            </section>
           </section>
         )}
 
@@ -2355,7 +2635,7 @@ ${pageText}
               </h2>
 
               <p className="mt-2 text-sm text-slate-300">
-                원하는 이미지만 골라 순서를 정한 뒤 PDF로 저장합니다.
+                원하는 이미지를 확인하고 순서를 정한 뒤 PDF로 저장합니다.
               </p>
             </div>
 
@@ -2407,7 +2687,7 @@ ${pageText}
                               index ===
                               0
                             }
-                            className="rounded-lg bg-slate-100 px-3 py-2 font-black disabled:opacity-30"
+                            className="rounded-lg bg-slate-100 px-3 py-2 font-black transition active:scale-90 disabled:opacity-30"
                           >
                             ↑
                           </button>
@@ -2425,7 +2705,7 @@ ${pageText}
                               workItems.length -
                                 1
                             }
-                            className="rounded-lg bg-slate-100 px-3 py-2 font-black disabled:opacity-30"
+                            className="rounded-lg bg-slate-100 px-3 py-2 font-black transition active:scale-90 disabled:opacity-30"
                           >
                             ↓
                           </button>
@@ -2437,7 +2717,7 @@ ${pageText}
                                 item.id
                               )
                             }
-                            className="rounded-lg bg-red-50 px-3 py-2 font-bold text-red-600"
+                            className="rounded-lg bg-red-50 px-3 py-2 font-bold text-red-600 transition active:scale-90"
                           >
                             삭제
                           </button>
@@ -2466,12 +2746,18 @@ ${pageText}
                 </h3>
 
                 <p className="mt-2 text-sm text-slate-300">
-                  표지 1장 + 써밋네컷{" "}
+                  앞표지 1장 + 써밋네컷{" "}
                   {
                     workItems.length
                   }
-                  장
+                  장 + 뒷표지 1장
                 </p>
+
+                {!backCoverImage && (
+                  <p className="mt-3 rounded-xl bg-amber-400/10 p-3 text-sm font-bold text-amber-300">
+                    최종 PDF를 만들려면 먼저 뒷표지를 생성해 주세요.
+                  </p>
+                )}
 
                 <button
                   type="button"
@@ -2479,9 +2765,10 @@ ${pageText}
                     downloadLessonPdf
                   }
                   disabled={
-                    makingPdf
+                    makingPdf ||
+                    !backCoverImage
                   }
-                  className="mt-5 w-full rounded-xl bg-purple-500 px-6 py-4 text-lg font-black text-white disabled:opacity-50"
+                  className="mt-5 w-full rounded-xl bg-purple-500 px-6 py-4 text-lg font-black text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {makingPdf
                     ? "PDF 만드는 중..."
