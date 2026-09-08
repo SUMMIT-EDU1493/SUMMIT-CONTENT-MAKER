@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
+import { jsPDF } from "jspdf";
 import HomeButton from "../components/HomeButton";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -37,28 +38,80 @@ type PassagePlan = {
   loadingImage: boolean;
 };
 
+type WorkItem = {
+  id: string;
+  title: string;
+  summary: string;
+  image: string;
+};
+
 function makeId() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2)}`;
 }
 
 export default function MiddlePassagePage() {
-  const [schoolName, setSchoolName] = useState("");
-  const [gradeName, setGradeName] = useState("");
-  const [lessonName, setLessonName] = useState("");
-  const [fileName, setFileName] = useState("");
-  const [pdfText, setPdfText] = useState("");
-  const [passages, setPassages] = useState<Passage[]>([]);
-  const [plans, setPlans] = useState<PassagePlan[]>([]);
+  const [schoolName, setSchoolName] =
+    useState("");
 
-  const [loadingPdf, setLoadingPdf] = useState(false);
-  const [loadingAi, setLoadingAi] = useState(false);
-  const [creatingPlanId, setCreatingPlanId] = useState("");
-  const [creatingAllPlans, setCreatingAllPlans] = useState(false);
-  const [loadingAllImages, setLoadingAllImages] = useState(false);
+  const [gradeName, setGradeName] =
+    useState("");
 
-  const [imageProgress, setImageProgress] = useState("");
-  const [statusText, setStatusText] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
+  const [lessonName, setLessonName] =
+    useState("");
+
+  const [fileName, setFileName] =
+    useState("");
+
+  const [pdfText, setPdfText] =
+    useState("");
+
+  const [passages, setPassages] =
+    useState<Passage[]>([]);
+
+  const [plans, setPlans] =
+    useState<PassagePlan[]>([]);
+
+  const [workItems, setWorkItems] =
+    useState<WorkItem[]>([]);
+
+  const [loadingPdf, setLoadingPdf] =
+    useState(false);
+
+  const [loadingAi, setLoadingAi] =
+    useState(false);
+
+  const [
+    creatingPlanId,
+    setCreatingPlanId,
+  ] = useState("");
+
+  const [
+    creatingAllPlans,
+    setCreatingAllPlans,
+  ] = useState(false);
+
+  const [
+    loadingAllImages,
+    setLoadingAllImages,
+  ] = useState(false);
+
+  const [makingPdf, setMakingPdf] =
+    useState(false);
+
+  const [
+    imageProgress,
+    setImageProgress,
+  ] = useState("");
+
+  const [statusText, setStatusText] =
+    useState("");
+
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState("");
 
   const readPdf = async (file: File) => {
     try {
@@ -67,40 +120,58 @@ export default function MiddlePassagePage() {
       setPdfText("");
       setPassages([]);
       setPlans([]);
+      setWorkItems([]);
       setFileName(file.name);
-      setStatusText("PDF를 읽는 중...");
 
-      const arrayBuffer = await file.arrayBuffer();
+      setStatusText(
+        "PDF를 읽는 중..."
+      );
 
-      const loadingTask = pdfjsLib.getDocument({
-        data: new Uint8Array(arrayBuffer),
-      });
+      const arrayBuffer =
+        await file.arrayBuffer();
 
-      const pdf = await loadingTask.promise;
+      const loadingTask =
+        pdfjsLib.getDocument({
+          data: new Uint8Array(
+            arrayBuffer
+          ),
+        });
+
+      const pdf =
+        await loadingTask.promise;
 
       let fullText = "";
 
       for (
         let pageNumber = 1;
-        pageNumber <= pdf.numPages;
+        pageNumber <=
+        pdf.numPages;
         pageNumber++
       ) {
         setStatusText(
           `${pageNumber}/${pdf.numPages} 페이지 읽는 중...`
         );
 
-        const page = await pdf.getPage(pageNumber);
-        const content = await page.getTextContent();
+        const page =
+          await pdf.getPage(
+            pageNumber
+          );
 
-        const pageText = content.items
-          .map((item: any) => {
-            if ("str" in item) {
-              return String(item.str ?? "");
-            }
+        const content =
+          await page.getTextContent();
 
-            return "";
-          })
-          .join(" ");
+        const pageText =
+          content.items
+            .map((item: any) => {
+              if ("str" in item) {
+                return String(
+                  item.str ?? ""
+                );
+              }
+
+              return "";
+            })
+            .join(" ");
 
         fullText += `
 
@@ -110,7 +181,8 @@ ${pageText}
 `;
       }
 
-      const text = fullText.trim();
+      const text =
+        fullText.trim();
 
       if (!text) {
         throw new Error(
@@ -137,105 +209,131 @@ ${pageText}
     }
   };
 
-  const analyzePassages = async () => {
-    if (!pdfText) {
-      alert("먼저 PDF를 선택해 주세요.");
-      return;
-    }
+  const analyzePassages =
+    async () => {
+      if (!pdfText) {
+        alert(
+          "먼저 PDF를 선택해 주세요."
+        );
 
-    try {
-      setLoadingAi(true);
-      setErrorMessage("");
-      setPassages([]);
-      setPlans([]);
+        return;
+      }
 
-      setStatusText(
-        "교재에서 영어 본문을 찾는 중..."
-      );
+      try {
+        setLoadingAi(true);
+        setErrorMessage("");
+        setPassages([]);
+        setPlans([]);
+        setWorkItems([]);
 
-      const response = await fetch(
-        "/api/middle-passage-analyze",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            text: pdfText,
-          }),
+        setStatusText(
+          "교재에서 영어 본문을 찾는 중..."
+        );
+
+        const response =
+          await fetch(
+            "/api/middle-passage-analyze",
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+
+              body: JSON.stringify({
+                text: pdfText,
+              }),
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data?.detail ||
+              data?.error ||
+              "본문 분석에 실패했습니다."
+          );
         }
-      );
 
-      const data = await response.json();
+        const foundPassages =
+          Array.isArray(
+            data?.passages
+          )
+            ? data.passages
+            : [];
 
-      if (!response.ok) {
-        throw new Error(
-          data?.detail ||
-            data?.error ||
-            "본문 분석에 실패했습니다."
+        if (
+          foundPassages.length === 0
+        ) {
+          throw new Error(
+            "본문을 찾지 못했습니다."
+          );
+        }
+
+        const nextPassages: Passage[] =
+          foundPassages.map(
+            (passage: any) => ({
+              id: makeId(),
+
+              title: String(
+                passage?.title ||
+                  "본문"
+              ).trim(),
+
+              content: String(
+                passage?.content ||
+                  ""
+              ).trim(),
+            })
+          );
+
+        setPassages(
+          nextPassages
         );
-      }
 
-      const foundPassages = Array.isArray(
-        data?.passages
-      )
-        ? data.passages
-        : [];
-
-      if (foundPassages.length === 0) {
-        throw new Error(
-          "본문을 찾지 못했습니다."
+        setStatusText(
+          `본문 ${nextPassages.length}개 찾기 완료`
         );
+      } catch (error: any) {
+        console.error(error);
+
+        setErrorMessage(
+          error?.message ||
+            "본문을 찾는 중 오류가 발생했습니다."
+        );
+
+        setStatusText("");
+      } finally {
+        setLoadingAi(false);
       }
-
-      const nextPassages: Passage[] =
-        foundPassages.map((passage: any) => ({
-          id: makeId(),
-          title: String(
-            passage?.title || "본문"
-          ).trim(),
-          content: String(
-            passage?.content || ""
-          ).trim(),
-        }));
-
-      setPassages(nextPassages);
-
-      setStatusText(
-        `본문 ${nextPassages.length}개 찾기 완료`
-      );
-    } catch (error: any) {
-      console.error(error);
-
-      setErrorMessage(
-        error?.message ||
-          "본문을 찾는 중 오류가 발생했습니다."
-      );
-
-      setStatusText("");
-    } finally {
-      setLoadingAi(false);
-    }
-  };
+    };
 
   const requestPlan = async (
     passage: Passage
   ) => {
-    const response = await fetch(
-      "/api/middle-passage-plan",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          title: passage.title,
-          content: passage.content,
-        }),
-      }
-    );
+    const response =
+      await fetch(
+        "/api/middle-passage-plan",
+        {
+          method: "POST",
 
-    const data = await response.json();
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify({
+            title: passage.title,
+            content: passage.content,
+          }),
+        }
+      );
+
+    const data =
+      await response.json();
 
     if (!response.ok) {
       throw new Error(
@@ -252,34 +350,56 @@ ${pageText}
     passage: Passage
   ) => {
     try {
-      setCreatingPlanId(passage.id);
+      setCreatingPlanId(
+        passage.id
+      );
+
       setErrorMessage("");
 
       setStatusText(
         `"${passage.title}" 설계 중...`
       );
 
-      const data = await requestPlan(passage);
+      const data =
+        await requestPlan(
+          passage
+        );
 
-      const newPlan: PassagePlan = {
-        id: makeId(),
-        passageId: passage.id,
-        title: String(
-          data?.title || passage.title
-        ),
-        summary: String(data?.summary || ""),
-        panels: Array.isArray(data?.panels)
-          ? data.panels
-          : [],
-        image: "",
-        loadingImage: false,
-      };
+      const newPlan: PassagePlan =
+        {
+          id: makeId(),
+
+          passageId:
+            passage.id,
+
+          title: String(
+            data?.title ||
+              passage.title
+          ),
+
+          summary: String(
+            data?.summary || ""
+          ),
+
+          panels: Array.isArray(
+            data?.panels
+          )
+            ? data.panels
+            : [],
+
+          image: "",
+
+          loadingImage:
+            false,
+        };
 
       setPlans((prev) => [
         ...prev.filter(
           (plan) =>
-            plan.passageId !== passage.id
+            plan.passageId !==
+            passage.id
         ),
+
         newPlan,
       ]);
 
@@ -293,8 +413,11 @@ ${pageText}
             `plan-${passage.id}`
           )
           ?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
+            behavior:
+              "smooth",
+
+            block:
+              "start",
           });
       }, 150);
     } catch (error: any) {
@@ -311,83 +434,123 @@ ${pageText}
     }
   };
 
-  const makeAllPlans = async () => {
-    if (passages.length === 0) {
-      alert("먼저 본문을 찾아 주세요.");
-      return;
-    }
-
-    try {
-      setCreatingAllPlans(true);
-      setErrorMessage("");
-      setPlans([]);
-
-      const newPlans: PassagePlan[] = [];
-
-      for (
-        let index = 0;
-        index < passages.length;
-        index++
+  const makeAllPlans =
+    async () => {
+      if (
+        passages.length === 0
       ) {
-        const passage = passages[index];
-
-        setStatusText(
-          `${index + 1}/${passages.length} · ${passage.title}`
+        alert(
+          "먼저 본문을 찾아 주세요."
         );
 
-        const data = await requestPlan(passage);
-
-        newPlans.push({
-          id: makeId(),
-          passageId: passage.id,
-          title: String(
-            data?.title || passage.title
-          ),
-          summary: String(
-            data?.summary || ""
-          ),
-          panels: Array.isArray(data?.panels)
-            ? data.panels
-            : [],
-          image: "",
-          loadingImage: false,
-        });
-
-        setPlans([...newPlans]);
+        return;
       }
 
-      setStatusText("전체 설계 완료");
-    } catch (error: any) {
-      console.error(error);
+      try {
+        setCreatingAllPlans(
+          true
+        );
 
-      setErrorMessage(
-        error?.message ||
-          "전체 설계 중 오류가 발생했습니다."
-      );
-    } finally {
-      setCreatingAllPlans(false);
-    }
-  };
+        setErrorMessage("");
+        setPlans([]);
+
+        const newPlans: PassagePlan[] =
+          [];
+
+        for (
+          let index = 0;
+          index <
+          passages.length;
+          index++
+        ) {
+          const passage =
+            passages[index];
+
+          setStatusText(
+            `${index + 1}/${passages.length} · ${passage.title}`
+          );
+
+          const data =
+            await requestPlan(
+              passage
+            );
+
+          newPlans.push({
+            id: makeId(),
+
+            passageId:
+              passage.id,
+
+            title: String(
+              data?.title ||
+                passage.title
+            ),
+
+            summary: String(
+              data?.summary ||
+                ""
+            ),
+
+            panels: Array.isArray(
+              data?.panels
+            )
+              ? data.panels
+              : [],
+
+            image: "",
+
+            loadingImage:
+              false,
+          });
+
+          setPlans([
+            ...newPlans,
+          ]);
+        }
+
+        setStatusText(
+          "전체 설계 완료"
+        );
+      } catch (error: any) {
+        console.error(error);
+
+        setErrorMessage(
+          error?.message ||
+            "전체 설계 중 오류가 발생했습니다."
+        );
+      } finally {
+        setCreatingAllPlans(
+          false
+        );
+      }
+    };
 
   const requestImage = async (
     plan: PassagePlan
   ): Promise<string> => {
-    const response = await fetch(
-      "/api/generate-comic",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          title: plan.title,
-          summary: plan.summary,
-          panels: plan.panels,
-        }),
-      }
-    );
+    const response =
+      await fetch(
+        "/api/generate-comic",
+        {
+          method: "POST",
 
-    const data = await response.json();
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify({
+            title: plan.title,
+            summary:
+              plan.summary,
+            panels:
+              plan.panels,
+          }),
+        }
+      );
+
+    const data =
+      await response.json();
 
     if (!response.ok) {
       throw new Error(
@@ -409,9 +572,11 @@ ${pageText}
   const generateImage = async (
     planId: string
   ) => {
-    const plan = plans.find(
-      (item) => item.id === planId
-    );
+    const plan =
+      plans.find(
+        (item) =>
+          item.id === planId
+      );
 
     if (!plan) {
       return;
@@ -425,21 +590,28 @@ ${pageText}
           item.id === planId
             ? {
                 ...item,
-                loadingImage: true,
+
+                loadingImage:
+                  true,
+
                 image: "",
               }
             : item
         )
       );
 
-      const image = await requestImage(plan);
+      const image =
+        await requestImage(plan);
 
       setPlans((prev) =>
         prev.map((item) =>
           item.id === planId
             ? {
                 ...item,
-                loadingImage: false,
+
+                loadingImage:
+                  false,
+
                 image,
               }
             : item
@@ -453,7 +625,9 @@ ${pageText}
           item.id === planId
             ? {
                 ...item,
-                loadingImage: false,
+
+                loadingImage:
+                  false,
               }
             : item
         )
@@ -466,86 +640,115 @@ ${pageText}
     }
   };
 
-  const generateAllImages = async () => {
-    const targets = plans.filter(
-      (plan) => !plan.image
-    );
+  const generateAllImages =
+    async () => {
+      const targets =
+        plans.filter(
+          (plan) =>
+            !plan.image
+        );
 
-    if (plans.length === 0) {
-      alert("먼저 설계안을 만들어 주세요.");
-      return;
-    }
-
-    if (targets.length === 0) {
-      alert(
-        "모든 설계안의 이미지가 이미 생성되어 있습니다."
-      );
-      return;
-    }
-
-    try {
-      setLoadingAllImages(true);
-      setErrorMessage("");
-
-      for (
-        let index = 0;
-        index < targets.length;
-        index++
+      if (
+        plans.length === 0
       ) {
-        const target = targets[index];
-
-        setImageProgress(
-          `${index + 1}/${targets.length} · ${target.title}`
+        alert(
+          "먼저 설계안을 만들어 주세요."
         );
 
-        setPlans((prev) =>
-          prev.map((item) =>
-            item.id === target.id
-              ? {
-                  ...item,
-                  loadingImage: true,
-                }
-              : item
-          )
-        );
-
-        const image =
-          await requestImage(target);
-
-        setPlans((prev) =>
-          prev.map((item) =>
-            item.id === target.id
-              ? {
-                  ...item,
-                  loadingImage: false,
-                  image,
-                }
-              : item
-          )
-        );
+        return;
       }
 
-      setImageProgress(
-        "전체 이미지 생성 완료"
-      );
-    } catch (error: any) {
-      console.error(error);
+      if (
+        targets.length === 0
+      ) {
+        alert(
+          "모든 설계안의 이미지가 이미 생성되어 있습니다."
+        );
 
-      setErrorMessage(
-        error?.message ||
-          "전체 이미지 생성 중 오류가 발생했습니다."
-      );
+        return;
+      }
 
-      setPlans((prev) =>
-        prev.map((item) => ({
-          ...item,
-          loadingImage: false,
-        }))
-      );
-    } finally {
-      setLoadingAllImages(false);
-    }
-  };
+      try {
+        setLoadingAllImages(
+          true
+        );
+
+        setErrorMessage("");
+
+        for (
+          let index = 0;
+          index <
+          targets.length;
+          index++
+        ) {
+          const target =
+            targets[index];
+
+          setImageProgress(
+            `${index + 1}/${targets.length} · ${target.title}`
+          );
+
+          setPlans((prev) =>
+            prev.map((item) =>
+              item.id ===
+              target.id
+                ? {
+                    ...item,
+
+                    loadingImage:
+                      true,
+                  }
+                : item
+            )
+          );
+
+          const image =
+            await requestImage(
+              target
+            );
+
+          setPlans((prev) =>
+            prev.map((item) =>
+              item.id ===
+              target.id
+                ? {
+                    ...item,
+
+                    loadingImage:
+                      false,
+
+                    image,
+                  }
+                : item
+            )
+          );
+        }
+
+        setImageProgress(
+          "전체 이미지 생성 완료"
+        );
+      } catch (error: any) {
+        console.error(error);
+
+        setErrorMessage(
+          error?.message ||
+            "전체 이미지 생성 중 오류가 발생했습니다."
+        );
+
+        setPlans((prev) =>
+          prev.map((item) => ({
+            ...item,
+
+            loadingImage:
+              false,
+          }))
+        );
+      } finally {
+        setLoadingAllImages(
+          false
+        );
+      }
+    };
 
   const updateSummary = (
     planId: string,
@@ -556,7 +759,9 @@ ${pageText}
         plan.id === planId
           ? {
               ...plan,
+
               summary: value,
+
               image: "",
             }
           : plan
@@ -571,20 +776,31 @@ ${pageText}
   ) => {
     setPlans((prev) =>
       prev.map((plan) => {
-        if (plan.id !== planId) {
+        if (
+          plan.id !== planId
+        ) {
           return plan;
         }
 
-        const panels = [...plan.panels];
+        const panels = [
+          ...plan.panels,
+        ];
 
-        panels[panelIndex] = {
-          ...panels[panelIndex],
+        panels[
+          panelIndex
+        ] = {
+          ...panels[
+            panelIndex
+          ],
+
           scene: value,
         };
 
         return {
           ...plan,
+
           panels,
+
           image: "",
         };
       })
@@ -598,20 +814,32 @@ ${pageText}
   ) => {
     setPlans((prev) =>
       prev.map((plan) => {
-        if (plan.id !== planId) {
+        if (
+          plan.id !== planId
+        ) {
           return plan;
         }
 
-        const panels = [...plan.panels];
+        const panels = [
+          ...plan.panels,
+        ];
 
-        panels[panelIndex] = {
-          ...panels[panelIndex],
-          characters: value,
+        panels[
+          panelIndex
+        ] = {
+          ...panels[
+            panelIndex
+          ],
+
+          characters:
+            value,
         };
 
         return {
           ...plan,
+
           panels,
+
           image: "",
         };
       })
@@ -622,34 +850,55 @@ ${pageText}
     planId: string,
     panelIndex: number,
     dialogueIndex: number,
-    field: "speaker" | "text",
+    field:
+      | "speaker"
+      | "text",
     value: string
   ) => {
     setPlans((prev) =>
       prev.map((plan) => {
-        if (plan.id !== planId) {
+        if (
+          plan.id !== planId
+        ) {
           return plan;
         }
 
-        const panels = [...plan.panels];
-
-        const dialogue = [
-          ...panels[panelIndex].dialogue,
+        const panels = [
+          ...plan.panels,
         ];
 
-        dialogue[dialogueIndex] = {
-          ...dialogue[dialogueIndex],
-          [field]: value,
+        const dialogue = [
+          ...panels[
+            panelIndex
+          ].dialogue,
+        ];
+
+        dialogue[
+          dialogueIndex
+        ] = {
+          ...dialogue[
+            dialogueIndex
+          ],
+
+          [field]:
+            value,
         };
 
-        panels[panelIndex] = {
-          ...panels[panelIndex],
+        panels[
+          panelIndex
+        ] = {
+          ...panels[
+            panelIndex
+          ],
+
           dialogue,
         };
 
         return {
           ...plan,
+
           panels,
+
           image: "",
         };
       })
@@ -662,16 +911,28 @@ ${pageText}
   ) => {
     setPlans((prev) =>
       prev.map((plan) => {
-        if (plan.id !== planId) {
+        if (
+          plan.id !== planId
+        ) {
           return plan;
         }
 
-        const panels = [...plan.panels];
+        const panels = [
+          ...plan.panels,
+        ];
 
-        panels[panelIndex] = {
-          ...panels[panelIndex],
+        panels[
+          panelIndex
+        ] = {
+          ...panels[
+            panelIndex
+          ],
+
           dialogue: [
-            ...panels[panelIndex].dialogue,
+            ...panels[
+              panelIndex
+            ].dialogue,
+
             {
               speaker: "",
               text: "",
@@ -681,7 +942,9 @@ ${pageText}
 
         return {
           ...plan,
+
           panels,
+
           image: "",
         };
       })
@@ -695,25 +958,38 @@ ${pageText}
   ) => {
     setPlans((prev) =>
       prev.map((plan) => {
-        if (plan.id !== planId) {
+        if (
+          plan.id !== planId
+        ) {
           return plan;
         }
 
-        const panels = [...plan.panels];
+        const panels = [
+          ...plan.panels,
+        ];
 
-        panels[panelIndex] = {
-          ...panels[panelIndex],
-          dialogue: panels[
+        panels[
+          panelIndex
+        ] = {
+          ...panels[
             panelIndex
-          ].dialogue.filter(
-            (_, index) =>
-              index !== dialogueIndex
-          ),
+          ],
+
+          dialogue:
+            panels[
+              panelIndex
+            ].dialogue.filter(
+              (_, index) =>
+                index !==
+                dialogueIndex
+            ),
         };
 
         return {
           ...plan,
+
           panels,
+
           image: "",
         };
       })
@@ -726,22 +1002,716 @@ ${pageText}
     setPassages((prev) =>
       prev.filter(
         (passage) =>
-          passage.id !== passageId
+          passage.id !==
+          passageId
       )
     );
 
     setPlans((prev) =>
       prev.filter(
         (plan) =>
-          plan.passageId !== passageId
+          plan.passageId !==
+          passageId
       )
     );
   };
+
+  const addToWorkBox = (
+    planId: string
+  ) => {
+    const plan =
+      plans.find(
+        (item) =>
+          item.id === planId
+      );
+
+    if (
+      !plan ||
+      !plan.image
+    ) {
+      return;
+    }
+
+    const alreadyAdded =
+      workItems.some(
+        (item) =>
+          item.image ===
+          plan.image
+      );
+
+    if (alreadyAdded) {
+      alert(
+        "이 이미지는 이미 PDF 작업함에 들어가 있어."
+      );
+
+      return;
+    }
+
+    setWorkItems((prev) => [
+      ...prev,
+
+      {
+        id: makeId(),
+
+        title:
+          plan.title,
+
+        summary:
+          plan.summary,
+
+        image:
+          plan.image,
+      },
+    ]);
+  };
+
+  const addAllImagesToWorkBox =
+    () => {
+      const imagePlans =
+        plans.filter(
+          (plan) =>
+            Boolean(
+              plan.image
+            )
+        );
+
+      const newItems =
+        imagePlans
+          .filter(
+            (plan) =>
+              !workItems.some(
+                (item) =>
+                  item.image ===
+                  plan.image
+              )
+          )
+          .map(
+            (
+              plan
+            ): WorkItem => ({
+              id: makeId(),
+
+              title:
+                plan.title,
+
+              summary:
+                plan.summary,
+
+              image:
+                plan.image,
+            })
+          );
+
+      if (
+        newItems.length === 0
+      ) {
+        alert(
+          "새로 작업함에 넣을 이미지가 없어."
+        );
+
+        return;
+      }
+
+      setWorkItems((prev) => [
+        ...prev,
+        ...newItems,
+      ]);
+
+      alert(
+        `${newItems.length}장을 PDF 작업함에 추가했어.`
+      );
+    };
+
+  const removeWorkItem = (
+    id: string
+  ) => {
+    setWorkItems((prev) =>
+      prev.filter(
+        (item) =>
+          item.id !== id
+      )
+    );
+  };
+
+  const moveWorkItem = (
+    index: number,
+    direction:
+      | "up"
+      | "down"
+  ) => {
+    const newItems = [
+      ...workItems,
+    ];
+
+    const targetIndex =
+      direction === "up"
+        ? index - 1
+        : index + 1;
+
+    if (
+      targetIndex < 0 ||
+      targetIndex >=
+        newItems.length
+    ) {
+      return;
+    }
+
+    const temp =
+      newItems[index];
+
+    newItems[index] =
+      newItems[
+        targetIndex
+      ];
+
+    newItems[
+      targetIndex
+    ] = temp;
+
+    setWorkItems(
+      newItems
+    );
+  };
+
+  const loadImage = (
+    src: string
+  ): Promise<HTMLImageElement> => {
+    return new Promise(
+      (resolve, reject) => {
+        const img =
+          new Image();
+
+        img.onload = () =>
+          resolve(img);
+
+        img.onerror = () =>
+          reject(
+            new Error(
+              "이미지를 불러오지 못했습니다."
+            )
+          );
+
+        img.src = src;
+      }
+    );
+  };
+
+  const createCoverImage =
+    async (): Promise<string> => {
+      if (
+        document.fonts?.ready
+      ) {
+        await document.fonts.ready;
+      }
+
+      const canvas =
+        document.createElement(
+          "canvas"
+        );
+
+      canvas.width = 1600;
+      canvas.height = 1131;
+
+      const ctx =
+        canvas.getContext(
+          "2d"
+        );
+
+      if (!ctx) {
+        throw new Error(
+          "표지 캔버스를 만들 수 없습니다."
+        );
+      }
+
+      const bgColor =
+        "#f8f7f3";
+
+      const black =
+        "#111111";
+
+      const gray =
+        "#505050";
+
+      const white =
+        "#ffffff";
+
+      ctx.fillStyle =
+        bgColor;
+
+      ctx.fillRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+
+      const filmX = 150;
+      const filmY = 330;
+      const filmWidth =
+        1300;
+      const filmHeight =
+        390;
+
+      const topLine = [
+        schoolName.trim(),
+        gradeName.trim()
+          ? `${gradeName.trim()}학년`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("  ·  ");
+
+      ctx.textAlign =
+        "left";
+
+      ctx.textBaseline =
+        "middle";
+
+      ctx.fillStyle =
+        black;
+
+      ctx.font =
+        '700 36px "Noto Sans KR", "Malgun Gothic", sans-serif';
+
+      ctx.fillText(
+        topLine ||
+          "SUMMIT EDU",
+        filmX,
+        145
+      );
+
+      ctx.fillStyle =
+        gray;
+
+      ctx.font =
+        '700 42px "Noto Sans KR", "Malgun Gothic", sans-serif';
+
+      ctx.fillText(
+        `${
+          lessonName.trim() ||
+          "Lesson"
+        }  ·  본문`,
+        filmX,
+        205
+      );
+
+      ctx.fillStyle =
+        black;
+
+      ctx.beginPath();
+
+      ctx.roundRect(
+        filmX,
+        filmY,
+        filmWidth,
+        filmHeight,
+        26
+      );
+
+      ctx.fill();
+
+      const holeWidth =
+        52;
+
+      const holeHeight =
+        24;
+
+      const holeGap =
+        30;
+
+      ctx.fillStyle =
+        bgColor;
+
+      for (
+        let x =
+          filmX + 35;
+        x <
+        filmX +
+          filmWidth -
+          holeWidth -
+          20;
+        x +=
+        holeWidth +
+        holeGap
+      ) {
+        ctx.beginPath();
+
+        ctx.roundRect(
+          x,
+          filmY + 22,
+          holeWidth,
+          holeHeight,
+          8
+        );
+
+        ctx.fill();
+
+        ctx.beginPath();
+
+        ctx.roundRect(
+          x,
+          filmY +
+            filmHeight -
+            holeHeight -
+            22,
+          holeWidth,
+          holeHeight,
+          8
+        );
+
+        ctx.fill();
+      }
+
+      const letters = [
+        "써",
+        "밋",
+        "네",
+        "컷",
+      ];
+
+      const innerMarginX =
+        48;
+
+      const frameGap =
+        20;
+
+      const frameTop =
+        filmY + 72;
+
+      const frameHeight =
+        filmHeight - 144;
+
+      const totalInnerWidth =
+        filmWidth -
+        innerMarginX * 2;
+
+      const frameWidth =
+        (totalInnerWidth -
+          frameGap * 3) /
+        4;
+
+      letters.forEach(
+        (
+          letter,
+          index
+        ) => {
+          const x =
+            filmX +
+            innerMarginX +
+            index *
+              (frameWidth +
+                frameGap);
+
+          ctx.fillStyle =
+            white;
+
+          ctx.fillRect(
+            x,
+            frameTop,
+            frameWidth,
+            frameHeight
+          );
+
+          ctx.strokeStyle =
+            white;
+
+          ctx.lineWidth =
+            7;
+
+          ctx.strokeRect(
+            x,
+            frameTop,
+            frameWidth,
+            frameHeight
+          );
+
+          ctx.fillStyle =
+            black;
+
+          ctx.strokeStyle =
+            black;
+
+          ctx.lineWidth =
+            2;
+
+          ctx.font =
+            '900 138px "Noto Sans KR", "Malgun Gothic", sans-serif';
+
+          ctx.textAlign =
+            "center";
+
+          ctx.textBaseline =
+            "middle";
+
+          const centerX =
+            x +
+            frameWidth /
+              2;
+
+          const centerY =
+            frameTop +
+            frameHeight /
+              2 +
+            3;
+
+          ctx.strokeText(
+            letter,
+            centerX,
+            centerY
+          );
+
+          ctx.fillText(
+            letter,
+            centerX,
+            centerY
+          );
+        }
+      );
+
+      try {
+        const logo =
+          await loadImage(
+            "/summit-logo.png"
+          );
+
+        const maxLogoWidth =
+          430;
+
+        const maxLogoHeight =
+          170;
+
+        const ratio =
+          Math.min(
+            maxLogoWidth /
+              logo.naturalWidth,
+
+            maxLogoHeight /
+              logo.naturalHeight
+          );
+
+        const logoWidth =
+          logo.naturalWidth *
+          ratio;
+
+        const logoHeight =
+          logo.naturalHeight *
+          ratio;
+
+        ctx.drawImage(
+          logo,
+
+          canvas.width /
+              2 -
+            logoWidth / 2,
+
+          860,
+
+          logoWidth,
+
+          logoHeight
+        );
+      } catch (error) {
+        console.error(
+          "COVER LOGO ERROR:",
+          error
+        );
+
+        ctx.fillStyle =
+          black;
+
+        ctx.textAlign =
+          "center";
+
+        ctx.font =
+          '800 42px "Noto Sans KR", "Malgun Gothic", sans-serif';
+
+        ctx.fillText(
+          "SUMMIT EDU",
+          canvas.width / 2,
+          950
+        );
+      }
+
+      return canvas.toDataURL(
+        "image/png",
+        1
+      );
+    };
+
+  const addImagePageToPdf = (
+    pdf: jsPDF,
+    image: string
+  ) => {
+    const pageWidth =
+      pdf.internal.pageSize.getWidth();
+
+    const pageHeight =
+      pdf.internal.pageSize.getHeight();
+
+    const margin = 10;
+
+    const availableWidth =
+      pageWidth -
+      margin * 2;
+
+    const availableHeight =
+      pageHeight -
+      margin * 2;
+
+    const imageProps =
+      pdf.getImageProperties(
+        image
+      );
+
+    const imageRatio =
+      imageProps.width /
+      imageProps.height;
+
+    let imageWidth =
+      availableWidth;
+
+    let imageHeight =
+      imageWidth /
+      imageRatio;
+
+    if (
+      imageHeight >
+      availableHeight
+    ) {
+      imageHeight =
+        availableHeight;
+
+      imageWidth =
+        imageHeight *
+        imageRatio;
+    }
+
+    const x =
+      (pageWidth -
+        imageWidth) /
+      2;
+
+    const y =
+      (pageHeight -
+        imageHeight) /
+      2;
+
+    pdf.addImage(
+      image,
+      "PNG",
+      x,
+      y,
+      imageWidth,
+      imageHeight,
+      undefined,
+      "FAST"
+    );
+  };
+
+  const downloadLessonPdf =
+    async () => {
+      if (
+        workItems.length === 0
+      ) {
+        alert(
+          "먼저 PDF 작업함에 써밋네컷 이미지를 추가해 주세요."
+        );
+
+        return;
+      }
+
+      try {
+        setMakingPdf(true);
+
+        const coverImage =
+          await createCoverImage();
+
+        const pdf =
+          new jsPDF({
+            orientation:
+              "landscape",
+
+            unit: "mm",
+
+            format: "a4",
+
+            compress:
+              true,
+          });
+
+        const pageWidth =
+          pdf.internal.pageSize.getWidth();
+
+        const pageHeight =
+          pdf.internal.pageSize.getHeight();
+
+        pdf.addImage(
+          coverImage,
+          "PNG",
+          0,
+          0,
+          pageWidth,
+          pageHeight,
+          undefined,
+          "FAST"
+        );
+
+        for (
+          let index = 0;
+          index <
+          workItems.length;
+          index++
+        ) {
+          const item =
+            workItems[index];
+
+          pdf.addPage(
+            "a4",
+            "landscape"
+          );
+
+          addImagePageToPdf(
+            pdf,
+            item.image
+          );
+        }
+
+        const baseName =
+          [
+            schoolName.trim(),
+            gradeName.trim()
+              ? `${gradeName.trim()}학년`
+              : "",
+            lessonName.trim(),
+          ]
+            .filter(Boolean)
+            .join("-") ||
+          "summit-middle";
+
+        pdf.save(
+          `${baseName}-본문-써밋네컷.pdf`
+        );
+      } catch (error) {
+        console.error(
+          "PDF ERROR:",
+          error
+        );
+
+        alert(
+          "PDF를 만드는 중 오류가 발생했습니다."
+        );
+      } finally {
+        setMakingPdf(false);
+      }
+    };
 
   const generatedImageCount =
     plans.filter((plan) =>
       Boolean(plan.image)
     ).length;
+
+  const totalPdfPages =
+    1 + workItems.length;
 
   return (
     <main className="min-h-screen bg-[#f7f4ea] px-5 py-8">
@@ -750,56 +1720,106 @@ ${pageText}
           <HomeButton />
         </div>
 
-        <header className="rounded-[30px] bg-white px-7 py-7 shadow-sm ring-1 ring-slate-200 md:px-9">
-          <p className="text-sm font-black tracking-[0.18em] text-emerald-700">
-            MIDDLE SCHOOL ENGLISH LAB
+        <div className="flex flex-wrap items-start justify-between gap-5">
+          <header className="flex-1 rounded-[30px] bg-white px-7 py-7 shadow-sm ring-1 ring-slate-200 md:px-9">
+            <p className="text-sm font-black tracking-[0.18em] text-emerald-700">
+              MIDDLE SCHOOL ENGLISH LAB
+            </p>
+
+            <h1 className="mt-2 text-4xl font-black text-slate-950 md:text-5xl">
+              본문 써밋네컷
+            </h1>
+
+            <p className="mt-3 text-slate-600">
+              영어 본문의 흐름을 네컷 학습만화로 만듭니다.
+            </p>
+          </header>
+
+          <div className="min-w-[150px] rounded-2xl bg-purple-100 px-5 py-4 text-center ring-1 ring-purple-200">
+            <p className="text-xs font-bold text-purple-600">
+              PDF 작업함
+            </p>
+
+            <p className="mt-1 text-3xl font-black text-purple-900">
+              {workItems.length}
+            </p>
+
+            <p className="text-xs text-purple-600">
+              장 저장됨
+            </p>
+          </div>
+        </div>
+
+        <section className="mt-8 rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200 md:p-8">
+          <p className="text-sm font-bold text-purple-600">
+            COVER INFORMATION
           </p>
 
-          <h1 className="mt-2 text-4xl font-black text-slate-950 md:text-5xl">
-            본문 써밋네컷
-          </h1>
-
-          <p className="mt-3 text-slate-600">
-            영어 본문의 흐름을 네컷 학습만화로 만듭니다.
-          </p>
-        </header>
-
-        <section className="mt-7 rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200 md:p-8">
-          <p className="text-xs font-black tracking-[0.18em] text-emerald-700">
-            LESSON INFORMATION
-          </p>
-
-          <h2 className="mt-1 text-2xl font-black text-slate-950">
-            기본 정보
+          <h2 className="mt-1 text-2xl font-black">
+            표지 정보
           </h2>
 
+          <p className="mt-2 text-sm text-slate-500">
+            입력한 정보는 PDF 첫 장 표지와 파일명에 반영됩니다.
+          </p>
+
           <div className="mt-6 grid gap-4 md:grid-cols-3">
-            <input
-              value={schoolName}
-              onChange={(e) =>
-                setSchoolName(e.target.value)
-              }
-              placeholder="학교"
-              className="rounded-xl border border-slate-300 px-4 py-3"
-            />
+            <div>
+              <label className="text-sm font-bold text-slate-700">
+                학교
+              </label>
 
-            <input
-              value={gradeName}
-              onChange={(e) =>
-                setGradeName(e.target.value)
-              }
-              placeholder="학년"
-              className="rounded-xl border border-slate-300 px-4 py-3"
-            />
+              <input
+                value={
+                  schoolName
+                }
+                onChange={(e) =>
+                  setSchoolName(
+                    e.target.value
+                  )
+                }
+                placeholder="예: 써밋중"
+                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3"
+              />
+            </div>
 
-            <input
-              value={lessonName}
-              onChange={(e) =>
-                setLessonName(e.target.value)
-              }
-              placeholder="Lesson"
-              className="rounded-xl border border-slate-300 px-4 py-3"
-            />
+            <div>
+              <label className="text-sm font-bold text-slate-700">
+                학년
+              </label>
+
+              <input
+                value={
+                  gradeName
+                }
+                onChange={(e) =>
+                  setGradeName(
+                    e.target.value
+                  )
+                }
+                placeholder="예: 2"
+                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-bold text-slate-700">
+                Lesson
+              </label>
+
+              <input
+                value={
+                  lessonName
+                }
+                onChange={(e) =>
+                  setLessonName(
+                    e.target.value
+                  )
+                }
+                placeholder="예: Lesson 3"
+                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3"
+              />
+            </div>
           </div>
         </section>
 
@@ -841,23 +1861,29 @@ ${pageText}
                   readPdf(file);
                 }
 
-                e.target.value = "";
+                e.target.value =
+                  "";
               }}
             />
           </label>
 
-          {pdfText && !loadingPdf && (
-            <button
-              type="button"
-              onClick={analyzePassages}
-              disabled={loadingAi}
-              className="mt-5 w-full rounded-xl bg-slate-950 px-6 py-4 font-black text-white disabled:opacity-50"
-            >
-              {loadingAi
-                ? "본문 찾는 중..."
-                : "영어 본문 찾기"}
-            </button>
-          )}
+          {pdfText &&
+            !loadingPdf && (
+              <button
+                type="button"
+                onClick={
+                  analyzePassages
+                }
+                disabled={
+                  loadingAi
+                }
+                className="mt-5 w-full rounded-xl bg-slate-950 px-6 py-4 font-black text-white disabled:opacity-50"
+              >
+                {loadingAi
+                  ? "본문 찾는 중..."
+                  : "영어 본문 찾기"}
+              </button>
+            )}
         </section>
 
         {statusText && (
@@ -872,7 +1898,8 @@ ${pageText}
           </div>
         )}
 
-        {passages.length > 0 && (
+        {passages.length >
+          0 && (
           <section className="mt-8">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
@@ -887,10 +1914,14 @@ ${pageText}
 
               <button
                 type="button"
-                onClick={makeAllPlans}
+                onClick={
+                  makeAllPlans
+                }
                 disabled={
                   creatingAllPlans ||
-                  Boolean(creatingPlanId)
+                  Boolean(
+                    creatingPlanId
+                  )
                 }
                 className="rounded-xl bg-emerald-700 px-5 py-3 font-black text-white disabled:opacity-50"
               >
@@ -902,15 +1933,25 @@ ${pageText}
 
             <div className="mt-5 space-y-5">
               {passages.map(
-                (passage, index) => (
+                (
+                  passage,
+                  index
+                ) => (
                   <div
-                    key={passage.id}
+                    key={
+                      passage.id
+                    }
                     className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200"
                   >
                     <div className="flex items-center justify-between gap-4">
                       <h3 className="font-black">
-                        본문 {index + 1} ·{" "}
-                        {passage.title}
+                        본문{" "}
+                        {index +
+                          1}{" "}
+                        ·{" "}
+                        {
+                          passage.title
+                        }
                       </h3>
 
                       <button
@@ -927,20 +1968,28 @@ ${pageText}
                     </div>
 
                     <textarea
-                      value={passage.content}
+                      value={
+                        passage.content
+                      }
                       onChange={(e) =>
-                        setPassages((prev) =>
-                          prev.map((item) =>
-                            item.id ===
-                            passage.id
-                              ? {
-                                  ...item,
-                                  content:
-                                    e.target
-                                      .value,
-                                }
-                              : item
-                          )
+                        setPassages(
+                          (prev) =>
+                            prev.map(
+                              (
+                                item
+                              ) =>
+                                item.id ===
+                                passage.id
+                                  ? {
+                                      ...item,
+
+                                      content:
+                                        e
+                                          .target
+                                          .value,
+                                    }
+                                  : item
+                            )
                         )
                       }
                       rows={10}
@@ -950,7 +1999,9 @@ ${pageText}
                     <button
                       type="button"
                       onClick={() =>
-                        makePlan(passage)
+                        makePlan(
+                          passage
+                        )
                       }
                       disabled={
                         Boolean(
@@ -974,34 +2025,59 @@ ${pageText}
 
         {plans.length > 0 && (
           <section className="mt-10">
-            <div className="mb-6">
-              <p className="text-sm font-bold text-purple-600">
-                SUMMIT FOUR-CUT EDITOR
-              </p>
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="text-sm font-bold text-purple-600">
+                  SUMMIT FOUR-CUT EDITOR
+                </p>
 
-              <h2 className="mt-1 text-3xl font-black">
-                써밋네컷 설계안
-              </h2>
+                <h2 className="mt-1 text-3xl font-black">
+                  써밋네컷 설계안
+                </h2>
 
-              <p className="mt-2 text-slate-600">
-                현재 {plans.length}개 설계안 ·
-                이미지 {generatedImageCount}개
-                생성됨
-              </p>
+                <p className="mt-2 text-slate-600">
+                  현재{" "}
+                  {plans.length}개
+                  설계안 · 이미지{" "}
+                  {
+                    generatedImageCount
+                  }
+                  개 생성됨
+                </p>
+              </div>
+
+              {generatedImageCount >
+                0 && (
+                <button
+                  type="button"
+                  onClick={
+                    addAllImagesToWorkBox
+                  }
+                  className="rounded-xl bg-purple-100 px-5 py-3 font-black text-purple-700 ring-1 ring-purple-200"
+                >
+                  생성 이미지 전체 작업함에 담기
+                </button>
+              )}
             </div>
 
             <div className="space-y-10">
               {plans.map(
-                (plan, planIndex) => (
+                (
+                  plan,
+                  planIndex
+                ) => (
                   <div
                     id={`plan-${plan.passageId}`}
-                    key={plan.id}
+                    key={
+                      plan.id
+                    }
                     className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
                   >
                     <div className="bg-slate-900 p-6 text-white">
                       <p className="text-sm font-bold text-purple-300">
                         설계안{" "}
-                        {planIndex + 1}
+                        {planIndex +
+                          1}
                       </p>
 
                       <h3 className="mt-1 text-2xl font-black">
@@ -1015,7 +2091,9 @@ ${pageText}
                       </label>
 
                       <input
-                        value={plan.summary}
+                        value={
+                          plan.summary
+                        }
                         maxLength={22}
                         onChange={(e) =>
                           updateSummary(
@@ -1027,7 +2105,10 @@ ${pageText}
                       />
 
                       <p className="mt-1 text-right text-xs text-slate-400">
-                        {plan.summary.length}
+                        {
+                          plan.summary
+                            .length
+                        }
                         /22
                       </p>
 
@@ -1044,7 +2125,9 @@ ${pageText}
                               className="rounded-2xl border border-slate-200 p-5"
                             >
                               <h4 className="text-xl font-black">
-                                {panel.cut}
+                                {
+                                  panel.cut
+                                }
                               </h4>
 
                               <label className="mt-4 block text-sm font-bold">
@@ -1059,7 +2142,8 @@ ${pageText}
                                   updateScene(
                                     plan.id,
                                     panelIndex,
-                                    e.target.value
+                                    e.target
+                                      .value
                                   )
                                 }
                                 rows={4}
@@ -1078,7 +2162,8 @@ ${pageText}
                                   updateCharacters(
                                     plan.id,
                                     panelIndex,
-                                    e.target.value
+                                    e.target
+                                      .value
                                   )
                                 }
                                 rows={3}
@@ -1110,7 +2195,8 @@ ${pageText}
                                               panelIndex,
                                               dialogueIndex,
                                               "speaker",
-                                              e.target
+                                              e
+                                                .target
                                                 .value
                                             )
                                           }
@@ -1130,7 +2216,8 @@ ${pageText}
                                               panelIndex,
                                               dialogueIndex,
                                               "text",
-                                              e.target
+                                              e
+                                                .target
                                                 .value
                                             )
                                           }
@@ -1177,7 +2264,9 @@ ${pageText}
                       <button
                         type="button"
                         onClick={() =>
-                          generateImage(plan.id)
+                          generateImage(
+                            plan.id
+                          )
                         }
                         disabled={
                           plan.loadingImage ||
@@ -1196,11 +2285,27 @@ ${pageText}
                       </button>
 
                       {plan.image && (
-                        <img
-                          src={plan.image}
-                          alt="써밋네컷"
-                          className="mt-6 w-full rounded-xl"
-                        />
+                        <div className="mt-6">
+                          <img
+                            src={
+                              plan.image
+                            }
+                            alt="써밋네컷"
+                            className="w-full rounded-xl"
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              addToWorkBox(
+                                plan.id
+                              )
+                            }
+                            className="mt-4 w-full rounded-xl bg-slate-900 px-5 py-4 font-black text-white"
+                          >
+                            PDF 작업함에 담기
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1219,8 +2324,12 @@ ${pageText}
 
               <button
                 type="button"
-                onClick={generateAllImages}
-                disabled={loadingAllImages}
+                onClick={
+                  generateAllImages
+                }
+                disabled={
+                  loadingAllImages
+                }
                 className="mt-5 w-full rounded-xl bg-purple-500 px-6 py-4 text-lg font-black text-white disabled:opacity-50"
               >
                 {loadingAllImages
@@ -1233,6 +2342,155 @@ ${pageText}
             </div>
           </section>
         )}
+
+        <section className="mt-12 rounded-3xl bg-slate-900 p-6 text-white">
+          <div className="flex flex-wrap items-start justify-between gap-5">
+            <div>
+              <p className="text-sm font-bold text-purple-300">
+                LESSON WORKBOX
+              </p>
+
+              <h2 className="mt-1 text-3xl font-black">
+                PDF 작업함
+              </h2>
+
+              <p className="mt-2 text-sm text-slate-300">
+                원하는 이미지만 골라 순서를 정한 뒤 PDF로 저장합니다.
+              </p>
+            </div>
+
+            <p className="text-3xl font-black">
+              {workItems.length}
+            </p>
+          </div>
+
+          {workItems.length ===
+          0 ? (
+            <p className="mt-6 rounded-xl border border-dashed border-slate-600 p-8 text-center text-slate-400">
+              아직 추가된 이미지가 없습니다.
+            </p>
+          ) : (
+            <>
+              <div className="mt-6 space-y-5">
+                {workItems.map(
+                  (
+                    item,
+                    index
+                  ) => (
+                    <div
+                      key={
+                        item.id
+                      }
+                      className="rounded-2xl bg-white p-5 text-slate-900"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-4">
+                        <h3 className="text-xl font-black">
+                          페이지{" "}
+                          {index +
+                            1}{" "}
+                          ·{" "}
+                          {
+                            item.summary
+                          }
+                        </h3>
+
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              moveWorkItem(
+                                index,
+                                "up"
+                              )
+                            }
+                            disabled={
+                              index ===
+                              0
+                            }
+                            className="rounded-lg bg-slate-100 px-3 py-2 font-black disabled:opacity-30"
+                          >
+                            ↑
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              moveWorkItem(
+                                index,
+                                "down"
+                              )
+                            }
+                            disabled={
+                              index ===
+                              workItems.length -
+                                1
+                            }
+                            className="rounded-lg bg-slate-100 px-3 py-2 font-black disabled:opacity-30"
+                          >
+                            ↓
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              removeWorkItem(
+                                item.id
+                              )
+                            }
+                            className="rounded-lg bg-red-50 px-3 py-2 font-bold text-red-600"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      </div>
+
+                      <img
+                        src={
+                          item.image
+                        }
+                        alt="써밋네컷"
+                        className="mt-4 w-full rounded-xl"
+                      />
+                    </div>
+                  )
+                )}
+              </div>
+
+              <div className="mt-8 rounded-2xl bg-purple-500/20 p-6">
+                <p className="text-sm font-bold text-purple-200">
+                  FINAL STEP
+                </p>
+
+                <h3 className="mt-1 text-2xl font-black">
+                  최종 PDF 만들기
+                </h3>
+
+                <p className="mt-2 text-sm text-slate-300">
+                  표지 1장 + 써밋네컷{" "}
+                  {
+                    workItems.length
+                  }
+                  장
+                </p>
+
+                <button
+                  type="button"
+                  onClick={
+                    downloadLessonPdf
+                  }
+                  disabled={
+                    makingPdf
+                  }
+                  className="mt-5 w-full rounded-xl bg-purple-500 px-6 py-4 text-lg font-black text-white disabled:opacity-50"
+                >
+                  {makingPdf
+                    ? "PDF 만드는 중..."
+                    : `PDF 다운로드 · 총 ${totalPdfPages}페이지`}
+                </button>
+              </div>
+            </>
+          )}
+        </section>
       </div>
     </main>
   );
