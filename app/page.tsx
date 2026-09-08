@@ -1432,7 +1432,7 @@ export default function Home() {
 
    if (!schoolLevel) {
     return (
-      <main className="min-h-screen bg-[#f7f4ea] px-5 py-5">
+      <main className="min-h-screen bg-[#f7f4ea] px-5 py-4">
         <div className="mx-auto max-w-6xl">
 
           {/* ACCOUNT */}
@@ -1453,18 +1453,18 @@ export default function Home() {
           </div>
 
           {/* BRAND */}
-          <section className="relative rounded-[30px] bg-white px-6 pb-6 pt-4 text-center shadow-sm md:px-10 md:pb-7 md:pt-4">
+          <section className="relative flex min-h-[220px] flex-col items-center justify-center rounded-[30px] bg-white px-6 py-3 text-center shadow-sm md:px-10 md:py-4">
             <img
               src="/summit-edu.png"
               alt="SUMMIT EDU"
-              className="mx-auto w-[135px] md:w-[150px]"
+              className="mx-auto w-[120px] md:w-[135px]"
             />
 
-            <h1 className="mt-0 text-[48px] font-black tracking-[-0.045em] text-slate-900 md:text-[66px]">
+            <h1 className="-mt-1 text-[48px] font-black tracking-[-0.045em] text-slate-900 md:text-[66px]">
               SUMMIT VISUAL LAB
             </h1>
 
-            <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-[22px] font-black text-slate-700 md:gap-5 md:text-[29px]">
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-[22px] font-black text-slate-700 md:gap-5 md:text-[29px]">
               <span>교과서 &amp; 부교재</span>
 
               <span
@@ -1481,7 +1481,7 @@ export default function Home() {
           </section>
 
           {/* LAB CARDS */}
-          <section className="mt-7 grid gap-6 md:grid-cols-2">
+          <section className="mt-7 grid auto-rows-fr gap-6 md:grid-cols-2">
 
             {/* MIDDLE */}
             <button
@@ -1490,7 +1490,7 @@ export default function Home() {
                 setSchoolLevel("middle");
                 setWorkMode("");
               }}
-              className="relative min-h-[300px] overflow-hidden rounded-[34px] border border-emerald-100 bg-[#dff5ec] p-8 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+              className="relative h-full min-h-[300px] overflow-hidden rounded-[34px] border border-emerald-100 bg-[#dff5ec] p-8 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
             >
               <img
                 src="/summit-bulb.png"
@@ -1498,7 +1498,7 @@ export default function Home() {
                 className="absolute -right-4 top-4 w-[210px] opacity-95 md:w-[240px]"
               />
 
-              <div className="relative z-10 max-w-[60%]">
+              <div className="relative z-10 flex h-full max-w-[64%] flex-col items-start justify-start">
                 <div className="inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-black tracking-widest text-emerald-700 shadow-sm">
                   MIDDLE SCHOOL LAB
                 </div>
@@ -1526,7 +1526,7 @@ export default function Home() {
                 setSchoolLevel("high");
                 setWorkMode("");
               }}
-              className="relative min-h-[300px] overflow-hidden rounded-[34px] border border-amber-100 bg-[#fff0b8] p-8 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+              className="relative h-full min-h-[300px] overflow-hidden rounded-[34px] border border-amber-100 bg-[#fff0b8] p-8 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
             >
               <img
                 src="/summit-bulb.png"
@@ -1534,7 +1534,7 @@ export default function Home() {
                 className="absolute -right-4 top-4 w-[210px] opacity-95 md:w-[240px]"
               />
 
-              <div className="relative z-10 max-w-[60%]">
+              <div className="relative z-10 flex h-full max-w-[64%] flex-col items-start justify-start">
                 <div className="inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-black tracking-widest text-amber-700 shadow-sm">
                   HIGH SCHOOL LAB
                 </div>
@@ -1565,7 +1565,7 @@ export default function Home() {
               onClick={() => {
                 window.location.href = "/english-test-maker";
               }}
-              className="relative min-h-[300px] overflow-hidden rounded-[34px] border border-sky-100 bg-[#dfefff] p-8 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+              className="relative h-full min-h-[300px] overflow-hidden rounded-[34px] border border-sky-100 bg-[#dfefff] p-8 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
             >
               <img
                 src="/summit-bulb.png"
@@ -1573,7 +1573,7 @@ export default function Home() {
                 className="absolute -right-4 top-4 w-[210px] opacity-95 md:w-[240px]"
               />
 
-              <div className="relative z-10 max-w-[64%]">
+              <div className="relative z-10 flex h-full max-w-[64%] flex-col items-start justify-start">
                 <div className="inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-black tracking-widest text-sky-700 shadow-sm">
                   ENG MOCK TEST LAB
                 </div>
@@ -1592,9 +1592,9 @@ export default function Home() {
             <button
               type="button"
               onClick={() => {
-                window.location.href = "/korean-test-maker";
+                window.location.href = "/korean-summary";
               }}
-              className="relative min-h-[300px] overflow-hidden rounded-[34px] border border-violet-100 bg-[#eee4ff] p-8 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+              className="relative h-full min-h-[300px] overflow-hidden rounded-[34px] border border-violet-100 bg-[#eee4ff] p-8 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
             >
               <img
                 src="/summit-bulb.png"
@@ -1602,17 +1602,17 @@ export default function Home() {
                 className="absolute -right-4 top-4 w-[210px] opacity-95 md:w-[240px]"
               />
 
-              <div className="relative z-10 max-w-[64%]">
+              <div className="relative z-10 flex h-full max-w-[64%] flex-col items-start justify-start">
                 <div className="inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-black tracking-widest text-violet-700 shadow-sm">
-                  KOR MOCK TEST LAB
+                  HIGH SCHOOL KR LAB
                 </div>
 
                 <h2 className="mt-5 whitespace-nowrap text-[36px] font-black leading-tight text-slate-900 md:text-[40px]">
-                  고등국어 변형문제
+                  고등국어
                 </h2>
 
                 <p className="mt-3 text-lg font-bold text-slate-600">
-                  모의고사 · 내신형 변형문제 제작
+                  요약.ZIP
                 </p>
               </div>
             </button>
