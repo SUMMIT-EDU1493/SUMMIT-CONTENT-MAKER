@@ -822,6 +822,16 @@ ${pageText}
             })
           );
 
+        // 만화 이미지를 만드는 동안 표지도 동시에 준비합니다.
+        // 만화 자체는 기존처럼 한 장씩 순차 생성합니다.
+        const coverPromise =
+          createCoverImage();
+
+        const backCoverPromise =
+          requestBackCover(
+            latestPlans
+          );
+
         for (
           let index = 0;
           index <
@@ -886,47 +896,50 @@ ${pageText}
         }
 
         setStatusText(
-          "앞표지를 자동으로 준비하는 중..."
+          "표지와 PDF용 이미지를 마무리하는 중..."
         );
 
         const cover =
-          await createCoverImage();
+          await coverPromise;
 
         setFrontCoverImage(
           cover
         );
 
-        await requestBackCover(
-          latestPlans
-        );
+        await backCoverPromise;
 
         const nextWorkItems: WorkItem[] =
-          latestPlans
-            .filter(
-              (plan) =>
-                Boolean(
-                  plan.image
-                )
-            )
-            .map(
-              (
-                plan
-              ): WorkItem => ({
-                id: makeId(),
+          await Promise.all(
+            latestPlans
+              .filter(
+                (plan) =>
+                  Boolean(
+                    plan.image
+                  )
+              )
+              .map(
+                async (
+                  plan
+                ): Promise<WorkItem> => ({
+                  id: makeId(),
 
-                planId:
-                  plan.id,
+                  planId:
+                    plan.id,
 
-                title:
-                  plan.title,
+                  title:
+                    plan.title,
 
-                summary:
-                  plan.summary,
+                  summary:
+                    plan.summary,
 
-                image:
-                  plan.image,
-              })
-            );
+                  // PDF 작업함에는 가벼운 JPEG 버전을 저장합니다.
+                  image:
+                    await optimizeImageForPdf(
+                      plan.image
+                    ),
+                })
+              )
+          );
 
         setWorkItems(
           nextWorkItems
@@ -1691,6 +1704,130 @@ ${pageText}
       );
     };
 
+  const optimizeImageForPdf = (
+    source: string
+  ): Promise<string> => {
+    if (
+      source.startsWith(
+        "data:image/jpeg"
+      )
+    ) {
+      return Promise.resolve(
+        source
+      );
+    }
+
+    return new Promise(
+      (
+        resolve,
+        reject
+      ) => {
+        const image =
+          new Image();
+
+        image.onload = () => {
+          try {
+            const canvas =
+              document.createElement(
+                "canvas"
+              );
+
+            const maxWidth =
+              1600;
+
+            const scale =
+              Math.min(
+                1,
+                maxWidth /
+                  image.width
+              );
+
+            canvas.width =
+              Math.max(
+                1,
+                Math.round(
+                  image.width *
+                    scale
+                )
+              );
+
+            canvas.height =
+              Math.max(
+                1,
+                Math.round(
+                  image.height *
+                    scale
+                )
+              );
+
+            const ctx =
+              canvas.getContext(
+                "2d"
+              );
+
+            if (!ctx) {
+              reject(
+                new Error(
+                  "PDF 이미지 최적화에 실패했습니다."
+                )
+              );
+              return;
+            }
+
+            // PNG 투명 영역이 JPEG에서 검게 변하지 않도록 흰색 배경을 깝니다.
+            ctx.fillStyle =
+              "#ffffff";
+
+            ctx.fillRect(
+              0,
+              0,
+              canvas.width,
+              canvas.height
+            );
+
+            ctx.drawImage(
+              image,
+              0,
+              0,
+              canvas.width,
+              canvas.height
+            );
+
+            resolve(
+              canvas.toDataURL(
+                "image/jpeg",
+                0.88
+              )
+            );
+          } catch (
+            error
+          ) {
+            reject(error);
+          }
+        };
+
+        image.onerror = () =>
+          reject(
+            new Error(
+              "PDF용 이미지를 불러오지 못했습니다."
+            )
+          );
+
+        image.src =
+          source;
+      }
+    );
+  };
+
+  const getPdfImageFormat = (
+    image: string
+  ) =>
+    image.startsWith(
+      "data:image/jpeg"
+    )
+      ? "JPEG"
+      : "PNG";
+
   const addImagePageToPdf = (
     pdf: jsPDF,
     image: string
@@ -1751,7 +1888,9 @@ ${pageText}
 
     pdf.addImage(
       image,
-      "PNG",
+      getPdfImageFormat(
+        image
+      ),
       x,
       y,
       imageWidth,
@@ -1787,6 +1926,39 @@ ${pageText}
       try {
         setMakingPdf(true);
 
+        // 버튼 상태가 먼저 화면에 반영되도록 한 번 양보합니다.
+        await new Promise<void>(
+          (resolve) =>
+            setTimeout(
+              resolve,
+              50
+            )
+        );
+
+        // PDF에 들어갈 이미지를 동시에 가볍게 준비합니다.
+        const [
+          pdfFrontCover,
+          pdfBackCover,
+        ] =
+          await Promise.all([
+            optimizeImageForPdf(
+              frontCoverImage
+            ),
+            optimizeImageForPdf(
+              backCoverImage
+            ),
+          ]);
+
+        const pdfWorkImages =
+          await Promise.all(
+            workItems.map(
+              (item) =>
+                optimizeImageForPdf(
+                  item.image
+                )
+            )
+          );
+
         const pdf =
           new jsPDF({
             orientation:
@@ -1797,7 +1969,7 @@ ${pageText}
             format: "a4",
 
             compress:
-              true,
+              false,
           });
 
         const pageWidth =
@@ -1807,8 +1979,10 @@ ${pageText}
           pdf.internal.pageSize.getHeight();
 
         pdf.addImage(
-          frontCoverImage,
-          "PNG",
+          pdfFrontCover,
+          getPdfImageFormat(
+            pdfFrontCover
+          ),
           0,
           0,
           pageWidth,
@@ -1833,7 +2007,9 @@ ${pageText}
 
           addImagePageToPdf(
             pdf,
-            item.image
+            pdfWorkImages[
+              index
+            ]
           );
         }
 
@@ -1844,7 +2020,7 @@ ${pageText}
 
         addImagePageToPdf(
           pdf,
-          backCoverImage
+          pdfBackCover
         );
 
         const baseName =
@@ -2531,19 +2707,45 @@ ${pageText}
                 버튼을 누르면 써밋네컷 전체와 앞표지·뒷표지를 순서대로 자동 생성합니다.
               </p>
 
+              {(creatingAllPlans ||
+                Boolean(
+                  creatingPlanId
+                )) && (
+                <div className="mt-5 rounded-xl border border-amber-300/30 bg-amber-400/10 p-4 text-center">
+                  <p className="font-black text-amber-200">
+                    {planProgressText ||
+                      "전체 설계 중..."}
+                  </p>
+
+                  <p className="mt-1 text-sm text-slate-300">
+                    설계가 모두 완료되면 전체 이미지 생성 버튼이 활성화됩니다.
+                  </p>
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={
                   generateAllImagesAndFinalize
                 }
                 disabled={
+                  creatingAllPlans ||
+                  Boolean(
+                    creatingPlanId
+                  ) ||
                   loadingAllImages ||
                   loadingBackCover
                 }
                 className="mt-5 w-full rounded-xl bg-purple-500 px-6 py-4 text-lg font-black text-white transition active:scale-[0.99] disabled:opacity-50"
               >
-                {loadingAllImages ||
-                loadingBackCover
+                {creatingAllPlans ||
+                Boolean(
+                  creatingPlanId
+                )
+                  ? planProgressText ||
+                    "전체 설계 완료 후 이미지 생성 가능"
+                  : loadingAllImages ||
+                    loadingBackCover
                   ? imageProgress ||
                     statusText ||
                     "전체 이미지 생성 중..."
