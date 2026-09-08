@@ -308,7 +308,7 @@ ${text}
           }
         )
         .filter(
-          (passage) =>
+          (passage: Passage) =>
             passage.content.length >
             80
         );
