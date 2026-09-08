@@ -1,7 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import {
+  useState,
+} from "react";
+
 import * as pdfjsLib from "pdfjs-dist";
+
 import HomeButton from "../components/HomeButton";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -29,6 +33,8 @@ type PassagePlan = {
   title: string;
   summary: string;
   panels: Panel[];
+  image: string;
+  loadingImage: boolean;
 };
 
 function makeId() {
@@ -38,32 +44,54 @@ function makeId() {
 }
 
 export default function MiddlePassagePage() {
-  const [schoolName, setSchoolName] =
-    useState("");
+  const [
+    schoolName,
+    setSchoolName,
+  ] = useState("");
 
-  const [gradeName, setGradeName] =
-    useState("");
+  const [
+    gradeName,
+    setGradeName,
+  ] = useState("");
 
-  const [lessonName, setLessonName] =
-    useState("");
+  const [
+    lessonName,
+    setLessonName,
+  ] = useState("");
 
-  const [fileName, setFileName] =
-    useState("");
+  const [
+    fileName,
+    setFileName,
+  ] = useState("");
 
-  const [pdfText, setPdfText] =
-    useState("");
+  const [
+    pdfText,
+    setPdfText,
+  ] = useState("");
 
-  const [passages, setPassages] =
-    useState<Passage[]>([]);
+  const [
+    passages,
+    setPassages,
+  ] = useState<
+    Passage[]
+  >([]);
 
-  const [plans, setPlans] =
-    useState<PassagePlan[]>([]);
+  const [
+    plans,
+    setPlans,
+  ] = useState<
+    PassagePlan[]
+  >([]);
 
-  const [loadingPdf, setLoadingPdf] =
-    useState(false);
+  const [
+    loadingPdf,
+    setLoadingPdf,
+  ] = useState(false);
 
-  const [loadingAi, setLoadingAi] =
-    useState(false);
+  const [
+    loadingAi,
+    setLoadingAi,
+  ] = useState(false);
 
   const [
     creatingPlanId,
@@ -75,117 +103,185 @@ export default function MiddlePassagePage() {
     setCreatingAllPlans,
   ] = useState(false);
 
-  const [statusText, setStatusText] =
-    useState("");
+  const [
+    loadingAllImages,
+    setLoadingAllImages,
+  ] = useState(false);
+
+  const [
+    imageProgress,
+    setImageProgress,
+  ] = useState("");
+
+  const [
+    statusText,
+    setStatusText,
+  ] = useState("");
 
   const [
     errorMessage,
     setErrorMessage,
   ] = useState("");
 
-  const readPdf = async (
-    file: File
-  ) => {
-    try {
-      setLoadingPdf(true);
-      setLoadingAi(false);
-      setCreatingPlanId("");
-      setCreatingAllPlans(false);
-
-      setErrorMessage("");
-      setStatusText(
-        "PDF를 읽는 중..."
-      );
-
-      setPdfText("");
-      setPassages([]);
-      setPlans([]);
-      setFileName(file.name);
-
-      const arrayBuffer =
-        await file.arrayBuffer();
-
-      const loadingTask =
-        pdfjsLib.getDocument({
-          data: new Uint8Array(
-            arrayBuffer
-          ),
-        });
-
-      const pdf =
-        await loadingTask.promise;
-
-      let fullText = "";
-
-      for (
-        let pageNumber = 1;
-        pageNumber <= pdf.numPages;
-        pageNumber++
-      ) {
-        setStatusText(
-          `${pageNumber}/${pdf.numPages} 페이지 읽는 중...`
+  const readPdf =
+    async (
+      file: File
+    ) => {
+      try {
+        setLoadingPdf(
+          true
         );
 
-        const page =
-          await pdf.getPage(
-            pageNumber
+        setLoadingAi(
+          false
+        );
+
+        setCreatingPlanId(
+          ""
+        );
+
+        setCreatingAllPlans(
+          false
+        );
+
+        setLoadingAllImages(
+          false
+        );
+
+        setErrorMessage(
+          ""
+        );
+
+        setStatusText(
+          "PDF를 읽는 중..."
+        );
+
+        setPdfText(
+          ""
+        );
+
+        setPassages(
+          []
+        );
+
+        setPlans(
+          []
+        );
+
+        setFileName(
+          file.name
+        );
+
+        const arrayBuffer =
+          await file.arrayBuffer();
+
+        const loadingTask =
+          pdfjsLib.getDocument({
+            data:
+              new Uint8Array(
+                arrayBuffer
+              ),
+          });
+
+        const pdf =
+          await loadingTask.promise;
+
+        let fullText =
+          "";
+
+        for (
+          let pageNumber =
+            1;
+          pageNumber <=
+          pdf.numPages;
+          pageNumber++
+        ) {
+          setStatusText(
+            `${pageNumber}/${pdf.numPages} 페이지 읽는 중...`
           );
 
-        const content =
-          await page.getTextContent();
+          const page =
+            await pdf.getPage(
+              pageNumber
+            );
 
-        const pageText =
-          content.items
-            .map((item: any) => {
-              if ("str" in item) {
-                return String(
-                  item.str ?? ""
-                );
-              }
+          const content =
+            await page.getTextContent();
 
-              return "";
-            })
-            .join(" ");
+          const pageText =
+            content.items
+              .map(
+                (
+                  item: any
+                ) => {
+                  if (
+                    "str" in
+                    item
+                  ) {
+                    return String(
+                      item.str ??
+                        ""
+                    );
+                  }
 
-        fullText += `
+                  return "";
+                }
+              )
+              .join(
+                " "
+              );
+
+          fullText += `
 
 --- ${pageNumber}페이지 ---
 
 ${pageText}
 `;
-      }
+        }
 
-      const text =
-        fullText.trim();
+        const text =
+          fullText.trim();
 
-      if (!text) {
-        throw new Error(
-          "PDF에서 텍스트를 읽지 못했습니다. 스캔 PDF일 수 있습니다."
+        if (!text) {
+          throw new Error(
+            "PDF에서 텍스트를 읽지 못했습니다. 스캔 PDF일 수 있습니다."
+          );
+        }
+
+        setPdfText(
+          text
+        );
+
+        setStatusText(
+          `PDF ${pdf.numPages}페이지 읽기 완료`
+        );
+      } catch (
+        error: any
+      ) {
+        console.error(
+          error
+        );
+
+        setErrorMessage(
+          error?.message ||
+            "PDF를 읽는 중 오류가 발생했습니다."
+        );
+
+        setStatusText(
+          ""
+        );
+      } finally {
+        setLoadingPdf(
+          false
         );
       }
-
-      setPdfText(text);
-
-      setStatusText(
-        `PDF ${pdf.numPages}페이지 읽기 완료`
-      );
-    } catch (error: any) {
-      console.error(error);
-
-      setErrorMessage(
-        error?.message ||
-          "PDF를 읽는 중 오류가 발생했습니다."
-      );
-
-      setStatusText("");
-    } finally {
-      setLoadingPdf(false);
-    }
-  };
+    };
 
   const analyzePassages =
     async () => {
-      if (!pdfText) {
+      if (
+        !pdfText
+      ) {
         alert(
           "먼저 PDF를 선택해 주세요."
         );
@@ -194,10 +290,21 @@ ${pageText}
       }
 
       try {
-        setLoadingAi(true);
-        setErrorMessage("");
-        setPassages([]);
-        setPlans([]);
+        setLoadingAi(
+          true
+        );
+
+        setErrorMessage(
+          ""
+        );
+
+        setPassages(
+          []
+        );
+
+        setPlans(
+          []
+        );
 
         setStatusText(
           "교재에서 영어 본문을 찾는 중..."
@@ -207,23 +314,30 @@ ${pageText}
           await fetch(
             "/api/middle-passage-analyze",
             {
-              method: "POST",
+              method:
+                "POST",
 
               headers: {
                 "Content-Type":
                   "application/json",
               },
 
-              body: JSON.stringify({
-                text: pdfText,
-              }),
+              body:
+                JSON.stringify(
+                  {
+                    text:
+                      pdfText,
+                  }
+                ),
             }
           );
 
         const data =
           await response.json();
 
-        if (!response.ok) {
+        if (
+          !response.ok
+        ) {
           throw new Error(
             data?.detail ||
               data?.error ||
@@ -239,7 +353,8 @@ ${pageText}
             : [];
 
         if (
-          foundPassages.length === 0
+          foundPassages.length ===
+          0
         ) {
           throw new Error(
             "본문을 찾지 못했습니다."
@@ -274,184 +389,97 @@ ${pageText}
         setStatusText(
           `본문 ${nextPassages.length}개 찾기 완료`
         );
-      } catch (error: any) {
-        console.error(error);
+      } catch (
+        error: any
+      ) {
+        console.error(
+          error
+        );
 
         setErrorMessage(
           error?.message ||
             "본문을 찾는 중 오류가 발생했습니다."
         );
 
-        setStatusText("");
+        setStatusText(
+          ""
+        );
       } finally {
-        setLoadingAi(false);
+        setLoadingAi(
+          false
+        );
       }
     };
 
-  const requestPlan = async (
-    passage: Passage
-  ) => {
-    const response =
-      await fetch(
-        "/api/middle-passage-plan",
-        {
-          method: "POST",
+  const requestPlan =
+    async (
+      passage: Passage
+    ) => {
+      const response =
+        await fetch(
+          "/api/middle-passage-plan",
+          {
+            method:
+              "POST",
 
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
 
-          body: JSON.stringify({
-            title: passage.title,
-            content:
-              passage.content,
-          }),
-        }
-      );
+            body:
+              JSON.stringify(
+                {
+                  title:
+                    passage.title,
 
-    const data =
-      await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        data?.detail ||
-          data?.error ||
-          "써밋네컷 설계에 실패했습니다."
-      );
-    }
-
-    return data;
-  };
-
-  const makePlan = async (
-    passage: Passage
-  ) => {
-    try {
-      setCreatingPlanId(
-        passage.id
-      );
-
-      setErrorMessage("");
-
-      setStatusText(
-        `"${passage.title}" 4컷 설계 중...`
-      );
+                  content:
+                    passage.content,
+                }
+              ),
+          }
+        );
 
       const data =
-        await requestPlan(
-          passage
-        );
+        await response.json();
 
-      const newPlan: PassagePlan = {
-        id: makeId(),
-
-        passageId:
-          passage.id,
-
-        title:
-          String(
-            data?.title ||
-              passage.title
-          ),
-
-        summary:
-          String(
-            data?.summary || ""
-          ),
-
-        panels:
-          Array.isArray(
-            data?.panels
-          )
-            ? data.panels
-            : [],
-      };
-
-      setPlans((prev) => {
-        const remaining =
-          prev.filter(
-            (plan) =>
-              plan.passageId !==
-              passage.id
-          );
-
-        return [
-          ...remaining,
-          newPlan,
-        ];
-      });
-
-      setStatusText(
-        `"${passage.title}" 4컷 설계 완료`
-      );
-
-      setTimeout(() => {
-        document
-          .getElementById(
-            `plan-${passage.id}`
-          )
-          ?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
-      }, 150);
-    } catch (error: any) {
-      console.error(error);
-
-      setErrorMessage(
-        error?.message ||
-          "써밋네컷 설계 중 오류가 발생했습니다."
-      );
-
-      setStatusText("");
-    } finally {
-      setCreatingPlanId("");
-    }
-  };
-
-  const makeAllPlans =
-    async () => {
       if (
-        passages.length === 0
+        !response.ok
       ) {
-        alert(
-          "먼저 본문을 찾아 주세요."
+        throw new Error(
+          data?.detail ||
+            data?.error ||
+            "써밋네컷 설계에 실패했습니다."
         );
-
-        return;
       }
 
+      return data;
+    };
+
+  const makePlan =
+    async (
+      passage: Passage
+    ) => {
       try {
-        setCreatingAllPlans(true);
-        setCreatingPlanId("");
-        setErrorMessage("");
-        setPlans([]);
+        setCreatingPlanId(
+          passage.id
+        );
 
-        const newPlans: PassagePlan[] =
-          [];
+        setErrorMessage(
+          ""
+        );
 
-        for (
-          let index = 0;
-          index <
-          passages.length;
-          index++
-        ) {
-          const passage =
-            passages[index];
+        setStatusText(
+          `"${passage.title}" 4컷 설계 중...`
+        );
 
-          setStatusText(
-            `${index + 1}/${
-              passages.length
-            } · "${passage.title}" 4컷 설계 중...`
+        const data =
+          await requestPlan(
+            passage
           );
 
-          const data =
-            await requestPlan(
-              passage
-            );
-
-          newPlans.push({
+        const newPlan: PassagePlan =
+          {
             id: makeId(),
 
             passageId:
@@ -475,7 +503,167 @@ ${pageText}
               )
                 ? data.panels
                 : [],
-          });
+
+            image:
+              "",
+
+            loadingImage:
+              false,
+          };
+
+        setPlans(
+          (
+            prev
+          ) => {
+            const remaining =
+              prev.filter(
+                (
+                  plan
+                ) =>
+                  plan.passageId !==
+                  passage.id
+              );
+
+            return [
+              ...remaining,
+              newPlan,
+            ];
+          }
+        );
+
+        setStatusText(
+          `"${passage.title}" 4컷 설계 완료`
+        );
+
+        setTimeout(
+          () => {
+            document
+              .getElementById(
+                `plan-${passage.id}`
+              )
+              ?.scrollIntoView(
+                {
+                  behavior:
+                    "smooth",
+
+                  block:
+                    "start",
+                }
+              );
+          },
+          150
+        );
+      } catch (
+        error: any
+      ) {
+        console.error(
+          error
+        );
+
+        setErrorMessage(
+          error?.message ||
+            "써밋네컷 설계 중 오류가 발생했습니다."
+        );
+
+        setStatusText(
+          ""
+        );
+      } finally {
+        setCreatingPlanId(
+          ""
+        );
+      }
+    };
+
+  const makeAllPlans =
+    async () => {
+      if (
+        passages.length ===
+        0
+      ) {
+        alert(
+          "먼저 본문을 찾아 주세요."
+        );
+
+        return;
+      }
+
+      try {
+        setCreatingAllPlans(
+          true
+        );
+
+        setCreatingPlanId(
+          ""
+        );
+
+        setErrorMessage(
+          ""
+        );
+
+        setPlans(
+          []
+        );
+
+        const newPlans: PassagePlan[] =
+          [];
+
+        for (
+          let index =
+            0;
+          index <
+          passages.length;
+          index++
+        ) {
+          const passage =
+            passages[
+              index
+            ];
+
+          setStatusText(
+            `${index + 1}/${
+              passages.length
+            } · "${passage.title}" 4컷 설계 중...`
+          );
+
+          const data =
+            await requestPlan(
+              passage
+            );
+
+          newPlans.push(
+            {
+              id: makeId(),
+
+              passageId:
+                passage.id,
+
+              title:
+                String(
+                  data?.title ||
+                    passage.title
+                ),
+
+              summary:
+                String(
+                  data?.summary ||
+                    ""
+                ),
+
+              panels:
+                Array.isArray(
+                  data?.panels
+                )
+                  ? data.panels
+                  : [],
+
+              image:
+                "",
+
+              loadingImage:
+                false,
+            }
+          );
 
           setPlans([
             ...newPlans,
@@ -486,26 +674,39 @@ ${pageText}
           `전체 본문 ${newPlans.length}개 4컷 설계 완료`
         );
 
-        setTimeout(() => {
-          document
-            .getElementById(
-              "plans"
-            )
-            ?.scrollIntoView({
-              behavior:
-                "smooth",
-              block: "start",
-            });
-        }, 150);
-      } catch (error: any) {
-        console.error(error);
+        setTimeout(
+          () => {
+            document
+              .getElementById(
+                "plans"
+              )
+              ?.scrollIntoView(
+                {
+                  behavior:
+                    "smooth",
+
+                  block:
+                    "start",
+                }
+              );
+          },
+          150
+        );
+      } catch (
+        error: any
+      ) {
+        console.error(
+          error
+        );
 
         setErrorMessage(
           error?.message ||
             "전체 써밋네컷 설계 중 오류가 발생했습니다."
         );
 
-        setStatusText("");
+        setStatusText(
+          ""
+        );
       } finally {
         setCreatingAllPlans(
           false
@@ -513,107 +714,481 @@ ${pageText}
       }
     };
 
-  const deletePassage = (
-    id: string
-  ) => {
-    setPassages((prev) =>
-      prev.filter(
-        (passage) =>
-          passage.id !== id
-      )
-    );
+  const requestImage =
+    async (
+      plan: PassagePlan
+    ): Promise<string> => {
+      const response =
+        await fetch(
+          "/api/middle-passage-generate",
+          {
+            method:
+              "POST",
 
-    setPlans((prev) =>
-      prev.filter(
-        (plan) =>
-          plan.passageId !== id
-      )
-    );
-  };
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
 
-  const updateTitle = (
-    id: string,
-    value: string
-  ) => {
-    setPassages((prev) =>
-      prev.map((passage) =>
-        passage.id === id
-          ? {
-              ...passage,
-              title: value,
-            }
-          : passage
-      )
-    );
-  };
+            body:
+              JSON.stringify(
+                {
+                  title:
+                    plan.title,
 
-  const updateContent = (
-    id: string,
-    value: string
-  ) => {
-    setPassages((prev) =>
-      prev.map((passage) =>
-        passage.id === id
-          ? {
-              ...passage,
-              content: value,
-            }
-          : passage
-      )
-    );
-  };
+                  summary:
+                    plan.summary,
 
-  const updatePlanSummary = (
-    planId: string,
-    value: string
-  ) => {
-    setPlans((prev) =>
-      prev.map((plan) =>
-        plan.id === planId
-          ? {
-              ...plan,
-              summary: value,
-            }
-          : plan
-      )
-    );
-  };
+                  panels:
+                    plan.panels,
+                }
+              ),
+          }
+        );
 
-  const updatePanel = (
-    planId: string,
-    panelIndex: number,
-    field:
-      | "sourceText"
-      | "scene"
-      | "caption",
-    value: string
-  ) => {
-    setPlans((prev) =>
-      prev.map((plan) => {
-        if (
-          plan.id !== planId
+      const data =
+        await response.json();
+
+      if (
+        !response.ok
+      ) {
+        throw new Error(
+          data?.detail ||
+            data?.error ||
+            "이미지 생성에 실패했습니다."
+        );
+      }
+
+      if (
+        !data?.image
+      ) {
+        throw new Error(
+          "생성된 이미지가 없습니다."
+        );
+      }
+
+      return data.image;
+    };
+
+  const generateImage =
+    async (
+      planId: string
+    ) => {
+      const plan =
+        plans.find(
+          (
+            item
+          ) =>
+            item.id ===
+            planId
+        );
+
+      if (!plan) {
+        return;
+      }
+
+      try {
+        setErrorMessage(
+          ""
+        );
+
+        setPlans(
+          (
+            prev
+          ) =>
+            prev.map(
+              (
+                item
+              ) =>
+                item.id ===
+                planId
+                  ? {
+                      ...item,
+
+                      loadingImage:
+                        true,
+
+                      image:
+                        "",
+                    }
+                  : item
+            )
+        );
+
+        const image =
+          await requestImage(
+            plan
+          );
+
+        setPlans(
+          (
+            prev
+          ) =>
+            prev.map(
+              (
+                item
+              ) =>
+                item.id ===
+                planId
+                  ? {
+                      ...item,
+
+                      loadingImage:
+                        false,
+
+                      image,
+                    }
+                  : item
+            )
+        );
+      } catch (
+        error: any
+      ) {
+        setPlans(
+          (
+            prev
+          ) =>
+            prev.map(
+              (
+                item
+              ) =>
+                item.id ===
+                planId
+                  ? {
+                      ...item,
+
+                      loadingImage:
+                        false,
+                    }
+                  : item
+            )
+        );
+
+        setErrorMessage(
+          error?.message ||
+            "이미지 생성 중 오류가 발생했습니다."
+        );
+      }
+    };
+
+  const generateAllImages =
+    async () => {
+      const targets =
+        plans.filter(
+          (
+            plan
+          ) =>
+            !plan.image
+        );
+
+      if (
+        plans.length ===
+        0
+      ) {
+        alert(
+          "먼저 설계안을 만들어 주세요."
+        );
+
+        return;
+      }
+
+      if (
+        targets.length ===
+        0
+      ) {
+        alert(
+          "모든 설계안의 이미지가 이미 생성되어 있습니다."
+        );
+
+        return;
+      }
+
+      try {
+        setLoadingAllImages(
+          true
+        );
+
+        setErrorMessage(
+          ""
+        );
+
+        for (
+          let index =
+            0;
+          index <
+          targets.length;
+          index++
         ) {
-          return plan;
+          const target =
+            targets[
+              index
+            ];
+
+          setImageProgress(
+            `${index + 1}/${targets.length} · ${target.title}`
+          );
+
+          setPlans(
+            (
+              prev
+            ) =>
+              prev.map(
+                (
+                  item
+                ) =>
+                  item.id ===
+                  target.id
+                    ? {
+                        ...item,
+
+                        loadingImage:
+                          true,
+                      }
+                    : item
+              )
+          );
+
+          const image =
+            await requestImage(
+              target
+            );
+
+          setPlans(
+            (
+              prev
+            ) =>
+              prev.map(
+                (
+                  item
+                ) =>
+                  item.id ===
+                  target.id
+                    ? {
+                        ...item,
+
+                        loadingImage:
+                          false,
+
+                        image,
+                      }
+                    : item
+              )
+          );
         }
 
-        const panels = [
-          ...plan.panels,
-        ];
+        setImageProgress(
+          "전체 이미지 생성 완료!"
+        );
+      } catch (
+        error: any
+      ) {
+        setErrorMessage(
+          error?.message ||
+            "전체 이미지 생성 중 오류가 발생했습니다."
+        );
 
-        panels[panelIndex] = {
-          ...panels[
-            panelIndex
-          ],
-          [field]: value,
-        };
+        setPlans(
+          (
+            prev
+          ) =>
+            prev.map(
+              (
+                item
+              ) => ({
+                ...item,
 
-        return {
-          ...plan,
-          panels,
-        };
-      })
-    );
-  };
+                loadingImage:
+                  false,
+              })
+            )
+        );
+      } finally {
+        setLoadingAllImages(
+          false
+        );
+
+        setTimeout(
+          () => {
+            setImageProgress(
+              ""
+            );
+          },
+          2000
+        );
+      }
+    };
+
+  const deletePassage =
+    (
+      id: string
+    ) => {
+      setPassages(
+        (
+          prev
+        ) =>
+          prev.filter(
+            (
+              passage
+            ) =>
+              passage.id !==
+              id
+          )
+      );
+
+      setPlans(
+        (
+          prev
+        ) =>
+          prev.filter(
+            (
+              plan
+            ) =>
+              plan.passageId !==
+              id
+          )
+      );
+    };
+
+  const updateTitle =
+    (
+      id: string,
+      value: string
+    ) => {
+      setPassages(
+        (
+          prev
+        ) =>
+          prev.map(
+            (
+              passage
+            ) =>
+              passage.id ===
+              id
+                ? {
+                    ...passage,
+                    title:
+                      value,
+                  }
+                : passage
+          )
+      );
+    };
+
+  const updateContent =
+    (
+      id: string,
+      value: string
+    ) => {
+      setPassages(
+        (
+          prev
+        ) =>
+          prev.map(
+            (
+              passage
+            ) =>
+              passage.id ===
+              id
+                ? {
+                    ...passage,
+                    content:
+                      value,
+                  }
+                : passage
+          )
+      );
+    };
+
+  const updatePlanSummary =
+    (
+      planId: string,
+      value: string
+    ) => {
+      setPlans(
+        (
+          prev
+        ) =>
+          prev.map(
+            (
+              plan
+            ) =>
+              plan.id ===
+              planId
+                ? {
+                    ...plan,
+
+                    summary:
+                      value,
+
+                    image:
+                      "",
+                  }
+                : plan
+          )
+      );
+    };
+
+  const updatePanel =
+    (
+      planId: string,
+      panelIndex: number,
+      field:
+        | "sourceText"
+        | "scene"
+        | "caption",
+      value: string
+    ) => {
+      setPlans(
+        (
+          prev
+        ) =>
+          prev.map(
+            (
+              plan
+            ) => {
+              if (
+                plan.id !==
+                planId
+              ) {
+                return plan;
+              }
+
+              const panels =
+                [
+                  ...plan.panels,
+                ];
+
+              panels[
+                panelIndex
+              ] = {
+                ...panels[
+                  panelIndex
+                ],
+
+                [field]:
+                  value,
+              };
+
+              return {
+                ...plan,
+                panels,
+                image:
+                  "",
+              };
+            }
+          )
+      );
+    };
+
+  const generatedImageCount =
+    plans.filter(
+      (
+        plan
+      ) =>
+        Boolean(
+          plan.image
+        )
+    ).length;
 
   return (
     <main className="min-h-screen bg-[#f7f4ea] px-5 py-8">
@@ -624,20 +1199,15 @@ ${pageText}
 
         <header className="rounded-[30px] bg-white px-7 py-7 shadow-sm ring-1 ring-slate-200 md:px-9">
           <p className="text-sm font-black tracking-[0.18em] text-emerald-700">
-            MIDDLE SCHOOL
-            ENGLISH LAB
+            MIDDLE SCHOOL ENGLISH LAB
           </p>
 
           <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-950 md:text-5xl">
-            중등 영어 본문
-            써밋네컷
+            중등 영어 본문 써밋네컷
           </h1>
 
           <p className="mt-3 text-slate-600">
-            교재에서 본문을 찾아
-            흐름이 한눈에 보이는
-            써밋네컷으로
-            제작합니다.
+            교재의 본문을 찾아 흐름이 한눈에 보이는 써밋네컷으로 제작합니다.
           </p>
         </header>
 
@@ -657,8 +1227,12 @@ ${pageText}
               </label>
 
               <input
-                value={schoolName}
-                onChange={(e) =>
+                value={
+                  schoolName
+                }
+                onChange={(
+                  e
+                ) =>
                   setSchoolName(
                     e.target.value
                   )
@@ -674,8 +1248,12 @@ ${pageText}
               </label>
 
               <input
-                value={gradeName}
-                onChange={(e) =>
+                value={
+                  gradeName
+                }
+                onChange={(
+                  e
+                ) =>
                   setGradeName(
                     e.target.value
                   )
@@ -691,8 +1269,12 @@ ${pageText}
               </label>
 
               <input
-                value={lessonName}
-                onChange={(e) =>
+                value={
+                  lessonName
+                }
+                onChange={(
+                  e
+                ) =>
                   setLessonName(
                     e.target.value
                   )
@@ -720,13 +1302,14 @@ ${pageText}
               </p>
 
               <p className="mt-2 text-sm text-slate-500">
-                교과서 또는
-                부교재 PDF
+                교과서 또는 부교재 PDF
               </p>
 
               {fileName && (
                 <p className="mt-4 font-bold text-emerald-700">
-                  {fileName}
+                  {
+                    fileName
+                  }
                 </p>
               )}
             </div>
@@ -735,17 +1318,24 @@ ${pageText}
               type="file"
               accept=".pdf,application/pdf"
               className="hidden"
-              onChange={(e) => {
+              onChange={(
+                e
+              ) => {
                 const file =
                   e.target.files?.[0];
 
-                if (!file) {
+                if (
+                  !file
+                ) {
                   return;
                 }
 
-                readPdf(file);
+                readPdf(
+                  file
+                );
 
-                e.target.value = "";
+                e.target.value =
+                  "";
               }}
             />
           </label>
@@ -771,13 +1361,17 @@ ${pageText}
 
         {statusText && (
           <div className="mt-5 rounded-2xl bg-emerald-50 px-5 py-4 font-bold text-emerald-800 ring-1 ring-emerald-100">
-            {statusText}
+            {
+              statusText
+            }
           </div>
         )}
 
         {errorMessage && (
           <div className="mt-5 rounded-2xl bg-red-50 px-5 py-4 font-bold text-red-700 ring-1 ring-red-100">
-            {errorMessage}
+            {
+              errorMessage
+            }
           </div>
         )}
 
@@ -795,9 +1389,7 @@ ${pageText}
                 </h2>
 
                 <p className="mt-2 text-sm text-slate-500">
-                  본문을 확인하고
-                  필요 없는 것은
-                  삭제해 주세요.
+                  본문을 확인하고 필요 없는 것은 삭제해 주세요.
                 </p>
               </div>
 
@@ -828,7 +1420,9 @@ ${pageText}
                 ) => {
                   const hasPlan =
                     plans.some(
-                      (plan) =>
+                      (
+                        plan
+                      ) =>
                         plan.passageId ===
                         passage.id
                     );
@@ -876,8 +1470,7 @@ ${pageText}
                         ) =>
                           updateTitle(
                             passage.id,
-                            e.target
-                              .value
+                            e.target.value
                           )
                         }
                         className="mt-5 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xl font-black text-slate-900 outline-none focus:border-emerald-400"
@@ -892,11 +1485,12 @@ ${pageText}
                         ) =>
                           updateContent(
                             passage.id,
-                            e.target
-                              .value
+                            e.target.value
                           )
                         }
-                        rows={12}
+                        rows={
+                          12
+                        }
                         className="mt-4 w-full resize-y rounded-2xl border border-slate-200 bg-white px-5 py-5 text-[15px] leading-7 text-slate-800 outline-none focus:border-emerald-400"
                       />
 
@@ -934,37 +1528,56 @@ ${pageText}
           </section>
         )}
 
-        {plans.length > 0 && (
+        {plans.length >
+          0 && (
           <section
             id="plans"
             className="mt-10"
           >
-            <div>
-              <p className="text-xs font-black tracking-[0.18em] text-emerald-700">
-                STEP 3
-              </p>
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="text-xs font-black tracking-[0.18em] text-emerald-700">
+                  STEP 3
+                </p>
 
-              <h2 className="mt-1 text-3xl font-black text-slate-950">
-                써밋네컷 설계안
-              </h2>
+                <h2 className="mt-1 text-3xl font-black text-slate-950">
+                  써밋네컷 설계안
+                </h2>
 
-              <p className="mt-2 text-sm text-slate-500">
-                이미지 생성 전에
-                네 컷의 흐름과 장면을
-                확인해 주세요.
-              </p>
+                <p className="mt-2 text-sm text-slate-500">
+                  장면을 확인한 뒤 이미지를 생성해 주세요.
+                </p>
+              </div>
+
+              <div className="rounded-full bg-slate-950 px-5 py-2 text-sm font-black text-white">
+                이미지{" "}
+                {
+                  generatedImageCount
+                }
+                /
+                {
+                  plans.length
+                }
+              </div>
             </div>
 
             <div className="mt-6 grid gap-8">
               {plans.map(
-                (plan) => (
+                (
+                  plan,
+                  planIndex
+                ) => (
                   <article
-                    key={plan.id}
+                    key={
+                      plan.id
+                    }
                     id={`plan-${plan.passageId}`}
                     className="scroll-mt-6 rounded-[30px] bg-white p-6 shadow-sm ring-1 ring-slate-200 md:p-8"
                   >
                     <h3 className="text-3xl font-black text-slate-950">
-                      {plan.title}
+                      {
+                        plan.title
+                      }
                     </h3>
 
                     <div className="mt-5 rounded-2xl bg-emerald-50 p-5 ring-1 ring-emerald-100">
@@ -981,11 +1594,12 @@ ${pageText}
                         ) =>
                           updatePlanSummary(
                             plan.id,
-                            e.target
-                              .value
+                            e.target.value
                           )
                         }
-                        rows={3}
+                        rows={
+                          3
+                        }
                         className="mt-3 w-full resize-y rounded-xl border border-emerald-200 bg-white px-4 py-3 font-bold leading-6 text-slate-800 outline-none"
                       />
                     </div>
@@ -1001,13 +1615,14 @@ ${pageText}
                             className="rounded-[24px] border border-slate-200 bg-slate-50 p-5"
                           >
                             <div className="inline-flex rounded-full bg-slate-950 px-4 py-2 text-sm font-black text-white">
-                              {panel.cut}
+                              {
+                                panel.cut
+                              }
                             </div>
 
                             <div className="mt-5">
                               <label className="text-xs font-black tracking-wider text-slate-500">
-                                ORIGINAL
-                                TEXT
+                                ORIGINAL TEXT
                               </label>
 
                               <textarea
@@ -1021,12 +1636,12 @@ ${pageText}
                                     plan.id,
                                     panelIndex,
                                     "sourceText",
-                                    e
-                                      .target
-                                      .value
+                                    e.target.value
                                   )
                                 }
-                                rows={7}
+                                rows={
+                                  7
+                                }
                                 className="mt-2 w-full resize-y rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-700 outline-none focus:border-emerald-400"
                               />
                             </div>
@@ -1047,12 +1662,12 @@ ${pageText}
                                     plan.id,
                                     panelIndex,
                                     "scene",
-                                    e
-                                      .target
-                                      .value
+                                    e.target.value
                                   )
                                 }
-                                rows={5}
+                                rows={
+                                  5
+                                }
                                 className="mt-2 w-full resize-y rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm leading-6 text-slate-700 outline-none focus:border-emerald-400"
                               />
                             </div>
@@ -1073,12 +1688,12 @@ ${pageText}
                                     plan.id,
                                     panelIndex,
                                     "caption",
-                                    e
-                                      .target
-                                      .value
+                                    e.target.value
                                   )
                                 }
-                                rows={3}
+                                rows={
+                                  3
+                                }
                                 className="mt-2 w-full resize-y rounded-xl border border-amber-200 bg-white px-4 py-3 text-sm font-bold leading-6 text-slate-800 outline-none focus:border-amber-400"
                               />
                             </div>
@@ -1086,28 +1701,76 @@ ${pageText}
                         )
                       )}
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        generateImage(
+                          plan.id
+                        )
+                      }
+                      disabled={
+                        plan.loadingImage ||
+                        loadingAllImages
+                      }
+                      className="mt-6 w-full rounded-2xl bg-violet-600 px-6 py-4 text-lg font-black text-white transition hover:bg-violet-700 disabled:opacity-40"
+                    >
+                      {plan.loadingImage
+                        ? "이미지 생성 중..."
+                        : plan.image
+                        ? "이 이미지 다시 생성"
+                        : `설계안 ${
+                            planIndex +
+                            1
+                          } 이미지 생성`}
+                    </button>
+
+                    {plan.image && (
+                      <div className="mt-6">
+                        <img
+                          src={
+                            plan.image
+                          }
+                          alt="중등 본문 써밋네컷"
+                          className="w-full rounded-2xl border border-slate-200 bg-white"
+                        />
+                      </div>
+                    )}
                   </article>
                 )
               )}
             </div>
 
-            <div className="mt-8 rounded-[28px] bg-slate-950 p-7 text-white">
+            <div className="mt-8 rounded-[30px] bg-slate-950 p-7 text-white">
               <p className="text-xs font-black tracking-[0.18em] text-emerald-300">
-                NEXT STEP
+                ALL COMIC PLANS CHECKED
               </p>
 
               <h3 className="mt-2 text-2xl font-black">
-                설계 확인 후
-                실제 써밋네컷 생성
+                설계안 확인 다 했어?
               </h3>
 
               <p className="mt-2 text-sm leading-6 text-slate-300">
-                다음 단계에서
-                이 설계안을 바탕으로
-                한 번의 이미지 생성으로
-                2×2 네컷 그림을
-                제작합니다.
+                확인이 끝난 설계안을 위에서부터 순서대로 한 장씩 생성합니다.
               </p>
+
+              <button
+                type="button"
+                onClick={
+                  generateAllImages
+                }
+                disabled={
+                  loadingAllImages
+                }
+                className="mt-5 w-full rounded-2xl bg-violet-500 px-6 py-4 text-lg font-black text-white disabled:opacity-40"
+              >
+                {loadingAllImages
+                  ? `전체 이미지 생성 중 · ${imageProgress}`
+                  : `확인한 설계안 전체 이미지 생성 · ${
+                      plans.length -
+                      generatedImageCount
+                    }개 남음`}
+              </button>
             </div>
           </section>
         )}
