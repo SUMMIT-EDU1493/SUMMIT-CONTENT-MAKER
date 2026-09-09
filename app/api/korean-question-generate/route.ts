@@ -57,11 +57,34 @@ export async function POST(
     const passage =
       cleanText(body?.passage);
 
-    const difficulty:
-      Difficulty =
-      body?.difficulty === "상"
-        ? "상"
-        : "중";
+    const difficulties: Difficulty[] =
+      Array.isArray(
+        body?.difficulties
+      )
+        ? body.difficulties
+            .filter(
+              (
+                item: unknown
+              ): item is Difficulty =>
+                item === "중" ||
+                item === "상"
+            )
+            .filter(
+              (
+                item: Difficulty,
+                index: number,
+                array: Difficulty[]
+              ) =>
+                array.indexOf(
+                  item
+                ) === index
+            )
+        : [];
+
+    const activeDifficulties: Difficulty[] =
+      difficulties.length > 0
+        ? difficulties
+        : ["중"];
 
     const rawTypes =
       Array.isArray(body?.types)
@@ -94,7 +117,7 @@ export async function POST(
                 Math.max(
                   0,
                   Math.min(
-                    3,
+                    30,
                     Number(
                       value.count ??
                         0
@@ -184,7 +207,12 @@ export async function POST(
 난이도
 ==================================================
 
-현재 난이도: ${difficulty}
+사용 가능한 난이도: ${activeDifficulties.join(", ")}
+
+- 한 가지 난이도만 전달된 경우 모든 문항을 그 난이도로 출제하십시오.
+- "중"과 "상"이 함께 전달된 경우 전체 문항에서 두 난이도를 가능한 한 균등하게 섞으십시오.
+- 문항 수가 홀수라면 어느 한 난이도가 1문항 더 많아도 됩니다.
+- 같은 유형 안에서도 문항이 2개 이상이면 난이도가 한쪽에 몰리지 않도록 하십시오.
 
 [중]
 
@@ -411,7 +439,7 @@ JSON 출력 전에 모든 문제를 다시 검수하십시오.
 4. 선택지끼리 의미가 겹치지 않는가?
 5. 지문에 없는 지식을 정답 근거로 사용하지 않았는가?
 6. <보기>가 필요한 유형에서는 텍스트 <보기>가 충분한가?
-7. 난이도 ${difficulty}에 맞는가?
+7. 각 문항의 난이도가 사용 가능한 난이도 범위 안에 있으며, 복수 난이도 요청 시 적절히 섞였는가?
 8. 5개 선택지가 모두 문법적으로 자연스러운가?
 9. 같은 표현을 반복하여 정답이 티 나지 않는가?
 
@@ -427,7 +455,7 @@ JSON
   "questions": [
     {
       "type": "세부 내용 파악",
-      "difficulty": "${difficulty}",
+      "difficulty": "중",
       "stem": "문제 발문",
       "boxText": "",
       "targetWord": "",

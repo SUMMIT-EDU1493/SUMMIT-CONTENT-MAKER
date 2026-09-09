@@ -165,12 +165,12 @@ export default function KoreanQuestionMakerPage() {
   );
 
   const [
-    difficulty,
-    setDifficulty,
-  ] =
-    useState<Difficulty>(
-      "중"
-    );
+    difficulties,
+    setDifficulties,
+  ] = useState<Difficulty[]>([
+    "중",
+    "상",
+  ]);
 
   const [
     typeSettings,
@@ -240,13 +240,67 @@ export default function KoreanQuestionMakerPage() {
                     Math.max(
                       0,
                       Math.min(
-                        3,
+                        30,
                         nextCount
                       )
                     ),
                 }
               : item
         )
+    );
+  };
+
+  const setAllTypeCounts = (
+    count: number
+  ) => {
+    const safeCount =
+      Math.max(
+        0,
+        Math.min(
+          30,
+          count
+        )
+      );
+
+    setTypeSettings(
+      (prev) =>
+        prev.map(
+          (item) => ({
+            ...item,
+            count: safeCount,
+          })
+        )
+    );
+  };
+
+  const toggleDifficulty = (
+    level: Difficulty
+  ) => {
+    setDifficulties(
+      (prev) => {
+        if (
+          prev.includes(
+            level
+          )
+        ) {
+          if (
+            prev.length ===
+            1
+          ) {
+            return prev;
+          }
+
+          return prev.filter(
+            (item) =>
+              item !== level
+          );
+        }
+
+        return [
+          ...prev,
+          level,
+        ];
+      }
     );
   };
 
@@ -390,6 +444,17 @@ export default function KoreanQuestionMakerPage() {
       setPassages(
         nextPassages
       );
+
+      setTypeSettings(
+        (prev) =>
+          prev.map(
+            (item) => ({
+              ...item,
+              count:
+                nextPassages.length,
+            })
+          )
+      );
     } catch (
       error: any
     ) {
@@ -525,6 +590,16 @@ export default function KoreanQuestionMakerPage() {
         return;
       }
 
+      if (
+        difficulties.length ===
+        0
+      ) {
+        alert(
+          "난이도를 하나 이상 선택해 주세요."
+        );
+        return;
+      }
+
       try {
         setGenerating(
           true
@@ -548,6 +623,78 @@ export default function KoreanQuestionMakerPage() {
         const nextSkipped: SkippedType[] =
           [];
 
+        const passageCount =
+          selectedPassages.length;
+
+        const requestsByPassage =
+          selectedPassages.map(
+            () =>
+              [] as {
+                type: string;
+                count: number;
+              }[]
+          );
+
+        typeSettings.forEach(
+          (
+            setting,
+            typeIndex
+          ) => {
+            if (
+              setting.count <=
+              0
+            ) {
+              return;
+            }
+
+            const base =
+              Math.floor(
+                setting.count /
+                  passageCount
+              );
+
+            const remainder =
+              setting.count %
+              passageCount;
+
+            for (
+              let offset = 0;
+              offset <
+              passageCount;
+              offset++
+            ) {
+              const passageIndex =
+                (
+                  offset +
+                  typeIndex
+                ) %
+                passageCount;
+
+              const count =
+                base +
+                (
+                  offset <
+                  remainder
+                    ? 1
+                    : 0
+                );
+
+              if (
+                count >
+                0
+              ) {
+                requestsByPassage[
+                  passageIndex
+                ].push({
+                  type:
+                    setting.type,
+                  count,
+                });
+              }
+            }
+          }
+        );
+
         for (
           let index = 0;
           index <
@@ -559,71 +706,85 @@ export default function KoreanQuestionMakerPage() {
               index
             ];
 
+          const passageTypes =
+            requestsByPassage[
+              index
+            ];
+
+          if (
+            passageTypes.length ===
+            0
+          ) {
+            continue;
+          }
+
           setGenerationProgress(
             `수능형 문제 생성 중 (${index + 1}/${selectedPassages.length}) · ${passage.title}`
           );
 
-          const response =
-            await fetch(
-              "/api/korean-question-generate",
-              {
-                method:
-                  "POST",
+          try {
+            const response =
+              await fetch(
+                "/api/korean-question-generate",
+                {
+                  method:
+                    "POST",
 
-                headers: {
-                  "Content-Type":
-                    "application/json",
-                },
+                  headers: {
+                    "Content-Type":
+                      "application/json",
+                  },
 
-                body:
-                  JSON.stringify({
-                    title:
-                      passage.title,
+                  body:
+                    JSON.stringify({
+                      title:
+                        passage.title,
 
-                    passage:
-                      passage.content,
+                      passage:
+                        passage.content,
 
-                    difficulty,
+                      difficulties,
 
-                    types:
-                      typeSettings.map(
-                        (
-                          item
-                        ) => ({
-                          type:
-                            item.type,
-                          count:
-                            item.count,
-                        })
-                      ),
-                  }),
-              }
-            );
+                      types:
+                        passageTypes,
+                    }),
+                }
+              );
 
-          const data =
-            await response.json();
+            const data =
+              await response.json();
 
-          if (
-            !response.ok
-          ) {
-            throw new Error(
-              data?.detail ||
-                data?.error ||
-                `${passage.title} 문제 생성에 실패했습니다.`
-            );
-          }
+            if (
+              !response.ok
+            ) {
+              nextSkipped.push({
+                passageTitle:
+                  passage.title,
+                type:
+                  "전체",
+                reason:
+                  data?.detail ||
+                  data?.error ||
+                  "문제 생성에 실패했습니다.",
+              });
 
-          if (
-            Array.isArray(
-              data?.questions
-            )
-          ) {
-            data.questions.forEach(
-              (
-                raw: any
-              ) => {
-                nextQuestions.push(
-                  {
+              setSkippedTypes([
+                ...nextSkipped,
+              ]);
+
+              continue;
+            }
+
+            if (
+              Array.isArray(
+                data?.questions
+              )
+            ) {
+              data.questions.forEach(
+                (
+                  raw: any
+                ) => {
+                  nextQuestions.push({
                     id:
                       makeId(),
 
@@ -681,23 +842,21 @@ export default function KoreanQuestionMakerPage() {
                     evidence:
                       raw.evidence ||
                       "",
-                  }
-                );
-              }
-            );
-          }
+                  });
+                }
+              );
+            }
 
-          if (
-            Array.isArray(
-              data?.skippedTypes
-            )
-          ) {
-            data.skippedTypes.forEach(
-              (
-                item: any
-              ) => {
-                nextSkipped.push(
-                  {
+            if (
+              Array.isArray(
+                data?.skippedTypes
+              )
+            ) {
+              data.skippedTypes.forEach(
+                (
+                  item: any
+                ) => {
+                  nextSkipped.push({
                     passageTitle:
                       passage.title,
 
@@ -708,19 +867,44 @@ export default function KoreanQuestionMakerPage() {
                     reason:
                       item.reason ||
                       "",
-                  }
-                );
-              }
-            );
+                  });
+                }
+              );
+            }
+
+            setQuestions([
+              ...nextQuestions,
+            ]);
+
+            setSkippedTypes([
+              ...nextSkipped,
+            ]);
+          } catch (
+            passageError: any
+          ) {
+            nextSkipped.push({
+              passageTitle:
+                passage.title,
+              type:
+                "전체",
+              reason:
+                passageError?.message ||
+                "이 지문의 문제 생성 중 오류가 발생했습니다.",
+            });
+
+            setSkippedTypes([
+              ...nextSkipped,
+            ]);
           }
+        }
 
-          setQuestions([
-            ...nextQuestions,
-          ]);
-
-          setSkippedTypes([
-            ...nextSkipped,
-          ]);
+        if (
+          nextQuestions.length ===
+          0
+        ) {
+          throw new Error(
+            "선택한 지문에서 유효한 문제를 생성하지 못했습니다."
+          );
         }
 
         setGenerationProgress(
@@ -1140,38 +1324,44 @@ export default function KoreanQuestionMakerPage() {
                 ).map(
                   (
                     level
-                  ) => (
-                    <button
-                      key={
+                  ) => {
+                    const selected =
+                      difficulties.includes(
                         level
-                      }
-                      type="button"
-                      onClick={() =>
-                        setDifficulty(
+                      );
+
+                    return (
+                      <button
+                        key={
                           level
-                        )
-                      }
-                      className={`rounded-xl px-5 py-4 font-black transition ${
-                        difficulty ===
-                        level
-                          ? "bg-slate-900 text-white"
-                          : "border border-slate-300 bg-white text-slate-600"
-                      }`}
-                    >
-                      난이도{" "}
-                      {
-                        level
-                      }
-                    </button>
-                  )
+                        }
+                        type="button"
+                        onClick={() =>
+                          toggleDifficulty(
+                            level
+                          )
+                        }
+                        className={`rounded-xl px-5 py-4 font-black transition ${
+                          selected
+                            ? "bg-slate-900 text-white"
+                            : "border border-slate-300 bg-white text-slate-600"
+                        }`}
+                      >
+                        {selected
+                          ? "✓ "
+                          : ""}
+                        난이도{" "}
+                        {
+                          level
+                        }
+                      </button>
+                    );
+                  }
                 )}
               </div>
 
               <p className="mt-3 text-sm text-slate-500">
-                {difficulty ===
-                "중"
-                  ? "문단 간 연결과 조건 판단이 필요한 중상 수준으로 출제합니다."
-                  : "여러 정보를 결합하고 개념·조건을 2단계 이상 적용하는 고난도 문항으로 출제합니다."}
+                중·상을 함께 선택하면 두 난이도를 섞어서 출제합니다.
               </p>
             </div>
 
@@ -1183,17 +1373,82 @@ export default function KoreanQuestionMakerPage() {
                   </p>
 
                   <p className="mt-1 text-sm text-slate-500">
-                    0문항으로 설정하면 해당 유형은 출제하지 않습니다.
+                    문항 수는 선택한 전체 지문에 고르게 분배합니다. 0문항이면 해당 유형은 출제하지 않습니다.
                   </p>
                 </div>
 
                 <p className="rounded-full bg-violet-100 px-4 py-2 text-sm font-black text-violet-700">
-                  지문당 최대{" "}
+                  전체 최대{" "}
                   {
                     questionCount
                   }
                   문항
                 </p>
+              </div>
+
+              <div className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+                <span className="text-sm font-black text-slate-700">
+                  전체 유형 문항 수
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setAllTypeCounts(
+                      Math.max(
+                        0,
+                        Math.min(
+                          ...typeSettings.map(
+                            (item) =>
+                              item.count
+                          )
+                        ) - 1
+                      )
+                    )
+                  }
+                  className="h-9 w-9 rounded-lg border border-slate-300 bg-white font-black"
+                >
+                  -
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setAllTypeCounts(
+                      Math.max(
+                        ...typeSettings.map(
+                          (item) =>
+                            item.count
+                        )
+                      ) + 1
+                    )
+                  }
+                  className="h-9 w-9 rounded-lg bg-slate-900 font-black text-white"
+                >
+                  +
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setAllTypeCounts(
+                      selectedPassages.length
+                    )
+                  }
+                  className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-black text-white"
+                >
+                  선택 지문 수로 맞추기
+                </button>
+
+                <span className="text-sm text-slate-500">
+                  현재 선택 지문{" "}
+                  <strong>
+                    {
+                      selectedPassages.length
+                    }
+                  </strong>
+                  개
+                </span>
               </div>
 
               <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -1262,8 +1517,8 @@ export default function KoreanQuestionMakerPage() {
                               )
                             }
                             disabled={
-                              item.count ===
-                              3
+                              item.count >=
+                              30
                             }
                             className="h-9 w-9 rounded-lg bg-violet-600 font-black text-white disabled:opacity-30"
                           >
@@ -1287,7 +1542,7 @@ export default function KoreanQuestionMakerPage() {
                 {
                   selectedPassages.length
                 }
-                개 · 지문당 최대{" "}
+                개 · 전체 최대{" "}
                 {
                   questionCount
                 }
