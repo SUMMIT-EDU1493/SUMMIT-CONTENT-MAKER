@@ -25,7 +25,7 @@ export default function KoreanLabPage() {
           </h1>
 
           <p className="mt-4 text-base font-medium leading-7 text-slate-500">
-            긴 국어 지문을 시험 대비용 시각 학습자료로 재구성합니다.
+            긴 국어 지문을 시험 대비용 학습자료로 재구성합니다.
           </p>
         </section>
 
@@ -52,20 +52,27 @@ export default function KoreanLabPage() {
             </div>
           </Link>
 
-          <div className="rounded-[32px] border border-slate-200 bg-white p-8 opacity-70">
-            <p className="text-xs font-black tracking-[0.15em] text-slate-400">
-              COMING SOON
+          <Link
+            href="/korean-twin-questions"
+            className="group rounded-[32px] border border-slate-200 bg-white p-8 transition hover:-translate-y-1 hover:shadow-xl"
+          >
+            <p className="text-xs font-black tracking-[0.15em] text-slate-500">
+              CSAT QUESTION LAB
             </p>
 
-            <h2 className="mt-4 text-3xl font-black text-slate-700">
-              국어 변형문제
+            <h2 className="mt-4 text-3xl font-black text-slate-900">
+              수능형 국어 문제
             </h2>
 
-            <p className="mt-4 text-sm font-medium leading-7 text-slate-500">
-              지문 분석 기반 국어 변형문제 제작 기능은 다음 단계에서
-              추가합니다.
+            <p className="mt-4 max-w-md text-sm font-medium leading-7 text-slate-600">
+              원문 지문은 그대로 보존하고, 구조·세부 내용·사례 적용·
+              어휘·추론·견해 비교·중심 내용 유형의 문제를 제작합니다.
             </p>
-          </div>
+
+            <div className="mt-8 inline-flex rounded-full bg-slate-900 px-5 py-2.5 text-sm font-black text-white">
+              제작하기 →
+            </div>
+          </Link>
         </section>
       </div>
     </main>
