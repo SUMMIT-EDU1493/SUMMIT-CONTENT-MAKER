@@ -1592,7 +1592,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => {
-                window.location.href = "/korean-summary";
+                window.location.href = "/korean-test-maker";
               }}
               className="relative h-full min-h-[300px] overflow-hidden rounded-[34px] border border-violet-100 bg-[#eee4ff] p-8 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
             >
