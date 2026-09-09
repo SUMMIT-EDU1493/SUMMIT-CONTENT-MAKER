@@ -178,6 +178,16 @@ export async function POST(
         0
       );
 
+    const requestedCountByType =
+      new Map<string, number>(
+        types.map(
+          (item) => [
+            item.type,
+            item.count,
+          ]
+        )
+      );
+
     const openai =
       new OpenAI({
         apiKey,
@@ -243,7 +253,25 @@ ${requestedTypes}
 지문 자체가 특정 유형에 객관적으로 적합하지 않다면
 억지로 문제를 만들지 마십시오.
 
-그 유형은 skippedTypes에 이유와 함께 기록하십시오.
+그러나 다음 유형은 일반적인 독서 지문이라면
+가급적 출제하십시오.
+
+- 글의 구조와 전개 방식
+- 세부 내용 파악
+- 단어의 의미 파악
+- 생략된 내용 추론
+- 중심 내용 파악
+
+특히 "생략된 내용 추론"은
+지문에 명시된 전제·인과·조건·대조 관계에서
+논리적으로 도출할 수 있는 내용이 하나라도 있다면
+출제 가능한 것으로 판단하십시오.
+
+정말 객관적으로 출제가 불가능한 경우에만
+skippedTypes에 이유와 함께 기록하십시오.
+
+요청한 문항 수보다 더 많은 문제를 만들면 안 됩니다.
+각 유형별 요청 개수를 정확히 지키십시오.
 
 ==================================================
 유형별 출제 규칙
@@ -641,6 +669,52 @@ ${passage}
               .length === 5
         );
 
+    const limitedQuestions = (() => {
+      const used =
+        new Map<string, number>();
+
+      const result: typeof questions =
+        [];
+
+      for (
+        const question of questions
+      ) {
+        const limit =
+          requestedCountByType.get(
+            question.type
+          );
+
+        if (
+          !limit ||
+          limit <= 0
+        ) {
+          continue;
+        }
+
+        const current =
+          used.get(
+            question.type
+          ) ?? 0;
+
+        if (
+          current >= limit
+        ) {
+          continue;
+        }
+
+        result.push(
+          question
+        );
+
+        used.set(
+          question.type,
+          current + 1
+        );
+      }
+
+      return result;
+    })();
+
     const skippedTypes =
       Array.isArray(
         parsed?.skippedTypes
@@ -683,15 +757,26 @@ ${passage}
         : [];
 
     if (
-      questions.length === 0
+      limitedQuestions.length ===
+        0 &&
+      skippedTypes.length === 0
     ) {
-      throw new Error(
-        "유효한 수능형 문항을 생성하지 못했습니다."
-      );
+      return Response.json({
+        questions: [],
+        skippedTypes: types.map(
+          (item) => ({
+            type:
+              item.type,
+            reason:
+              "요청한 유형의 유효한 문항을 생성하지 못했습니다.",
+          })
+        ),
+      });
     }
 
     return Response.json({
-      questions,
+      questions:
+        limitedQuestions,
       skippedTypes,
     });
   } catch (
