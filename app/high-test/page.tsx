@@ -1152,7 +1152,7 @@ ${pageText}
       );
 
       alert(
-        "고등 PDF를 만드는 중 오류가 발생했어."
+        "고등 PDF를 만드는 중 오류가 발생했습니다."
       );
     } finally {
       setMakingPdf(false);
