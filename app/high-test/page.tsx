@@ -463,7 +463,7 @@ ${pageText}
       );
 
     if (available.length === 0) {
-      alert("생성된 이미지가 없어.");
+      alert("생성된 이미지가 없습니다.");
       return;
     }
 
@@ -518,7 +518,7 @@ ${pageText}
     const ctx = canvas.getContext("2d");
 
     if (!ctx) {
-      throw new Error("표지 캔버스를 만들 수 없어.");
+      throw new Error("표지 캔버스를 만들 수 없습니다.");
     }
 
     const white = "#FFFFFF";
@@ -703,7 +703,7 @@ ${pageText}
           image.onerror = () =>
             reject(
               new Error(
-                `이미지를 불러오지 못했어: ${src}`
+                `이미지를 불러오지 못했습니다: ${src}`
               )
             );
 
@@ -946,7 +946,7 @@ ${pageText}
     const ctx = canvas.getContext("2d");
 
     if (!ctx) {
-      throw new Error("뒷표지 캔버스를 만들 수 없어.");
+      throw new Error("뒷표지 캔버스를 만들 수 없습니다.");
     }
 
     ctx.fillStyle = "#111827";
@@ -991,7 +991,7 @@ ${pageText}
         logo.onerror = () =>
           reject(
             new Error(
-              "SUMMIT 로고를 불러오지 못했어."
+              "SUMMIT 로고를 불러오지 못했습니다."
             )
           );
       }
@@ -1720,7 +1720,7 @@ ${pageText}
                         <p className="mt-3 text-center text-xs font-semibold text-slate-500">
                           ⚠️ 이 버튼을 누를 때마다
                           이미지 1장 생성 비용이
-                          발생해.
+                          발생합니다.
                         </p>
                       </div>
 
@@ -1919,7 +1919,7 @@ ${pageText}
 
             <p className="mt-2 text-sm leading-6 text-slate-300">
               앞표지 + 작업함 이미지 {workItems.length}장 + 뒷표지
-              순서로 PDF를 만들어.
+              순서로 PDF를 만듭니다.
             </p>
 
             <div className="mt-4 rounded-2xl bg-white/10 p-4">
