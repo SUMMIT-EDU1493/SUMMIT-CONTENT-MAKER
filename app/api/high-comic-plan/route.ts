@@ -20,6 +20,8 @@ type HighComicPlan = {
   koreanSubtitle: string;
   blockSummary: string;
   sourceRange: string;
+  visualStyle?: string;
+  storyMode?: string;
   keyWords: string[];
   panels: ComicPanel[];
 };
@@ -225,6 +227,87 @@ plans 배열의 항목 1개
 지문 1개당
 반드시 써밋네컷 1장만 만든다.
 
+
+==================================================
+시각 스타일과 스토리 전개 방식
+==================================================
+
+각 독립 영어 지문마다 아래 두 항목을 반드시 정하라.
+
+- visualStyle
+- storyMode
+
+visualStyle은 다음 후보를 골고루 사용한다.
+
+1. graphic novel
+   - 강한 명암, 드라마틱한 구도, 그래픽노블 느낌
+
+2. editorial illustration
+   - 잡지 삽화처럼 세련되고 개념적인 시각 표현
+
+3. cinematic storyboard
+   - 영화 장면처럼 카메라 구도와 빛을 적극 활용
+
+4. modern webtoon
+   - 현대적인 한국 웹툰 스타일
+
+5. ink drawing comic
+   - 펜·잉크 드로잉과 강한 선 중심
+
+6. painterly illustration
+   - 회화적인 질감과 분위기 중심
+
+7. collage magazine comic
+   - 매거진 콜라주와 편집 디자인 감각
+
+8. retro comic book
+   - 빈티지 코믹북, 하프톤과 강한 프레이밍
+
+9. minimal conceptual illustration
+   - 인물 대화보다 개념과 상징을 시각적으로 표현
+
+10. infographic comic
+   - 정보·비교·과정을 그림 속에서 직관적으로 보여주는 방식
+
+연속된 두 지문에 같은 visualStyle을 사용하지 마라.
+전체 자료 안에서 특정 스타일만 반복하지 마라.
+
+storyMode는 다음 방식을 골고루 섞는다.
+
+- character dialogue
+- narrator driven
+- visual metaphor
+- comparison
+- process sequence
+- cause and effect
+- symbolic scene
+- real world example
+- documentary style
+- inner monologue
+
+매번 학생 2~3명이 서서 대화하는 구조로 만들지 마라.
+
+중요:
+4컷 모두가 인물 간 대화로만 이루어지는 plan은 금지한다.
+
+각 plan의 4컷 중 최소 1컷,
+가능하면 2컷은 다음 중 하나로 구성한다.
+
+- 인물 없는 상징 장면
+- 짧은 내레이션 중심 장면
+- 개념을 시각화한 장면
+- 실제 사례 재현
+- 비교 장면
+- 원인 → 결과 장면
+- 사물이나 환경 중심 장면
+- 극적인 클로즈업
+- 공간 전체를 보여주는 장면
+
+본문이 추상적인 설명문이라면
+억지로 학생 두 명이 그 내용을 설명하게 하지 말고,
+시각적 비유와 상황 자체로 보여줘라.
+
+
 ==================================================
 고등 써밋네컷 스타일
 ==================================================
@@ -351,6 +434,8 @@ plans도 반드시 10개여야 한다.
       "koreanSubtitle": "해당 지문의 짧은 한글 부제",
       "blockSummary": "해당 영어 지문의 핵심 내용",
       "sourceRange": "2024년 03월 모의고사 21번",
+      "visualStyle": "graphic novel",
+      "storyMode": "visual metaphor",
       "keyWords": [
         "한글뜻(English)",
         "한글뜻(English)"
@@ -494,6 +579,36 @@ ${sourceText}
           sourceRange:
             plan.sourceRange ||
             "",
+
+          visualStyle:
+            plan.visualStyle ||
+            [
+              "graphic novel",
+              "editorial illustration",
+              "cinematic storyboard",
+              "modern webtoon",
+              "ink drawing comic",
+              "painterly illustration",
+              "collage magazine comic",
+              "retro comic book",
+              "minimal conceptual illustration",
+              "infographic comic",
+            ][index % 10],
+
+          storyMode:
+            plan.storyMode ||
+            [
+              "visual metaphor",
+              "real world example",
+              "comparison",
+              "narrator driven",
+              "cause and effect",
+              "symbolic scene",
+              "process sequence",
+              "documentary style",
+              "inner monologue",
+              "character dialogue",
+            ][index % 10],
 
           keyWords:
             Array.isArray(

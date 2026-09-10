@@ -24,6 +24,8 @@ type HighComicPlan = {
   koreanSubtitle?: string;
   blockSummary?: string;
   sourceRange?: string;
+  visualStyle?: string;
+  storyMode?: string;
   keyWords?: string[];
   panels?: ComicPanel[];
 };
@@ -144,6 +146,61 @@ PAGE STRUCTURE
 - no study-note box
 - no extra captions outside the intended comic content
 
+
+==================================================
+THIS PAGE'S ASSIGNED VISUAL DIRECTION
+==================================================
+
+VISUAL STYLE:
+${plan.visualStyle || "modern webtoon"}
+
+STORY MODE:
+${plan.storyMode || "visual storytelling"}
+
+The assigned VISUAL STYLE above is mandatory.
+
+Do not automatically fall back to the same generic Korean webtoon look
+for every request.
+
+Interpret the requested style strongly through:
+- line quality
+- shading
+- texture
+- framing
+- lighting
+- visual rhythm
+- background treatment
+- panel composition
+
+The four panels must still form one coherent page,
+but the overall artistic language should clearly reflect
+the assigned VISUAL STYLE.
+
+The assigned STORY MODE must also affect composition.
+
+If STORY MODE is:
+- visual metaphor: show the concept visually rather than through people explaining it
+- comparison: make the contrast immediately visible
+- process sequence: emphasize progression from panel to panel
+- cause and effect: visually separate cause and consequence
+- narrator driven: allow narration-led visual scenes with fewer speaking characters
+- symbolic scene: use objects, spaces, scale, or imagery as symbols
+- real world example: dramatize a concrete situation
+- documentary style: use observational, real-world framing
+- inner monologue: focus on one person's thought process
+- character dialogue: conversation is allowed, but still vary staging strongly
+
+IMPORTANT:
+Do not force two or three characters into every panel.
+
+At least ONE panel should work visually even without a conversation.
+Whenever the source allows it, make TWO panels primarily visual,
+narrative, symbolic, environmental, or action-based.
+
+Avoid the repetitive formula:
+"student A explains -> student B reacts -> student A explains again."
+
+
 ==================================================
 HIGH-SCHOOL VISUAL STYLE
 ==================================================
@@ -152,8 +209,8 @@ Target audience:
 Korean high-school students, approximately ages 16–18.
 
 Art direction:
-- polished modern Korean webtoon
-- mature teenage visual style
+- follow the assigned VISUAL STYLE strongly
+- mature high-school visual tone
 - cinematic composition
 - expressive faces
 - dynamic posing
@@ -391,7 +448,7 @@ Verify all of the following:
 3. high-school visual tone
 4. mature teenage proportions
 5. no childish/chibi look
-6. visually engaging modern Korean webtoon style
+6. visually engaging assigned visual style is clearly visible
 7. at least 3 clearly different camera framings
 8. supplied story order preserved
 9. dialogue meaning preserved

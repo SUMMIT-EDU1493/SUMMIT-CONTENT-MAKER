@@ -28,6 +28,8 @@ type HighComicPlan = {
   koreanSubtitle: string;
   blockSummary: string;
   sourceRange: string;
+  visualStyle?: string;
+  storyMode?: string;
   keyWords: string[];
   panels: ComicPanel[];
 };
@@ -1169,12 +1171,12 @@ ${pageText}
       );
 
     if (remainingPlans.length === 0) {
-      alert("이미 모든 이미지가 생성되어 있어.");
+      alert("이미 모든 이미지가 생성되어 있습니다.");
       return;
     }
 
     const confirmed = window.confirm(
-      `아직 생성되지 않은 이미지 ${remainingPlans.length}장을 순서대로 만들 거야. 이미지 생성 비용이 발생해. 계속할까?`
+      `아직 생성되지 않은 이미지 ${remainingPlans.length}장을 최대 3장씩 동시에 생성합니다. 이미지 생성 비용이 발생합니다. 계속하시겠습니까?`
     );
 
     if (!confirmed) {
@@ -1183,33 +1185,61 @@ ${pageText}
 
     try {
       setGeneratingAll(true);
+      setGeneratingId("");
       setErrorMessage("");
 
-      for (
-        let index = 0;
-        index < remainingPlans.length;
-        index++
-      ) {
-        const plan =
-          remainingPlans[index];
+      const concurrency = 3;
+      const total = remainingPlans.length;
 
-        setGeneratingId(plan.id);
-
-        setBatchProgress(
-          `${index + 1} / ${remainingPlans.length} 생성 중 · ${plan.englishTitle}`
-        );
-
-        const image =
-          await generateImageRequest(plan);
-
-        setGeneratedImages((prev) => ({
-          ...prev,
-          [plan.id]: image,
-        }));
-      }
+      let nextIndex = 0;
+      let completed = 0;
 
       setBatchProgress(
-        `완료 · ${remainingPlans.length}장 생성`
+        `전체 이미지 생성 중 · 0 / ${total}`
+      );
+
+      const worker = async () => {
+        while (true) {
+          const currentIndex = nextIndex;
+          nextIndex += 1;
+
+          if (currentIndex >= total) {
+            return;
+          }
+
+          const plan =
+            remainingPlans[currentIndex];
+
+          const image =
+            await generateImageRequest(plan);
+
+          setGeneratedImages((prev) => ({
+            ...prev,
+            [plan.id]: image,
+          }));
+
+          completed += 1;
+
+          setBatchProgress(
+            `전체 이미지 생성 중 · ${completed} / ${total}`
+          );
+        }
+      };
+
+      const workerCount = Math.min(
+        concurrency,
+        total
+      );
+
+      await Promise.all(
+        Array.from(
+          { length: workerCount },
+          () => worker()
+        )
+      );
+
+      setBatchProgress(
+        `완료 · ${total}장 생성되었습니다.`
       );
     } catch (error: any) {
       console.error(
@@ -1223,7 +1253,7 @@ ${pageText}
       );
 
       setBatchProgress(
-        "중간에 오류가 발생했어. 이미 만들어진 이미지는 그대로 유지돼."
+        "중간에 오류가 발생했습니다. 이미 생성된 이미지는 그대로 유지됩니다."
       );
     } finally {
       setGeneratingId("");
@@ -1670,6 +1700,7 @@ ${pageText}
                             generateImage(plan)
                           }
                           disabled={
+                            generatingAll ||
                             Boolean(
                               generatingId
                             )
@@ -1682,8 +1713,8 @@ ${pageText}
                             : generatedImages[
                                   plan.id
                                 ]
-                              ? "이 설계안 이미지 다시 생성"
-                              : "이 설계안으로 이미지 생성"}
+                              ? "이 설계안 이미지 다시 생성하기"
+                              : "이 설계안으로 이미지 생성하기"}
                         </button>
 
                         <p className="mt-3 text-center text-xs font-semibold text-slate-500">
@@ -1716,11 +1747,15 @@ ${pageText}
                                 plan
                               )
                             }
-                            disabled={workItems.some(
-                              (item) =>
-                                item.id ===
-                                plan.id
-                            )}
+                            disabled={
+                              generatingAll ||
+                              Boolean(generatingId) ||
+                              workItems.some(
+                                (item) =>
+                                  item.id ===
+                                  plan.id
+                              )
+                            }
                             className="mt-4 w-full rounded-2xl bg-emerald-600 px-6 py-4 font-black text-white disabled:bg-slate-300"
                           >
                             {workItems.some(
@@ -1729,7 +1764,7 @@ ${pageText}
                                 plan.id
                             )
                               ? "작업함에 추가됨"
-                              : "이 이미지 작업함에 추가"}
+                              : "생성된 이미지 작업함에 추가"}
                           </button>
                         </div>
                       )}
@@ -1774,7 +1809,7 @@ ${pageText}
               )}
 
               <p className="mt-3 text-center text-xs font-semibold text-slate-500">
-                ⚠️ 생성되는 이미지 수만큼 이미지 API 비용이 발생해.
+                ⚠️ 생성되는 이미지 수만큼 이미지 API 비용이 발생합니다.
               </p>
             </div>
 
@@ -1795,7 +1830,11 @@ ${pageText}
               <button
                 type="button"
                 onClick={addAllToWorkbox}
-                className="mt-5 w-full rounded-2xl bg-emerald-600 px-6 py-4 text-lg font-black text-white"
+                disabled={
+                  generatingAll ||
+                  Boolean(generatingId)
+                }
+                className="mt-5 w-full rounded-2xl bg-emerald-600 px-6 py-4 text-lg font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-60"
               >
                 생성된 이미지 전체 작업함에 추가
               </button>
