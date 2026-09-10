@@ -115,19 +115,19 @@ ${dialogueText}
       : "";
 
     const prompt = `
-Create ONE polished landscape 4-panel Korean webtoon page for high-school students.
+Create ONE polished landscape 4-panel illustrated comic page for Korean high-school students.
 
 This is part of a series called "SUMMIT FOUR-CUT".
 
 IMPORTANT:
 This is NOT a children's educational comic.
 
-The page should feel like:
-- a stylish modern Korean webtoon
-- an Instagram comic
-- an entertaining visual story
+The page must strongly follow the ASSIGNED VISUAL STYLE below.
 
-FIRST.
+Do not default to a generic Korean webtoon aesthetic.
+Different requests in this series must visibly look like different artists or different publication styles.
+
+It should still feel polished, contemporary, engaging, and suitable for high-school students.
 
 Educational content should be naturally embedded inside it.
 
@@ -138,7 +138,7 @@ PAGE STRUCTURE
 - exactly 4 panels
 - 2x2 grid
 - landscape composition
-- clean panel borders
+- thick, solid, clearly visible dark panel borders with bright gutters
 - no page title inside artwork
 - no footer
 - no logo
@@ -201,6 +201,32 @@ Avoid the repetitive formula:
 "student A explains -> student B reacts -> student A explains again."
 
 
+
+==================================================
+MANDATORY FOUR-PANEL BORDERS
+==================================================
+
+The page MUST visibly read as exactly four separate comic panels.
+
+Use:
+- exact 2 x 2 grid
+- thick, solid, dark panel borders
+- clearly visible vertical center divider
+- clearly visible horizontal center divider
+- bright clean gutters between all panels
+- outer frame clearly visible
+
+The divider lines must remain clearly visible
+even over very dark or highly detailed artwork.
+
+Do NOT:
+- blend adjacent scenes together
+- use borderless cinematic montage
+- let scenery cross from one panel into another
+- hide the center divider behind characters or speech bubbles
+
+At first glance, the viewer must immediately see FOUR separate rectangles.
+
 ==================================================
 HIGH-SCHOOL VISUAL STYLE
 ==================================================
@@ -217,7 +243,7 @@ Art direction:
 - stylish lighting
 - strong visual storytelling
 - attractive but natural character design
-- crisp digital illustration
+- rendering technique must match the assigned visual style
 - slightly dramatic
 - slightly trendy
 - visually memorable
@@ -232,6 +258,87 @@ AVOID:
 - static classroom explanation scenes
 - four panels with identical framing
 - overly cute children's-book style
+
+
+==================================================
+MANDATORY STYLE INTERPRETATION
+==================================================
+
+The value of VISUAL STYLE is not a small suggestion.
+It must cause an OBVIOUS visual difference.
+
+Interpret styles as follows:
+
+graphic novel:
+- dramatic inked linework
+- deep shadows and high contrast
+- cinematic lighting
+- realistic or semi-realistic anatomy
+- bold graphic compositions
+- NOT soft pastel webtoon rendering
+
+editorial illustration:
+- sophisticated magazine illustration
+- conceptual imagery
+- simplified but stylish figures
+- bold shapes and clever visual metaphors
+- contemporary editorial-art feeling
+
+cinematic storyboard:
+- movie-like cinematography
+- realistic lighting
+- dramatic wide shots and close-ups
+- depth, atmosphere, lens-like framing
+- restrained comic exaggeration
+
+modern webtoon:
+- polished Korean digital webtoon
+- clean expressive characters
+- brighter digital rendering
+- contemporary youth aesthetic
+
+ink drawing comic:
+- visible pen-and-ink texture
+- crosshatching
+- black-and-white or very limited-color feeling
+- expressive hand-drawn lines
+- print-comic character
+
+painterly illustration:
+- visible painted texture
+- atmospheric light
+- soft brushwork
+- rich illustrated-book or concept-art finish
+- NOT clean flat webtoon cel shading
+
+collage magazine comic:
+- layered paper, cutout, photography-inspired shapes
+- typography-like graphic elements only where appropriate
+- bold editorial composition
+- mixed-media feeling
+
+retro comic book:
+- vintage printed comic feeling
+- halftone dots
+- bold black outlines
+- punchy framing
+- classic comic-book energy
+
+minimal conceptual illustration:
+- sophisticated minimal shapes
+- symbolic composition
+- strong negative space
+- fewer but meaningful elements
+- still retain readable comic storytelling
+
+infographic comic:
+- visual comparison and information hierarchy
+- diagrams integrated into scenes
+- arrows, scale, spatial relationships where useful
+- characters may interact with the visual information
+- must still look like an illustrated comic, not a worksheet
+
+Do NOT render every one of these as the same anime/webtoon face style.
 
 ==================================================
 CHARACTER AGE & BODY PROPORTIONS
@@ -328,6 +435,36 @@ Avoid:
 - stiff explanatory language
 - childish baby talk
 
+
+==================================================
+MANDATORY LANGUAGE AND VOCABULARY
+==================================================
+
+All full dialogue sentences must be Korean.
+
+Do NOT create full English dialogue sentences.
+
+English is allowed only inside Korean learning expressions in this form:
+
+한글뜻(English)
+
+Examples:
+다양성(diversity)
+회복력(resilience)
+안정성(stability)
+
+The finished page should visibly contain approximately 5–8 useful English vocabulary expressions
+distributed naturally through the four panels whenever they are supplied in the plan.
+
+Do not omit most of the supplied keyWords.
+
+Preserve the Korean(English) format exactly.
+
+If the supplied plan accidentally contains an English-only dialogue sentence,
+do NOT reproduce it as English.
+Render the meaning naturally in Korean instead,
+while retaining useful English vocabulary only in parentheses.
+
 ==================================================
 SPEECH BUBBLES
 ==================================================
@@ -371,6 +508,24 @@ Vocabulary should naturally appear within dialogue or scene context.
 
 Suggested key vocabulary for this page:
 ${keyWords || "Use only the vocabulary already present in the supplied dialogue."}
+
+
+==================================================
+CHARACTER / SCENE BALANCE
+==================================================
+
+Do not remove people from most of the comic.
+
+Normally:
+- at least 2 of the 4 panels should contain meaningful human characters
+- no more than 1 panel should be a pure environment/object/symbol-only panel
+
+A panel without people is useful only when it communicates
+a strong visual metaphor, event, comparison, or consequence.
+
+Do not turn the comic into four disconnected poster illustrations.
+
+The four panels should feel like one flowing visual story.
 
 ==================================================
 CHARACTER CONSISTENCY
@@ -443,7 +598,7 @@ FINAL CHECK BEFORE GENERATING
 
 Verify all of the following:
 
-1. exactly 4 panels
+1. exactly 4 panels with thick, unmistakable dark borders and bright gutters
 2. 2x2 grid
 3. high-school visual tone
 4. mature teenage proportions
@@ -452,10 +607,10 @@ Verify all of the following:
 7. at least 3 clearly different camera framings
 8. supplied story order preserved
 9. dialogue meaning preserved
-10. Korean text readable
+10. every full dialogue sentence is Korean; English appears only as Korean(English) vocabulary
 11. speech-bubble font bold and thick
 12. no separate vocabulary box
-13. key vocabulary appears naturally if supplied
+13. approximately 5–8 supplied English learning words appear naturally in Korean(English) format
 14. no duplicate/cloned characters inside a panel
 15. no unnecessary random people
 16. recurring characters remain visually consistent

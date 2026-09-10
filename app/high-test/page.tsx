@@ -1669,7 +1669,7 @@ ${pageText}
                                         }
                                         className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-black text-red-600"
                                       >
-                                        대사 삭제
+                                        대사 삭제하기
                                       </button>
                                     </div>
                                   )
@@ -1686,7 +1686,7 @@ ${pageText}
                                 }
                                 className="mt-4 w-full rounded-xl border-2 border-dashed border-purple-300 px-4 py-3 text-sm font-black text-purple-600"
                               >
-                                + 대사 추가
+                                + 대사 추가하기
                               </button>
                             </div>
                           )
@@ -1784,8 +1784,8 @@ ${pageText}
               </h3>
 
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                이미 만들어진 이미지는 건너뛰고,
-                아직 없는 블록만 순서대로 생성해.
+                이미 생성된 이미지는 건너뛰고,
+                아직 생성되지 않은 이미지만 생성합니다.
               </p>
 
               <button
@@ -1823,8 +1823,8 @@ ${pageText}
               </h3>
 
               <p className="mt-2 text-sm text-slate-600">
-                현재 생성되어 있는 이미지만 추가하고,
-                이미 작업함에 있는 이미지는 건너뛰어.
+                현재 생성되어 있는 이미지만 추가하며,
+                이미 작업함에 있는 이미지는 건너뜁니다.
               </p>
 
               <button
