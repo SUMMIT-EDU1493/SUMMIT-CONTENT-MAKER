@@ -500,6 +500,47 @@ ${pageText}
     });
   };
 
+  const moveWorkItem = (
+    itemId: string,
+    direction: "up" | "down"
+  ) => {
+    setWorkItems((prev) => {
+      const currentIndex =
+        prev.findIndex(
+          (item) =>
+            item.id === itemId
+        );
+
+      if (currentIndex === -1) {
+        return prev;
+      }
+
+      const targetIndex =
+        direction === "up"
+          ? currentIndex - 1
+          : currentIndex + 1;
+
+      if (
+        targetIndex < 0 ||
+        targetIndex >= prev.length
+      ) {
+        return prev;
+      }
+
+      const next = [...prev];
+
+      [
+        next[currentIndex],
+        next[targetIndex],
+      ] = [
+        next[targetIndex],
+        next[currentIndex],
+      ];
+
+      return next;
+    });
+  };
+
   const removeWorkItem = (
     id: string
   ) => {
@@ -1176,7 +1217,7 @@ ${pageText}
     }
 
     const confirmed = window.confirm(
-      `아직 생성되지 않은 이미지 ${remainingPlans.length}장을 최대 3장씩 동시에 생성합니다. 이미지 생성 비용이 발생합니다. 계속하시겠습니까?`
+      `아직 생성되지 않은 이미지 ${remainingPlans.length}장을 최대 3장씩 동시에 생성합니다. 이미지 생성 시 크레딧이 차감됩니다. 계속하시겠습니까?`
     );
 
     if (!confirmed) {
@@ -1809,7 +1850,7 @@ ${pageText}
               )}
 
               <p className="mt-3 text-center text-xs font-semibold text-slate-500">
-                ⚠️ 생성되는 이미지 수만큼 이미지 API 비용이 발생합니다.
+                ⚠️ 생성되는 이미지 수만큼 크레딧이 차감됩니다.
               </p>
             </div>
 
@@ -1887,6 +1928,41 @@ ${pageText}
                         {item.subtitle}
                       </p>
 
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            moveWorkItem(
+                              item.id,
+                              "up"
+                            )
+                          }
+                          disabled={
+                            index === 0
+                          }
+                          className="rounded-xl bg-slate-200 px-4 py-3 text-sm font-black text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
+                        >
+                          ↑ 위로 이동
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            moveWorkItem(
+                              item.id,
+                              "down"
+                            )
+                          }
+                          disabled={
+                            index ===
+                            workItems.length - 1
+                          }
+                          className="rounded-xl bg-slate-200 px-4 py-3 text-sm font-black text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
+                        >
+                          ↓ 아래로 이동
+                        </button>
+                      </div>
+
                       <button
                         type="button"
                         onClick={() =>
@@ -1894,7 +1970,7 @@ ${pageText}
                             item.id
                           )
                         }
-                        className="mt-4 w-full rounded-xl bg-red-50 px-4 py-3 text-sm font-black text-red-600"
+                        className="mt-2 w-full rounded-xl bg-red-50 px-4 py-3 text-sm font-black text-red-600"
                       >
                         작업함에서 삭제
                       </button>
