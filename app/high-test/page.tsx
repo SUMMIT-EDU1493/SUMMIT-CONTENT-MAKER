@@ -107,6 +107,15 @@ export default function HighTestPage() {
     });
   };
 
+  const [editingDialogue, setEditingDialogue] =
+    useState<{
+      planIndex: number;
+      panelIndex: number;
+      dialogueIndex: number;
+      speaker: string;
+      text: string;
+    } | null>(null);
+
   const updateDialogue = (
     planIndex: number,
     panelIndex: number,
@@ -1666,48 +1675,45 @@ ${pageText}
                                       }
                                       className="rounded-xl bg-slate-50 p-4"
                                     >
-                                      <input
-                                        defaultValue={dialogue.speaker}
-                                        onBlur={(e) =>
-                                          updateDialogue(
-                                            planIndex,
-                                            panelIndex,
-                                            dialogueIndex,
-                                            "speaker",
-                                            e.currentTarget.value
-                                          )
-                                        }
-                                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-black text-purple-600"
-                                      />
+                                      <div className="rounded-lg bg-white px-3 py-2 text-xs font-black text-purple-600 ring-1 ring-slate-200">
+                                        {dialogue.speaker}
+                                      </div>
 
-                                      <textarea
-                                        defaultValue={dialogue.text}
-                                        onBlur={(e) =>
-                                          updateDialogue(
-                                            planIndex,
-                                            panelIndex,
-                                            dialogueIndex,
-                                            "text",
-                                            e.currentTarget.value
-                                          )
-                                        }
-                                        rows={3}
-                                        className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-lg font-bold leading-7 text-slate-900"
-                                      />
+                                      <div className="mt-2 whitespace-pre-wrap rounded-lg bg-white px-3 py-3 text-lg font-bold leading-7 text-slate-900 ring-1 ring-slate-200">
+                                        {dialogue.text}
+                                      </div>
 
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          deleteDialogue(
-                                            planIndex,
-                                            panelIndex,
-                                            dialogueIndex
-                                          )
-                                        }
-                                        className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-black text-red-600"
-                                      >
-                                        대사 삭제하기
-                                      </button>
+                                      <div className="mt-3 grid grid-cols-2 gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setEditingDialogue({
+                                              planIndex,
+                                              panelIndex,
+                                              dialogueIndex,
+                                              speaker: dialogue.speaker,
+                                              text: dialogue.text,
+                                            })
+                                          }
+                                          className="cursor-pointer rounded-lg bg-purple-100 px-3 py-2 text-xs font-black text-purple-700"
+                                        >
+                                          대사 수정하기
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            deleteDialogue(
+                                              planIndex,
+                                              panelIndex,
+                                              dialogueIndex
+                                            )
+                                          }
+                                          className="cursor-pointer rounded-lg bg-red-50 px-3 py-2 text-xs font-black text-red-600"
+                                        >
+                                          대사 삭제하기
+                                        </button>
+                                      </div>
                                     </div>
                                   )
                                 )}
@@ -1721,7 +1727,7 @@ ${pageText}
                                     panelIndex
                                   )
                                 }
-                                className="mt-4 w-full rounded-xl border-2 border-dashed border-purple-300 px-4 py-3 text-sm font-black text-purple-600"
+                                className="mt-4 w-full cursor-pointer rounded-xl border-2 border-dashed border-purple-300 px-4 py-3 text-sm font-black text-purple-600"
                               >
                                 + 대사 추가하기
                               </button>
@@ -1742,7 +1748,7 @@ ${pageText}
                               generatingId
                             )
                           }
-                          className="w-full rounded-2xl bg-pink-600 px-6 py-4 text-lg font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+                          className="w-full cursor-pointer rounded-2xl bg-pink-600 px-6 py-4 text-lg font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {generatingId ===
                           plan.id
@@ -1832,7 +1838,7 @@ ${pageText}
                   generatingAll ||
                   Boolean(generatingId)
                 }
-                className="mt-5 w-full rounded-2xl bg-purple-600 px-6 py-4 text-lg font-black text-white disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+                className="mt-5 w-full cursor-pointer rounded-2xl bg-purple-600 px-6 py-4 text-lg font-black text-white disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
               >
                 {generatingAll
                   ? "전체 이미지 생성 중..."
@@ -1871,7 +1877,7 @@ ${pageText}
                   generatingAll ||
                   Boolean(generatingId)
                 }
-                className="mt-5 w-full rounded-2xl bg-emerald-600 px-6 py-4 text-lg font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-60 cursor-pointer"
+                className="mt-5 w-full cursor-pointer rounded-2xl bg-emerald-600 px-6 py-4 text-lg font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-60 cursor-pointer"
               >
                 생성된 이미지 전체 작업함에 추가
               </button>
@@ -1936,7 +1942,7 @@ ${pageText}
                           disabled={
                             index === 0
                           }
-                          className="rounded-xl bg-slate-200 px-4 py-3 text-sm font-black text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
+                          className="cursor-pointer rounded-xl bg-slate-200 px-4 py-3 text-sm font-black text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
                         >
                           ↑ 위로 이동
                         </button>
@@ -1953,7 +1959,7 @@ ${pageText}
                             index ===
                             workItems.length - 1
                           }
-                          className="rounded-xl bg-slate-200 px-4 py-3 text-sm font-black text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
+                          className="cursor-pointer rounded-xl bg-slate-200 px-4 py-3 text-sm font-black text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
                         >
                           ↓ 아래로 이동
                         </button>
@@ -1966,7 +1972,7 @@ ${pageText}
                             item.id
                           )
                         }
-                        className="mt-2 w-full rounded-xl bg-red-50 px-4 py-3 text-sm font-black text-red-600"
+                        className="mt-2 w-full cursor-pointer rounded-xl bg-red-50 px-4 py-3 text-sm font-black text-red-600"
                       >
                         작업함에서 삭제
                       </button>
@@ -2004,7 +2010,7 @@ ${pageText}
               type="button"
               onClick={makeFinalPdf}
               disabled={makingPdf}
-              className="mt-5 w-full rounded-2xl bg-white px-6 py-4 text-lg font-black text-slate-900 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+              className="mt-5 w-full cursor-pointer rounded-2xl bg-white px-6 py-4 text-lg font-black text-slate-900 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
             >
               {makingPdf
                 ? "최종 PDF 만드는 중..."
@@ -2015,6 +2021,111 @@ ${pageText}
 
 
       </div>
+
+      {editingDialogue && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-black text-purple-600">
+                  DIALOGUE EDIT
+                </p>
+                <h2 className="mt-1 text-2xl font-black text-slate-900">
+                  대사 편집
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setEditingDialogue(null)}
+                className="cursor-pointer rounded-xl bg-slate-100 px-4 py-2 font-black text-slate-600"
+              >
+                닫기
+              </button>
+            </div>
+
+            <div className="mt-6">
+              <p className="text-xs font-black text-purple-600">
+                화자
+              </p>
+
+              <input
+                autoFocus
+                value={editingDialogue.speaker}
+                onChange={(e) =>
+                  setEditingDialogue((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          speaker: e.target.value,
+                        }
+                      : prev
+                  )
+                }
+                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 font-bold text-slate-900"
+              />
+            </div>
+
+            <div className="mt-5">
+              <p className="text-xs font-black text-purple-600">
+                대사
+              </p>
+
+              <textarea
+                value={editingDialogue.text}
+                onChange={(e) =>
+                  setEditingDialogue((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          text: e.target.value,
+                        }
+                      : prev
+                  )
+                }
+                rows={7}
+                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-lg font-bold leading-8 text-slate-900"
+              />
+            </div>
+
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setEditingDialogue(null)}
+                className="cursor-pointer rounded-xl bg-slate-100 px-5 py-4 font-black text-slate-600"
+              >
+                취소
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  updateDialogue(
+                    editingDialogue.planIndex,
+                    editingDialogue.panelIndex,
+                    editingDialogue.dialogueIndex,
+                    "speaker",
+                    editingDialogue.speaker
+                  );
+
+                  updateDialogue(
+                    editingDialogue.planIndex,
+                    editingDialogue.panelIndex,
+                    editingDialogue.dialogueIndex,
+                    "text",
+                    editingDialogue.text
+                  );
+
+                  setEditingDialogue(null);
+                }}
+                className="cursor-pointer rounded-xl bg-purple-600 px-5 py-4 font-black text-white"
+              >
+                저장
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

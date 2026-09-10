@@ -186,7 +186,7 @@ If STORY MODE is:
 - narrator driven: allow narration-led visual scenes with fewer speaking characters
 - symbolic scene: use objects, spaces, scale, or imagery as symbols
 - real world example: dramatize a concrete situation
-- documentary style: use observational, real-world framing
+- documentary style: use illustrated observational framing, never photography
 - inner monologue: focus on one person's thought process
 - character dialogue: conversation is allowed, but still vary staging strongly
 
@@ -226,6 +226,29 @@ Do NOT:
 - hide the center divider behind characters or speech bubbles
 
 At first glance, the viewer must immediately see FOUR separate rectangles.
+
+==================================================
+ILLUSTRATION ONLY — NO PHOTOREALISM
+==================================================
+
+This project must use illustrated artwork only.
+
+NEVER create:
+- photographs
+- photorealistic people
+- realistic human photos
+- live-action movie stills
+- DSLR or smartphone-photo appearance
+- photographic skin texture
+- photographic backgrounds
+- AI-generated photos of real-looking people
+
+Every person, object, and background must clearly look drawn,
+painted, inked, printed, collaged, or digitally illustrated.
+
+Even cinematic or documentary scenes must remain unmistakably illustrated.
+
+Human faces must never look like photographs of real people.
 
 ==================================================
 HIGH-SCHOOL VISUAL STYLE
@@ -273,7 +296,7 @@ graphic novel:
 - dramatic inked linework
 - deep shadows and high contrast
 - cinematic lighting
-- realistic or semi-realistic anatomy
+- mature illustrated anatomy with visible drawn linework
 - bold graphic compositions
 - NOT soft pastel webtoon rendering
 
@@ -286,7 +309,7 @@ editorial illustration:
 
 cinematic storyboard:
 - movie-like cinematography
-- realistic lighting
+- dramatic illustrated lighting
 - dramatic wide shots and close-ups
 - depth, atmosphere, lens-like framing
 - restrained comic exaggeration
@@ -312,7 +335,7 @@ painterly illustration:
 - NOT clean flat webtoon cel shading
 
 collage magazine comic:
-- layered paper, cutout, photography-inspired shapes
+- layered paper, hand-drawn cutout shapes and illustrated collage elements
 - typography-like graphic elements only where appropriate
 - bold editorial composition
 - mixed-media feeling
