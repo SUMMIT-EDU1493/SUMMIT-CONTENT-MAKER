@@ -196,9 +196,9 @@ export default function KoreanQuestionMakerPage() {
     );
 
   const [
-    showAnswers,
-    setShowAnswers,
-  ] = useState(true);
+    savingPdf,
+    setSavingPdf,
+  ] = useState(false);
 
   const selectedPassages =
     useMemo(
@@ -553,12 +553,29 @@ export default function KoreanQuestionMakerPage() {
     id: string
   ) => {
     setPassages(
-      (prev) =>
-        prev.filter(
-          (passage) =>
-            passage.id !==
-            id
-        )
+      (prev) => {
+        const remaining =
+          prev.filter(
+            (passage) =>
+              passage.id !==
+              id
+          );
+
+        return remaining.map(
+          (
+            passage,
+            index
+          ) => ({
+            ...passage,
+            title:
+              /^지문\s*\d+$/.test(
+                passage.title.trim()
+              )
+                ? `지문 ${index + 1}`
+                : passage.title,
+          })
+        );
+      }
     );
   };
 
@@ -944,20 +961,144 @@ export default function KoreanQuestionMakerPage() {
       }
     };
 
-  const printQuestions =
-    (
-      includeAnswers: boolean
-    ) => {
-      setShowAnswers(
-        includeAnswers
-      );
+  const savePdf =
+    async () => {
+      if (
+        questions.length ===
+        0
+      ) {
+        alert(
+          "저장할 문제가 없습니다."
+        );
+        return;
+      }
 
-      setTimeout(
-        () => {
-          window.print();
-        },
-        100
-      );
+      try {
+        setSavingPdf(
+          true
+        );
+
+        setErrorMessage(
+          ""
+        );
+
+        const response =
+          await fetch(
+            "/api/korean-question-pdf",
+            {
+              method:
+                "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+
+              body:
+                JSON.stringify({
+                  schoolName,
+                  gradeName,
+                  materialName,
+
+                  passages:
+                    selectedPassages.map(
+                      (
+                        passage
+                      ) => ({
+                        id:
+                          passage.id,
+                        title:
+                          passage.title,
+                        content:
+                          passage.content,
+                      })
+                    ),
+
+                  questions,
+                }),
+            }
+          );
+
+        if (
+          !response.ok
+        ) {
+          const data =
+            await response
+              .json()
+              .catch(
+                () => ({})
+              );
+
+          throw new Error(
+            data?.detail ||
+              data?.error ||
+              "PDF 생성에 실패했습니다."
+          );
+        }
+
+        const blob =
+          await response.blob();
+
+        const disposition =
+          response.headers.get(
+            "Content-Disposition"
+          ) || "";
+
+        const encodedMatch =
+          disposition.match(
+            /filename\*=UTF-8''([^;]+)/
+          );
+
+        const fileName =
+          encodedMatch?.[1]
+            ? decodeURIComponent(
+                encodedMatch[1]
+              )
+            : "수능형국어문제.pdf";
+
+        const url =
+          URL.createObjectURL(
+            blob
+          );
+
+        const link =
+          document.createElement(
+            "a"
+          );
+
+        link.href =
+          url;
+
+        link.download =
+          fileName;
+
+        document.body.appendChild(
+          link
+        );
+
+        link.click();
+
+        link.remove();
+
+        URL.revokeObjectURL(
+          url
+        );
+      } catch (
+        error: any
+      ) {
+        console.error(
+          error
+        );
+
+        setErrorMessage(
+          error?.message ||
+            "PDF 저장 중 오류가 발생했습니다."
+        );
+      } finally {
+        setSavingPdf(
+          false
+        );
+      }
     };
 
   const choiceNumber = (
@@ -1010,11 +1151,11 @@ export default function KoreanQuestionMakerPage() {
             type="button"
             onClick={() => {
               window.location.href =
-                "/";
+                "/korean-test-maker";
             }}
             className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-black text-slate-600 shadow-sm"
           >
-            ← 홈으로
+            ← 컨텐츠 선택으로
           </button>
         </div>
 
@@ -1603,31 +1744,7 @@ export default function KoreanQuestionMakerPage() {
                 문항이 생성되었습니다.
               </p>
 
-              <div className="mt-5 grid gap-3 md:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    printQuestions(
-                      false
-                    )
-                  }
-                  className="rounded-xl bg-slate-900 px-5 py-4 font-black text-white"
-                >
-                  문제지만 인쇄 · PDF 저장
-                </button>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    printQuestions(
-                      true
-                    )
-                  }
-                  className="rounded-xl bg-violet-600 px-5 py-4 font-black text-white"
-                >
-                  정답·해설 포함 인쇄 · PDF 저장
-                </button>
-              </div>
             </div>
 
             {skippedTypes.length >
@@ -1842,11 +1959,7 @@ export default function KoreanQuestionMakerPage() {
                                 </div>
 
                                 <div
-                                  className={`answer-area mt-6 rounded-2xl bg-violet-50 p-5 ring-1 ring-violet-100 ${
-                                    showAnswers
-                                      ? ""
-                                      : "hidden-for-print"
-                                  }`}
+                                  className="answer-area mt-6 rounded-2xl bg-violet-50 p-5 ring-1 ring-violet-100"
                                 >
                                   <p className="font-black text-violet-800">
                                     정답{" "}
@@ -1918,6 +2031,23 @@ export default function KoreanQuestionMakerPage() {
                   );
                 }
               )}
+            </div>
+
+            <div className="mt-8 no-print">
+              <button
+                type="button"
+                onClick={
+                  savePdf
+                }
+                disabled={
+                  savingPdf
+                }
+                className="w-full rounded-2xl bg-violet-600 px-6 py-5 text-lg font-black text-white shadow-sm transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {savingPdf
+                  ? "PDF 저장 중..."
+                  : "PDF 저장"}
+              </button>
             </div>
           </section>
         )}
