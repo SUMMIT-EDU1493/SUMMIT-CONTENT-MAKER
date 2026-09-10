@@ -1325,7 +1325,6 @@ ${pageText}
       </div>
 
 <div className="mb-6">
-  <HomeButton />
 </div>
         <div>
           <p className="text-sm font-bold text-purple-600">
@@ -1336,10 +1335,7 @@ ${pageText}
             고등 써밋네컷
           </h1>
 
-          <p className="mt-3 text-slate-600">
-            PDF → 의미 블럭 분할 → 4컷 설계안 →
-            원하는 블록만 이미지로 생성
-          </p>
+          <p className="mt-3 text-slate-600">영어 지문을 네컷만화로</p>
         </div>
 
         <section className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
@@ -1477,7 +1473,7 @@ ${pageText}
               type="button"
               onClick={createPlans}
               disabled={loadingPlan}
-              className="mt-5 w-full rounded-xl bg-purple-600 px-6 py-4 text-lg font-black text-white disabled:opacity-50"
+              className="mt-5 w-full rounded-xl bg-purple-600 px-6 py-4 text-lg font-black text-white disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
             >
               {loadingPlan
                 ? "고등 설계안 생성 중..."
@@ -1671,28 +1667,28 @@ ${pageText}
                                       className="rounded-xl bg-slate-50 p-4"
                                     >
                                       <input
-                                        value={dialogue.speaker}
-                                        onChange={(e) =>
+                                        defaultValue={dialogue.speaker}
+                                        onBlur={(e) =>
                                           updateDialogue(
                                             planIndex,
                                             panelIndex,
                                             dialogueIndex,
                                             "speaker",
-                                            e.target.value
+                                            e.currentTarget.value
                                           )
                                         }
                                         className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-black text-purple-600"
                                       />
 
                                       <textarea
-                                        value={dialogue.text}
-                                        onChange={(e) =>
+                                        defaultValue={dialogue.text}
+                                        onBlur={(e) =>
                                           updateDialogue(
                                             planIndex,
                                             panelIndex,
                                             dialogueIndex,
                                             "text",
-                                            e.target.value
+                                            e.currentTarget.value
                                           )
                                         }
                                         rows={3}
@@ -1836,7 +1832,7 @@ ${pageText}
                   generatingAll ||
                   Boolean(generatingId)
                 }
-                className="mt-5 w-full rounded-2xl bg-purple-600 px-6 py-4 text-lg font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-5 w-full rounded-2xl bg-purple-600 px-6 py-4 text-lg font-black text-white disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
               >
                 {generatingAll
                   ? "전체 이미지 생성 중..."
@@ -1875,7 +1871,7 @@ ${pageText}
                   generatingAll ||
                   Boolean(generatingId)
                 }
-                className="mt-5 w-full rounded-2xl bg-emerald-600 px-6 py-4 text-lg font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-60"
+                className="mt-5 w-full rounded-2xl bg-emerald-600 px-6 py-4 text-lg font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-60 cursor-pointer"
               >
                 생성된 이미지 전체 작업함에 추가
               </button>
@@ -2008,7 +2004,7 @@ ${pageText}
               type="button"
               onClick={makeFinalPdf}
               disabled={makingPdf}
-              className="mt-5 w-full rounded-2xl bg-white px-6 py-4 text-lg font-black text-slate-900 disabled:opacity-50"
+              className="mt-5 w-full rounded-2xl bg-white px-6 py-4 text-lg font-black text-slate-900 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
             >
               {makingPdf
                 ? "최종 PDF 만드는 중..."
