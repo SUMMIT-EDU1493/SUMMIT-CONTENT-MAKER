@@ -1429,7 +1429,7 @@ ${pageText}
             </h2>
 
             <p className="mt-2 text-sm text-slate-600">
-              여기까지는 텍스트 설계안 생성이야.
+              여기까지는 텍스트 설계안 생성 단계입니다.
             </p>
 
             <button
