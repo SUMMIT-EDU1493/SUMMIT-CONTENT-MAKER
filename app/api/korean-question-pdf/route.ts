@@ -391,11 +391,11 @@ export async function POST(
 
     const choiceMarks =
       [
-        "①",
-        "②",
-        "③",
-        "④",
-        "⑤",
+        "1)",
+        "2)",
+        "3)",
+        "4)",
+        "5)",
       ];
 
     // ==========================================
@@ -521,7 +521,7 @@ export async function POST(
         {
           size: 8.6,
           lineHeight: 4.25,
-          gapAfter: 4,
+          gapAfter: 6,
         }
       );
 
