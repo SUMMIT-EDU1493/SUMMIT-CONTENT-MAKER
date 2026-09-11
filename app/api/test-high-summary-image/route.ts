@@ -145,6 +145,25 @@ show numbered stages or arrows.
 Do NOT force every page into the same layout.
 
 ==================================================
+VERTICAL FIT FOR PRINT
+==================================================
+
+The page will be printed as an A4 landscape booklet page.
+
+Use the vertical space carefully:
+
+- compact top spacing
+- compact spacing between title and content
+- no oversized decorative header area
+- no unnecessary blank strip at the top
+- no important content near the bottom edge
+- distribute content mainly within y = 120 to 900 px
+- keep approximately 70 to 90 px clear at the bottom
+- fit every key point and vocabulary item fully inside the page
+- never crop or partially hide the final line or bottom box
+- do not solve fit problems by making text tiny
+
+==================================================
 TEXT RULES
 ==================================================
 
@@ -164,29 +183,45 @@ IMPORTANT LOGO / LAYOUT RULE
 The official SUMMIT logo will be overlaid later by software
 in the extreme upper-left corner.
 
-Keep a REAL clean safety zone in the upper-left area:
-approximately 260 px wide × 120 px high.
+Reserve ONLY a small logo safety zone in the extreme upper-left:
+approximately x = 35 to 275 px,
+y = 25 to 135 px.
 
-Inside that safety zone:
+Inside ONLY that small upper-left logo area:
 - no title
 - no subtitle
-- no underline
 - no doodle
 - no icon
 - no illustration
 - no box
 - no sticky note
-- no decorative line
 
-Start the main title farther to the right
-or lower than this safety zone.
+IMPORTANT PAGE COMPOSITION:
+
+- Do NOT leave a large empty band across the top of the page.
+- Use the upper part of the page efficiently.
+- Start the main title high on the page, approximately y = 70 to 150 px.
+- Place the main title to the RIGHT of the logo safety zone when necessary.
+- The title does NOT need to move far downward.
+- Begin the main learning content soon below the title.
+- Keep the overall composition vertically compact.
+- Avoid pushing the whole layout toward the bottom.
+
+PRINT SAFE AREA:
+
+- Keep all important text and graphics above approximately y = 920 px.
+- Leave approximately 70 to 90 px of calm bottom safety margin.
+- No important vocabulary, sentence, arrow, label, or box may touch the bottom edge.
+- The entire educational content must fit comfortably inside one printed A4 landscape page.
+- Prefer reducing unnecessary vertical gaps rather than shrinking text.
+- Preserve clear, readable text sizes.
 
 IMPORTANT:
 Do NOT draw an empty box.
 Do NOT draw a dotted rectangle.
 Do NOT draw a placeholder.
-Do NOT visibly mark the reserved area.
-The area should simply remain visually calm and empty.
+Do NOT visibly mark the reserved logo area.
+The reserved area should simply remain visually calm.
 
 ==================================================
 DO NOT

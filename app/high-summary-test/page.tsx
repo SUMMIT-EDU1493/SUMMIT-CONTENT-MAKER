@@ -636,6 +636,35 @@ export default function HighSummaryTestPage() {
           );
         }
 
+        // 소책자 인쇄용 페이지 페어링
+        // 앞표지 + 내용 + 뒷표지의 총 페이지 수가
+        // 4의 배수가 되도록 빈 페이지를 뒷표지 앞에 추가합니다.
+        const pagesBeforeBack =
+          1 + workItems.length;
+
+        const finalPageCountWithoutBlanks =
+          pagesBeforeBack + 1;
+
+        const blankPageCount =
+          (4 -
+            (finalPageCountWithoutBlanks %
+              4)) %
+          4;
+
+        for (
+          let i = 0;
+          i < blankPageCount;
+          i++
+        ) {
+          pdf.addPage(
+            "a4",
+            "landscape"
+          );
+        }
+
+        // 소책자 인쇄용 페이지 페어링
+        // 앞표지 + 내용 + 뒷표지의 총 페이지 수가
+        // 4의 배수가 되도록 빈 페이지를 뒷표지 앞에 추가합니다.
         pdf.addPage(
           "a4",
           "landscape"

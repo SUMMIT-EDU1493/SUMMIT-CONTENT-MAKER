@@ -61,7 +61,7 @@ export default function Home() {
   const [workMode, setWorkMode] = useState<WorkMode>("");
   const [schoolName, setSchoolName] = useState("");
   const [gradeName, setGradeName] = useState("");
-  const [lessonName, setLessonName] = useState("");
+  const [lessonName, setLessonName] = useState("Lesson ");
   const [contentType, setContentType] = useState("대화문");
 
   const [fileName, setFileName] = useState("");
@@ -129,7 +129,7 @@ export default function Home() {
 
       if (!fullText.trim()) {
         setErrorMessage(
-          "PDF는 열렸지만 텍스트를 찾지 못했어. 스캔 PDF일 가능성이 있어."
+          "PDF는 열렸지만 텍스트를 찾지 못했습니다. 스캔 PDF일 가능성이 있습니다."
         );
         return;
       }
@@ -137,7 +137,7 @@ export default function Home() {
       setPdfText(fullText.trim());
     } catch (error) {
       console.error(error);
-      setErrorMessage("PDF를 읽는 중 오류가 발생했어.");
+      setErrorMessage("PDF를 읽는 중 오류가 발생했습니다.");
     } finally {
       setLoadingPdf(false);
     }
@@ -181,7 +181,7 @@ export default function Home() {
     } catch (error: any) {
       setErrorMessage(
         error?.message ||
-          "교재 분석 중 오류가 발생했어."
+          "교재 분석 중 오류가 발생했습니다."
       );
     } finally {
       setLoadingAi(false);
@@ -268,7 +268,7 @@ export default function Home() {
     } catch (error: any) {
       setErrorMessage(
         error?.message ||
-          "써밋네컷 설계안 생성 중 오류가 발생했어."
+          "써밋네컷 설계안 생성 중 오류가 발생했습니다."
       );
     } finally {
       setLoadingComic(false);
@@ -333,7 +333,7 @@ export default function Home() {
     } catch (error: any) {
       setErrorMessage(
         error?.message ||
-          "전체 설계안 생성 중 오류가 발생했어."
+          "전체 설계안 생성 중 오류가 발생했습니다."
       );
     } finally {
       setLoadingAllComics(false);
@@ -649,7 +649,7 @@ export default function Home() {
 
       setErrorMessage(
         error?.message ||
-          "만화 이미지 생성 중 오류가 발생했어."
+          "만화 이미지 생성 중 오류가 발생했습니다."
       );
     }
   };
@@ -665,14 +665,14 @@ export default function Home() {
         comicProjects.length === 0
       ) {
         alert(
-          "먼저 설계안을 만들어줘."
+          "먼저 설계안을 생성해 주세요."
         );
         return;
       }
 
       if (targets.length === 0) {
         alert(
-          "모든 설계안의 이미지가 이미 만들어져 있어."
+          "모든 설계안의 이미지가 이미 생성되어 있습니다."
         );
         return;
       }
@@ -736,7 +736,7 @@ export default function Home() {
       } catch (error: any) {
         setErrorMessage(
           error?.message ||
-            "전체 이미지 생성 중 오류가 발생했어."
+            "전체 이미지 생성 중 오류가 발생했습니다."
         );
       } finally {
         setLoadingAllImages(false);
@@ -752,7 +752,7 @@ export default function Home() {
       comicProjects.length === 0
     ) {
       alert(
-        "먼저 써밋네컷 설계안을 만들어줘."
+        "먼저 써밋네컷 설계안을 생성해 주세요."
       );
       return;
     }
@@ -801,7 +801,7 @@ export default function Home() {
     } catch (error: any) {
       setErrorMessage(
         error?.message ||
-          "뒷표지 생성 중 오류가 발생했어."
+          "뒷표지 생성 중 오류가 발생했습니다."
       );
     } finally {
       setLoadingBackCover(false);
@@ -1412,7 +1412,7 @@ export default function Home() {
         );
 
         alert(
-          "PDF를 만드는 중 오류가 발생했어."
+          "PDF를 만드는 중 오류가 발생했습니다."
         );
       } finally {
         setMakingPdf(false);
@@ -1469,7 +1469,7 @@ export default function Home() {
 
               <span
                 aria-hidden="true"
-                className="text-[34px] font-black leading-none text-emerald-500 md:text-[40px]"
+                className="text-[34px] font-black leading-none text-emerald-700 md:text-[40px]"
               >
                 ➜
               </span>
@@ -1544,7 +1544,7 @@ export default function Home() {
                 </h2>
 
                 <p className="mt-3 text-lg font-bold text-slate-600">
-                  써밋네컷 · 요약.ZIP
+                  교과서 · 모의고사 · 외부지문
                 </p>
 
                 <div className="mt-7 flex flex-wrap gap-2">
@@ -1636,9 +1636,7 @@ export default function Home() {
 
           <div className="mt-8">
             <p className="text-sm font-bold text-blue-600">
-              {schoolLevel === "middle"
-                ? "중등 컨텐츠 선택"
-                : "고등 컨텐츠 선택"}
+              SUMMIT VISUAL LAB
             </p>
 
             <h1 className="mt-2 text-4xl font-black text-slate-900">
@@ -1813,7 +1811,7 @@ export default function Home() {
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>
             <p className="text-sm font-bold text-blue-600">
-              SUMMIT EDU
+              SUMMIT VISUAL LAB
             </p>
 
             <h1 className="mt-2 text-4xl font-black text-slate-900">
@@ -1821,7 +1819,7 @@ export default function Home() {
             </h1>
 
             <p className="mt-3 text-slate-600">
-              영어 교재의 대화문을 찾아 써밋네컷으로 제작합니다..
+              영어교과서의 대화문을 찾아 써밋네컷으로 제작합니다.
             </p>
           </div>
 
@@ -1905,29 +1903,6 @@ export default function Home() {
               />
             </div>
 
-            <div>
-              <label className="text-sm font-bold text-slate-700">
-                내용 구분
-              </label>
-
-              <select
-                value={contentType}
-                onChange={(e) =>
-                  setContentType(
-                    e.target.value
-                  )
-                }
-                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3"
-              >
-                <option value="대화문">
-                  대화문
-                </option>
-
-                <option value="본문">
-                  본문
-                </option>
-              </select>
-            </div>
           </div>
         </section>
 
@@ -1985,7 +1960,7 @@ export default function Home() {
               </h2>
 
               <p className="mt-2 text-sm text-slate-500">
-                교재 안의 대화문을 모두 찾은 다음 필요한 것만 남기면 돼.
+                대화문을 추출한 후 필요한 대화문만 선택해 주세요.
               </p>
 
               <button
@@ -2016,11 +1991,11 @@ export default function Home() {
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
                 <h2 className="text-2xl font-bold">
-                  발견된 대화문
+                  대화문 LIST
                 </h2>
 
                 <p className="mt-2 text-sm text-slate-500">
-                  필요 없는 것은 삭제하고 사용할 대화문만 남겨줘.
+                  필요한 대화문만 남긴 후 설계안을 생성해 주세요.
                 </p>
               </div>
 
@@ -2093,7 +2068,7 @@ export default function Home() {
                         }
                         className="rounded-xl border border-red-200 bg-red-50 px-5 py-3 font-bold text-red-600 disabled:opacity-40"
                       >
-                        필요 없는 대화문 삭제
+                        이 대화문 삭제
                       </button>
                     </div>
                   </div>
@@ -2111,7 +2086,7 @@ export default function Home() {
                 </p>
 
                 <h3 className="mt-1 text-2xl font-black text-slate-900">
-                  남은 대화문 전체 설계안 만들기
+                  대화문 설계안 만들기
                 </h3>
 
                 <button
@@ -2423,11 +2398,11 @@ export default function Home() {
               </p>
 
               <h3 className="mt-1 text-2xl font-black">
-                설계안 확인 다 했어?
+                설계안을 확인해 주세요.
               </h3>
 
               <p className="mt-2 text-sm text-slate-300">
-                모든 설계안을 확인한 뒤 여기서 한꺼번에 이미지를 생성하면 돼.
+                모든 설계안을 확인한 후 이미지를 생성해 주세요.
               </p>
 
               <button
@@ -2465,11 +2440,11 @@ export default function Home() {
               </h3>
 
               <p className="mt-2 text-sm text-slate-600">
-                이 Lesson에 등장한 캐릭터들을 모아 마지막 뒷표지를 만들어.
+                이 Lesson에 등장한 캐릭터를 활용하여 마지막 뒷표지를 제작합니다.
               </p>
 
               <p className="mt-1 text-xs text-slate-500">
-                뒷표지 생성은 AI 이미지 1장을 사용하므로 이미지 생성 비용이 발생해.
+                
               </p>
 
               <button
@@ -2637,7 +2612,7 @@ export default function Home() {
 
                 {!backCoverImage && (
                   <p className="mt-2 text-xs text-amber-300">
-                    뒷표지를 아직 만들지 않았어. 지금 PDF를 만들면 뒷표지 없이 저장돼.
+                    뒷표지가 생성되지 않았습니다. 현재 PDF를 만들면 뒷표지 없이 저장됩니다.
                   </p>
                 )}
 
