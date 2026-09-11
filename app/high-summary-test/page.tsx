@@ -583,7 +583,9 @@ export default function HighSummaryTestPage() {
   // -----------------------------
 
   const makeFinalPdf =
-    async () => {
+    async (
+      mode: "normal" | "booklet"
+    ) => {
       if (
         workItems.length === 0
       ) {
@@ -604,17 +606,6 @@ export default function HighSummaryTestPage() {
         const back =
           await createBackCover();
 
-        /*
-         * 소책자 인쇄용 페이지 순서
-         *
-         * 예: 총 8페이지
-         * 8, 1 / 2, 7 / 6, 3 / 4, 5
-         *
-         * 앞표지와 뒷표지가 반드시
-         * 같은 바깥쪽 용지에 배치되도록
-         * PDF 자체에서 순서를 정리합니다.
-         */
-
         const logicalPages: Array<
           string | null
         > = [
@@ -625,34 +616,55 @@ export default function HighSummaryTestPage() {
           back,
         ];
 
-        while (
-          logicalPages.length % 4 !== 0
-        ) {
-          logicalPages.splice(
-            logicalPages.length - 1,
-            0,
-            null
-          );
-        }
+        let pagesToWrite:
+          Array<string | null>;
 
-        const bookletPages: Array<
-          string | null
-        > = [];
+        if (mode === "booklet") {
+          const preparedPages =
+            [...logicalPages];
 
-        let left = 0;
-        let right =
-          logicalPages.length - 1;
+          while (
+            preparedPages.length %
+              4 !==
+            0
+          ) {
+            preparedPages.splice(
+              preparedPages.length -
+                1,
+              0,
+              null
+            );
+          }
 
-        while (left < right) {
-          bookletPages.push(
-            logicalPages[right],
-            logicalPages[left],
-            logicalPages[left + 1],
-            logicalPages[right - 1]
-          );
+          const bookletPages:
+            Array<string | null> = [];
 
-          left += 2;
-          right -= 2;
+          let left = 0;
+          let right =
+            preparedPages.length -
+            1;
+
+          while (left < right) {
+            bookletPages.push(
+              preparedPages[right],
+              preparedPages[left],
+              preparedPages[
+                left + 1
+              ],
+              preparedPages[
+                right - 1
+              ]
+            );
+
+            left += 2;
+            right -= 2;
+          }
+
+          pagesToWrite =
+            bookletPages;
+        } else {
+          pagesToWrite =
+            logicalPages;
         }
 
         const pdf =
@@ -664,7 +676,7 @@ export default function HighSummaryTestPage() {
             compress: true,
           });
 
-        bookletPages.forEach(
+        pagesToWrite.forEach(
           (image, index) => {
             if (index > 0) {
               pdf.addPage(
@@ -689,17 +701,18 @@ export default function HighSummaryTestPage() {
             lessonName.trim(),
             "요약.ZIP",
           ]
-            .filter(
-              Boolean
-            )
+            .filter(Boolean)
             .join("-");
 
+        const suffix =
+          mode === "booklet"
+            ? "소책자인쇄용"
+            : "일반";
+
         pdf.save(
-          `${fileName}.pdf`
+          `${fileName}-${suffix}.pdf`
         );
-      } catch (
-        error
-      ) {
+      } catch (error) {
         console.error(
           "SUMMARY FINAL PDF ERROR:",
           error
@@ -1127,21 +1140,43 @@ export default function HighSummaryTestPage() {
                 </div>
               )}
 
-              <button
-                onClick={
-                  makeFinalPdf
-                }
-                disabled={
-                  makingFinalPdf ||
-                  workItems.length ===
-                    0
-                }
-                className="mt-6 w-full rounded-2xl bg-black px-6 py-5 text-lg font-black text-white disabled:opacity-40"
-              >
-                {makingFinalPdf
-                  ? "최종 요약.ZIP PDF 만드는 중..."
-                  : "앞표지 + 본문 + 마지막장 PDF 만들기"}
-              </button>
+              <div className="mt-6 grid gap-3 md:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    makeFinalPdf(
+                      "normal"
+                    )
+                  }
+                  disabled={
+                    makingFinalPdf ||
+                    workItems.length === 0
+                  }
+                  className="w-full cursor-pointer rounded-2xl bg-white px-6 py-5 text-lg font-black text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {makingFinalPdf
+                    ? "PDF 만드는 중..."
+                    : "일반 PDF 저장"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    makeFinalPdf(
+                      "booklet"
+                    )
+                  }
+                  disabled={
+                    makingFinalPdf ||
+                    workItems.length === 0
+                  }
+                  className="w-full cursor-pointer rounded-2xl bg-black px-6 py-5 text-lg font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {makingFinalPdf
+                    ? "PDF 만드는 중..."
+                    : "소책자 인쇄용 PDF 저장"}
+                </button>
+              </div>
 
             </div>
 

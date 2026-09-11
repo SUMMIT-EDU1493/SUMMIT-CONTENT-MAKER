@@ -1260,72 +1260,26 @@ export default function Home() {
     const pageHeight =
       pdf.internal.pageSize.getHeight();
 
-    const margin = 10;
-
-    const availableWidth =
-      pageWidth - margin * 2;
-
-    const availableHeight =
-      pageHeight - margin * 2;
-
-    const imageProps =
-      pdf.getImageProperties(
-        image
-      );
-
-    const imageRatio =
-      imageProps.width /
-      imageProps.height;
-
-    let imageWidth =
-      availableWidth;
-
-    let imageHeight =
-      imageWidth / imageRatio;
-
-    if (
-      imageHeight >
-      availableHeight
-    ) {
-      imageHeight =
-        availableHeight;
-
-      imageWidth =
-        imageHeight *
-        imageRatio;
-    }
-
-    const x =
-      (pageWidth -
-        imageWidth) /
-      2;
-
-    const y =
-      (pageHeight -
-        imageHeight) /
-      2;
-
     pdf.addImage(
       image,
       "PNG",
-      x,
-      y,
-      imageWidth,
-      imageHeight,
+      0,
+      0,
+      pageWidth,
+      pageHeight,
       undefined,
       "FAST"
     );
   };
 
   const downloadLessonPdf =
-    async () => {
-      if (
-        workItems.length === 0
-      ) {
+    async (
+      mode: "normal" | "booklet"
+    ) => {
+      if (workItems.length === 0) {
         alert(
-          "먼저 PDF에 넣을 이미지에 써밋네컷을 추가해 주세요."
+          "먼저 PDF에 넣을 이미지를 작업함에 추가해 주세요."
         );
-
         return;
       }
 
@@ -1335,62 +1289,107 @@ export default function Home() {
         const coverImage =
           await createCoverImage();
 
-        const pdf = new jsPDF({
-          orientation:
-            "landscape",
-          unit: "mm",
-          format: "a4",
-          compress: true,
-        });
-
-        const pageWidth =
-          pdf.internal.pageSize.getWidth();
-
-        const pageHeight =
-          pdf.internal.pageSize.getHeight();
-
-        pdf.addImage(
+        const logicalPages: Array<
+          string | null
+        > = [
           coverImage,
-          "PNG",
-          0,
-          0,
-          pageWidth,
-          pageHeight,
-          undefined,
-          "FAST"
+          ...workItems.map(
+            (item) => item.image
+          ),
+          ...(backCoverImage
+            ? [backCoverImage]
+            : []),
+        ];
+
+        let pagesToWrite:
+          Array<string | null>;
+
+        if (mode === "booklet") {
+          const preparedPages =
+            [...logicalPages];
+
+          if (backCoverImage) {
+            while (
+              preparedPages.length %
+                4 !==
+              0
+            ) {
+              preparedPages.splice(
+                preparedPages.length -
+                  1,
+                0,
+                null
+              );
+            }
+          } else {
+            while (
+              preparedPages.length %
+                4 !==
+              0
+            ) {
+              preparedPages.push(
+                null
+              );
+            }
+          }
+
+          const bookletPages:
+            Array<string | null> = [];
+
+          let left = 0;
+          let right =
+            preparedPages.length -
+            1;
+
+          while (left < right) {
+            bookletPages.push(
+              preparedPages[right],
+              preparedPages[left],
+              preparedPages[
+                left + 1
+              ],
+              preparedPages[
+                right - 1
+              ]
+            );
+
+            left += 2;
+            right -= 2;
+          }
+
+          pagesToWrite =
+            bookletPages;
+        } else {
+          pagesToWrite =
+            logicalPages;
+        }
+
+        const pdf =
+          new jsPDF({
+            orientation:
+              "landscape",
+            unit: "mm",
+            format: "a4",
+            compress: true,
+          });
+
+        pagesToWrite.forEach(
+          (image, index) => {
+            if (index > 0) {
+              pdf.addPage(
+                "a4",
+                "landscape"
+              );
+            }
+
+            if (image) {
+              addImagePageToPdf(
+                pdf,
+                image
+              );
+            }
+          }
         );
-
-        for (
-          let index = 0;
-          index <
-          workItems.length;
-          index++
-        ) {
-          const item =
-            workItems[index];
-
-          pdf.addPage(
-            "a4",
-            "landscape"
-          );
-
-          addImagePageToPdf(
-            pdf,
-            item.image
-          );
-        }
-
-        if (backCoverImage) {
-          pdf.addPage(
-            "a4",
-            "landscape"
-          );
-
-          addImagePageToPdf(
-            pdf,
-            backCoverImage
-          );
-        }
 
         const baseName =
           [
@@ -1402,8 +1401,13 @@ export default function Home() {
             .join("-") ||
           "summit-lesson";
 
+        const suffix =
+          mode === "booklet"
+            ? "써밋네컷-소책자인쇄용"
+            : "써밋네컷-일반";
+
         pdf.save(
-          `${baseName}-써밋네컷.pdf`
+          `${baseName}-${suffix}.pdf`
         );
       } catch (error) {
         console.error(
@@ -2616,20 +2620,37 @@ export default function Home() {
                   </p>
                 )}
 
-                <button
-                  type="button"
-                  onClick={
-                    downloadLessonPdf
-                  }
-                  disabled={
-                    makingPdf
-                  }
-                  className="mt-5 w-full rounded-xl bg-purple-500 px-6 py-4 text-lg font-black text-white disabled:opacity-50"
-                >
-                  {makingPdf
-                    ? "PDF 만드는 중..."
-                    : `PDF 다운로드 · 총 ${totalPdfPages}페이지`}
-                </button>
+                <div className="mt-5 grid gap-3 md:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      downloadLessonPdf(
+                        "normal"
+                      )
+                    }
+                    disabled={makingPdf}
+                    className="w-full cursor-pointer rounded-xl bg-white px-6 py-4 text-lg font-black text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {makingPdf
+                      ? "PDF 만드는 중..."
+                      : "일반 PDF 저장"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      downloadLessonPdf(
+                        "booklet"
+                      )
+                    }
+                    disabled={makingPdf}
+                    className="w-full cursor-pointer rounded-xl bg-purple-500 px-6 py-4 text-lg font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {makingPdf
+                      ? "PDF 만드는 중..."
+                      : "소책자 인쇄용 PDF 저장"}
+                  </button>
+                </div>
               </div>
             </>
           )}

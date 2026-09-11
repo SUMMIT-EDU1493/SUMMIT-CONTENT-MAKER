@@ -1122,92 +1122,152 @@ ${pageText}
     return data.image as string;
   };
 
-  const makeFinalPdf = async () => {
-    if (workItems.length === 0) {
-      alert(
-        "먼저 이미지를 작업함에 추가해 주세요."
-      );
-      return;
-    }
+  const makeFinalPdf =
+    async (
+      mode: "normal" | "booklet"
+    ) => {
+      if (workItems.length === 0) {
+        alert(
+          "먼저 이미지를 작업함에 추가해 주세요."
+        );
+        return;
+      }
 
-    try {
-      setMakingPdf(true);
+      try {
+        setMakingPdf(true);
 
-      const coverImage =
-        await createHighCoverImage();
+        const coverImage =
+          await createHighCoverImage();
 
-      const backCoverImage =
-        await fetchPdfPageImage(
-          "/api/high-back-cover",
-          {
-            plans: result?.plans || [],
+        const backCoverImage =
+          await fetchPdfPageImage(
+            "/api/high-back-cover",
+            {
+              plans:
+                result?.plans ||
+                [],
+            }
+          );
+
+        const logicalPages: Array<
+          string | null
+        > = [
+          coverImage,
+          ...workItems.map(
+            (item) => item.image
+          ),
+          backCoverImage,
+        ];
+
+        let pagesToWrite:
+          Array<string | null>;
+
+        if (mode === "booklet") {
+          const preparedPages =
+            [...logicalPages];
+
+          while (
+            preparedPages.length %
+              4 !==
+            0
+          ) {
+            preparedPages.splice(
+              preparedPages.length -
+                1,
+              0,
+              null
+            );
+          }
+
+          const bookletPages:
+            Array<string | null> = [];
+
+          let left = 0;
+          let right =
+            preparedPages.length -
+            1;
+
+          while (left < right) {
+            bookletPages.push(
+              preparedPages[right],
+              preparedPages[left],
+              preparedPages[
+                left + 1
+              ],
+              preparedPages[
+                right - 1
+              ]
+            );
+
+            left += 2;
+            right -= 2;
+          }
+
+          pagesToWrite =
+            bookletPages;
+        } else {
+          pagesToWrite =
+            logicalPages;
+        }
+
+        const pdf =
+          new jsPDF({
+            orientation:
+              "landscape",
+            unit: "mm",
+            format: "a4",
+            compress: true,
+          });
+
+        pagesToWrite.forEach(
+          (image, index) => {
+            if (index > 0) {
+              pdf.addPage(
+                "a4",
+                "landscape"
+              );
+            }
+
+            if (image) {
+              addImagePageToPdf(
+                pdf,
+                image
+              );
+            }
           }
         );
 
-      const pdf = new jsPDF({
-        orientation: "landscape",
-        unit: "mm",
-        format: "a4",
-        compress: true,
-      });
+        const baseName =
+          [
+            schoolName.trim(),
+            gradeName.trim(),
+            lessonName.trim(),
+          ]
+            .filter(Boolean)
+            .join("-") ||
+          "summit-high";
 
-      addImagePageToPdf(
-        pdf,
-        coverImage
-      );
+        const suffix =
+          mode === "booklet"
+            ? "고등-써밋네컷-소책자인쇄용"
+            : "고등-써밋네컷-일반";
 
-      for (
-        let index = 0;
-        index < workItems.length;
-        index++
-      ) {
-        pdf.addPage(
-          "a4",
-          "landscape"
+        pdf.save(
+          `${baseName}-${suffix}.pdf`
+        );
+      } catch (error) {
+        console.error(
+          "HIGH PDF ERROR:",
+          error
         );
 
-        addImagePageToPdf(
-          pdf,
-          workItems[index].image
+        alert(
+          "고등 PDF를 만드는 중 오류가 발생했습니다."
         );
+      } finally {
+        setMakingPdf(false);
       }
-
-      pdf.addPage(
-        "a4",
-        "landscape"
-      );
-
-      addImagePageToPdf(
-        pdf,
-        backCoverImage
-      );
-
-      const baseName =
-        [
-          schoolName.trim(),
-          gradeName.trim(),
-          lessonName.trim(),
-        ]
-          .filter(Boolean)
-          .join("-") ||
-        "summit-high";
-
-      pdf.save(
-        `${baseName}-고등-써밋네컷.pdf`
-      );
-    } catch (error) {
-      console.error(
-        "HIGH PDF ERROR:",
-        error
-      );
-
-      alert(
-        "고등 PDF를 만드는 중 오류가 발생했습니다."
-      );
-    } finally {
-      setMakingPdf(false);
-    }
-  };
+    };
 
   const generateAllImages = async () => {
     if (!result) {
@@ -2006,16 +2066,37 @@ ${pageText}
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={makeFinalPdf}
-              disabled={makingPdf}
-              className="mt-5 w-full cursor-pointer rounded-2xl bg-white px-6 py-4 text-lg font-black text-slate-900 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-            >
-              {makingPdf
-                ? "최종 PDF 만드는 중..."
-                : "앞표지 · 본문 · 뒷표지 PDF 저장"}
-            </button>
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              <button
+                type="button"
+                onClick={() =>
+                  makeFinalPdf(
+                    "normal"
+                  )
+                }
+                disabled={makingPdf}
+                className="w-full cursor-pointer rounded-2xl bg-white px-6 py-4 text-lg font-black text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {makingPdf
+                  ? "PDF 만드는 중..."
+                  : "일반 PDF 저장"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  makeFinalPdf(
+                    "booklet"
+                  )
+                }
+                disabled={makingPdf}
+                className="w-full cursor-pointer rounded-2xl bg-purple-500 px-6 py-4 text-lg font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {makingPdf
+                  ? "PDF 만드는 중..."
+                  : "소책자 인쇄용 PDF 저장"}
+              </button>
+            </div>
           </section>
         )}
 
