@@ -604,6 +604,57 @@ export default function HighSummaryTestPage() {
         const back =
           await createBackCover();
 
+        /*
+         * 소책자 인쇄용 페이지 순서
+         *
+         * 예: 총 8페이지
+         * 8, 1 / 2, 7 / 6, 3 / 4, 5
+         *
+         * 앞표지와 뒷표지가 반드시
+         * 같은 바깥쪽 용지에 배치되도록
+         * PDF 자체에서 순서를 정리합니다.
+         */
+
+        const logicalPages: Array<
+          string | null
+        > = [
+          cover,
+          ...workItems.map(
+            (item) => item.image
+          ),
+          back,
+        ];
+
+        while (
+          logicalPages.length % 4 !== 0
+        ) {
+          logicalPages.splice(
+            logicalPages.length - 1,
+            0,
+            null
+          );
+        }
+
+        const bookletPages: Array<
+          string | null
+        > = [];
+
+        let left = 0;
+        let right =
+          logicalPages.length - 1;
+
+        while (left < right) {
+          bookletPages.push(
+            logicalPages[right],
+            logicalPages[left],
+            logicalPages[left + 1],
+            logicalPages[right - 1]
+          );
+
+          left += 2;
+          right -= 2;
+        }
+
         const pdf =
           new jsPDF({
             orientation:
@@ -613,66 +664,22 @@ export default function HighSummaryTestPage() {
             compress: true,
           });
 
-        addImagePageToPdf(
-          pdf,
-          cover
-        );
+        bookletPages.forEach(
+          (image, index) => {
+            if (index > 0) {
+              pdf.addPage(
+                "a4",
+                "landscape"
+              );
+            }
 
-        for (
-          let i = 0;
-          i <
-          workItems.length;
-          i++
-        ) {
-          pdf.addPage(
-            "a4",
-            "landscape"
-          );
-
-          addImagePageToPdf(
-            pdf,
-            workItems[i]
-              .image
-          );
-        }
-
-        // 소책자 인쇄용 페이지 페어링
-        // 앞표지 + 내용 + 뒷표지의 총 페이지 수가
-        // 4의 배수가 되도록 빈 페이지를 뒷표지 앞에 추가합니다.
-        const pagesBeforeBack =
-          1 + workItems.length;
-
-        const finalPageCountWithoutBlanks =
-          pagesBeforeBack + 1;
-
-        const blankPageCount =
-          (4 -
-            (finalPageCountWithoutBlanks %
-              4)) %
-          4;
-
-        for (
-          let i = 0;
-          i < blankPageCount;
-          i++
-        ) {
-          pdf.addPage(
-            "a4",
-            "landscape"
-          );
-        }
-
-        // 소책자 인쇄용 페이지 페어링
-        // 앞표지 + 내용 + 뒷표지의 총 페이지 수가
-        // 4의 배수가 되도록 빈 페이지를 뒷표지 앞에 추가합니다.
-        pdf.addPage(
-          "a4",
-          "landscape"
-        );
-
-        addImagePageToPdf(
-          pdf,
-          back
+            if (image) {
+              addImagePageToPdf(
+                pdf,
+                image
+              );
+            }
+          }
         );
 
         const fileName =
