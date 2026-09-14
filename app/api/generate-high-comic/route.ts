@@ -72,10 +72,15 @@ export async function POST(request: Request) {
       );
     }
 
+    const requestId = crypto.randomUUID();
+
+    console.log("[generate-high-comic] requestId=" + requestId);
+
     const openai = createTrackedOpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     }, {
         route: "/api/generate-high-comic",
+        requestId,
         feature: "고등 써밋네컷 이미지",
       });
 
