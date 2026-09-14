@@ -1,9 +1,10 @@
-import OpenAI from "openai";
+﻿import OpenAI from "openai";
 import { logApiUsage } from "@/lib/api-usage";
 
 type TrackingContext = {
   route: string;
   feature: string;
+  requestId?: string;
 };
 
 type AnyRecord = Record<string, any>;
@@ -139,6 +140,7 @@ export function createTrackedOpenAI(
         metadata: {
           pricingBasis: model === "gpt-image-2" ? "gpt-image-2 token pricing" : "unknown",
           usdKrwRate: USD_KRW_RATE,
+          requestId: context.requestId || null,
           size: request.size || null,
           quality: request.quality || null,
           rawUsage: usage || null,
@@ -157,6 +159,7 @@ export function createTrackedOpenAI(
         errorMessage: errorMessage(error),
         metadata: {
           usdKrwRate: USD_KRW_RATE,
+          requestId: context.requestId || null,
           size: request.size || null,
           quality: request.quality || null,
         },
@@ -167,3 +170,4 @@ export function createTrackedOpenAI(
 
   return client;
 }
+

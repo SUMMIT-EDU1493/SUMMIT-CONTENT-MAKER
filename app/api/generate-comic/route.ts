@@ -36,10 +36,15 @@ export async function POST(request: Request) {
       );
     }
 
+    const requestId = crypto.randomUUID();
+
+    console.log("[generate-comic] requestId=" + requestId);
+
     const openai = createTrackedOpenAI({
       apiKey,
     }, {
         route: "/api/generate-comic",
+        requestId,
         feature: "중등 써밋네컷 이미지",
       });
 
