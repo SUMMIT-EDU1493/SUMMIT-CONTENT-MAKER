@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 
+import { createTrackedOpenAI } from "@/lib/tracked-openai";
 export const maxDuration = 300;
 
 type Difficulty = "중" | "상";
@@ -189,8 +190,11 @@ export async function POST(
       );
 
     const openai =
-      new OpenAI({
+      createTrackedOpenAI({
         apiKey,
+      }, {
+        route: "/api/korean-question-generate",
+        feature: "국어 문제 생성",
       });
 
     const prompt = `

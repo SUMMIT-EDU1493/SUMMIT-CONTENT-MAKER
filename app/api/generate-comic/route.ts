@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { createTrackedOpenAI } from "@/lib/tracked-openai";
 import sharp from "sharp";
 import path from "path";
 import fs from "fs/promises";
@@ -35,9 +36,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const openai = new OpenAI({
+    const openai = createTrackedOpenAI({
       apiKey,
-    });
+    }, {
+        route: "/api/generate-comic",
+        feature: "중등 써밋네컷 이미지",
+      });
 
     const body: ComicPlan = await request.json();
 

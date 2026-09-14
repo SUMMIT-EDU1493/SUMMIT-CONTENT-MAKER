@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 
+import { createTrackedOpenAI } from "@/lib/tracked-openai";
 export const maxDuration = 300;
 
 type Passage = {
@@ -64,8 +65,11 @@ export async function POST(
     }
 
     const openai =
-      new OpenAI({
+      createTrackedOpenAI({
         apiKey,
+      }, {
+        route: "/api/middle-passage-analyze",
+        feature: "중등 본문 분석",
       });
 
     const prompt = `

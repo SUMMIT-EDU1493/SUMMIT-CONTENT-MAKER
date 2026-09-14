@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 
+import { createTrackedOpenAI } from "@/lib/tracked-openai";
 export const maxDuration = 300;
 
 type PassageResult = {
@@ -92,8 +93,11 @@ export async function POST(request: Request) {
     }
 
     const openai =
-      new OpenAI({
+      createTrackedOpenAI({
         apiKey,
+      }, {
+        route: "/api/korean-summary-passages",
+        feature: "국어 요약 지문 분석",
       });
 
     /*

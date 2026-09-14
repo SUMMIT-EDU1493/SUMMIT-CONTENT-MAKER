@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 
+import { createTrackedOpenAI } from "@/lib/tracked-openai";
 type Passage = {
   id: string;
   title: string;
@@ -38,9 +39,12 @@ export async function POST(req: Request) {
       );
     }
 
-    const openai = new OpenAI({
+    const openai = createTrackedOpenAI({
       apiKey,
-    });
+    }, {
+        route: "/api/korean-summary-generate",
+        feature: "국어 요약 생성",
+      });
 
     const prompt = `
 너는 고등 국어 학습자료 편집자다.

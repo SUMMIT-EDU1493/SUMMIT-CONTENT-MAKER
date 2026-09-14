@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 
+import { createTrackedOpenAI } from "@/lib/tracked-openai";
 export const maxDuration = 300;
 
 type ComicDialogue = {
@@ -79,8 +80,11 @@ export async function POST(request: Request) {
     }
 
     const openai =
-      new OpenAI({
+      createTrackedOpenAI({
         apiKey,
+      }, {
+        route: "/api/middle-passage-plan",
+        feature: "중등 본문 써밋네컷 설계안",
       });
 
     const prompt = `

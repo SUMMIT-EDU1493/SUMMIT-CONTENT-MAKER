@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { createTrackedOpenAI } from "@/lib/tracked-openai";
 import sharp from "sharp";
 import path from "path";
 import fs from "fs/promises";
@@ -54,9 +55,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const openai = new OpenAI({
+    const openai = createTrackedOpenAI({
       apiKey: process.env.OPENAI_API_KEY,
-    });
+    }, {
+        route: "/api/generate-cheer-page",
+        feature: "중등 써밋네컷 뒷표지",
+      });
 
     // 모든 컷에 반복되어 있는 캐릭터 설명 수집
     const characterDescriptions = plans

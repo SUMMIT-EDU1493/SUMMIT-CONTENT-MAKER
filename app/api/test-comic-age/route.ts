@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { createTrackedOpenAI } from "@/lib/tracked-openai";
 import sharp from "sharp";
 import path from "path";
 import fs from "fs/promises";
@@ -17,9 +18,12 @@ export async function GET() {
       );
     }
 
-    const openai = new OpenAI({
+    const openai = createTrackedOpenAI({
       apiKey,
-    });
+    }, {
+        route: "/api/test-comic-age",
+        feature: "테스트 만화 연령",
+      });
 
     const summaryText = "같이 준비하니까 더 든든해!";
 

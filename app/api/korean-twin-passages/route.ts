@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 
+import { createTrackedOpenAI } from "@/lib/tracked-openai";
 export const maxDuration = 300;
 
 type PassageMarker = {
@@ -117,8 +118,11 @@ export async function POST(
     }
 
     const openai =
-      new OpenAI({
+      createTrackedOpenAI({
         apiKey,
+      }, {
+        route: "/api/korean-twin-passages",
+        feature: "국어 쌍둥이 문제 분석",
       });
 
     const prompt = `

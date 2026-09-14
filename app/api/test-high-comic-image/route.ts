@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { createTrackedOpenAI } from "@/lib/tracked-openai";
 import sharp from "sharp";
 
 export const runtime = "nodejs";
@@ -12,9 +13,12 @@ export async function GET() {
       );
     }
 
-    const openai = new OpenAI({
+    const openai = createTrackedOpenAI({
       apiKey: process.env.OPENAI_API_KEY,
-    });
+    }, {
+        route: "/api/test-high-comic-image",
+        feature: "테스트 고등 써밋네컷 이미지",
+      });
 
     const prompt = `
 Create ONE polished landscape 4-panel webtoon page for Korean high-school students.

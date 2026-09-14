@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { createTrackedOpenAI } from "@/lib/tracked-openai";
 import sharp from "sharp";
 import fs from "fs/promises";
 import path from "path";
@@ -71,9 +72,12 @@ export async function POST(request: Request) {
       .filter(Boolean)
       .slice(0, 20);
 
-    const openai = new OpenAI({
+    const openai = createTrackedOpenAI({
       apiKey: process.env.OPENAI_API_KEY,
-    });
+    }, {
+        route: "/api/high-back-cover",
+        feature: "고등 써밋네컷 뒷표지",
+      });
 
     let castSummary = uniqueHints.join("\n");
 

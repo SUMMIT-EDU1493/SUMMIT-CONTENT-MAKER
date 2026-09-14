@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { createTrackedOpenAI } from "@/lib/tracked-openai";
 import sharp from "sharp";
 import path from "path";
 import fs from "fs/promises";
@@ -14,9 +15,12 @@ export async function GET() {
       );
     }
 
-    const openai = new OpenAI({
+    const openai = createTrackedOpenAI({
       apiKey: process.env.OPENAI_API_KEY,
-    });
+    }, {
+        route: "/api/test-back-cover-dedup",
+        feature: "테스트 뒷표지 중복제거",
+      });
 
     const repeatedCharacterDescriptions = `
 1컷:

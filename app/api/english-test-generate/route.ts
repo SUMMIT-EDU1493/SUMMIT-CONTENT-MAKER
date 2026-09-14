@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 
+import { createTrackedOpenAI } from "@/lib/tracked-openai";
 type Passage = {
   id: string;
   title: string;
@@ -543,9 +544,12 @@ export async function POST(req: Request) {
       );
     }
 
-    const openai = new OpenAI({
+    const openai = createTrackedOpenAI({
       apiKey,
-    });
+    }, {
+        route: "/api/english-test-generate",
+        feature: "영어 시험 문제 생성",
+      });
 
     const batches = splitPlans(plans);
 

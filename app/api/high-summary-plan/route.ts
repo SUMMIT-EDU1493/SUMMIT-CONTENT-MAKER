@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 
+import { createTrackedOpenAI } from "@/lib/tracked-openai";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
@@ -48,9 +49,12 @@ export async function POST(
     }
 
     const openai =
-      new OpenAI({
+      createTrackedOpenAI({
         apiKey:
           process.env.OPENAI_API_KEY,
+      }, {
+        route: "/api/high-summary-plan",
+        feature: "고등 요약집 설계안",
       });
 
     const prompt = `

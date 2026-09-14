@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { createTrackedOpenAI } from "@/lib/tracked-openai";
 import sharp from "sharp";
 import fs from "fs/promises";
 import path from "path";
@@ -40,10 +41,13 @@ export async function POST(request: Request) {
     const lessonName =
       body.lessonName?.trim() || "";
 
-    const openai = new OpenAI({
+    const openai = createTrackedOpenAI({
       apiKey:
         process.env.OPENAI_API_KEY,
-    });
+    }, {
+        route: "/api/high-summary-cover",
+        feature: "고등 요약집 표지",
+      });
 
     const prompt = `
 Create ONE landscape cover for a Korean high-school English visual summary booklet.

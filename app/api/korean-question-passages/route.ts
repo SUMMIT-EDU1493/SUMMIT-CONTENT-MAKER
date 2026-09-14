@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 
+import { createTrackedOpenAI } from "@/lib/tracked-openai";
 export const maxDuration = 300;
 
 type Passage = {
@@ -55,9 +56,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const openai = new OpenAI({
+    const openai = createTrackedOpenAI({
       apiKey,
-    });
+    }, {
+        route: "/api/korean-question-passages",
+        feature: "국어 문제 지문 추출",
+      });
 
     const prompt = `
 당신은 대한민국 고등학교 국어 시험지와

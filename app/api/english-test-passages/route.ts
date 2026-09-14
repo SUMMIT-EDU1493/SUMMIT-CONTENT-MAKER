@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 
+import { createTrackedOpenAI } from "@/lib/tracked-openai";
 type Passage = {
   title: string;
   source: string;
@@ -16,7 +17,10 @@ export async function POST(req: Request) {
       );
     }
 
-    const openai = new OpenAI({ apiKey });
+    const openai = createTrackedOpenAI({ apiKey }, {
+        route: "/api/english-test-passages",
+        feature: "영어 시험 지문 분석",
+      });
 
     const body = await req.json();
 

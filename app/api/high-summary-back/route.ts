@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { createTrackedOpenAI } from "@/lib/tracked-openai";
 import sharp from "sharp";
 import fs from "fs/promises";
 import path from "path";
@@ -30,10 +31,13 @@ export async function POST(request: Request) {
     const body =
       (await request.json()) as RequestBody;
 
-    const openai = new OpenAI({
+    const openai = createTrackedOpenAI({
       apiKey:
         process.env.OPENAI_API_KEY,
-    });
+    }, {
+        route: "/api/high-summary-back",
+        feature: "고등 요약집 뒷표지",
+      });
 
     const prompt = `
 Create ONE landscape final page for a Korean high-school English visual summary booklet.

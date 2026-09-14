@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 
+import { createTrackedOpenAI } from "@/lib/tracked-openai";
 export async function POST(request: Request) {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
@@ -11,7 +12,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const openai = new OpenAI({ apiKey });
+    const openai = createTrackedOpenAI({ apiKey }, {
+        route: "/api/analyze",
+        feature: "중등 대화문 추출",
+      });
 
     const body = await request.json();
     const text = body.text;

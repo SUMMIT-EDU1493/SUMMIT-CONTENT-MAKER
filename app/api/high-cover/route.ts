@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { createTrackedOpenAI } from "@/lib/tracked-openai";
 import sharp from "sharp";
 import fs from "fs/promises";
 import path from "path";
@@ -30,9 +31,12 @@ export async function POST(request: Request) {
     const gradeName = body?.gradeName?.trim() || "고등";
     const lessonName = body?.lessonName?.trim() || "Lesson";
 
-    const openai = new OpenAI({
+    const openai = createTrackedOpenAI({
       apiKey: process.env.OPENAI_API_KEY,
-    });
+    }, {
+        route: "/api/high-cover",
+        feature: "고등 써밋네컷 표지",
+      });
 
     const prompt = `
 Create a polished horizontal cover page for a Korean educational comic PDF.

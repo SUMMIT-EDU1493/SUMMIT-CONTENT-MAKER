@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 
+import { createTrackedOpenAI } from "@/lib/tracked-openai";
 export const maxDuration = 300;
 
 type FlowItem = {
@@ -241,9 +242,12 @@ Make the page composition like an English-style visual summary sheet:
         layoutType as keyof typeof layoutInstructionMap
       ] || layoutInstructionMap.concept;
 
-    const openai = new OpenAI({
+    const openai = createTrackedOpenAI({
       apiKey,
-    });
+    }, {
+        route: "/api/korean-summary-visual",
+        feature: "국어 요약 시각자료",
+      });
 
     const prompt = `
 Create ONE finished LANDSCAPE Korean visual summary page.
