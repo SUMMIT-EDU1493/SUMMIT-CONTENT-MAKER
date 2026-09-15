@@ -542,7 +542,8 @@ Produce only the comic artwork.
     const logoPath = path.join(
       process.cwd(),
       "public",
-      "summit-logo.png"
+      "brand",
+      "summit-visual-lab-horizontal.png"
     );
 
     const fontPath = path.join(

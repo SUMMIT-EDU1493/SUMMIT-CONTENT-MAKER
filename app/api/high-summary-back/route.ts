@@ -208,7 +208,8 @@ Do NOT draw or invent a SUMMIT logo.
       path.join(
         process.cwd(),
         "public",
-        "summit-logo.png"
+        "brand",
+        "summit-visual-lab-horizontal.png"
       );
 
     const logoFile =

@@ -1441,7 +1441,7 @@ ${pageText}
 
       ctx.fillText(
         topLine ||
-          "SUMMIT EDU",
+          "SUMMIT VISUAL LAB",
         filmX,
         145
       );
@@ -1637,7 +1637,7 @@ ${pageText}
       try {
         const logo =
           await loadImage(
-            "/summit-logo.png"
+            "/brand/summit-visual-lab-horizontal.png"
           );
 
         const maxLogoWidth =
@@ -1692,7 +1692,7 @@ ${pageText}
           '800 42px "Noto Sans KR", "Malgun Gothic", sans-serif';
 
         ctx.fillText(
-          "SUMMIT EDU",
+          "SUMMIT VISUAL LAB",
           canvas.width / 2,
           950
         );

@@ -188,7 +188,8 @@ DO NOT:
     const logoPath = path.join(
       process.cwd(),
       "public",
-      "summit-logo.png"
+      "brand",
+      "summit-visual-lab-horizontal.png"
     );
 
     const logoFile = await fs.readFile(logoPath);

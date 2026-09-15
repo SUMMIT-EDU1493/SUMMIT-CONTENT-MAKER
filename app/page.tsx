@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import { jsPDF } from "jspdf";
 import HomeButton from "./components/HomeButton";
@@ -56,6 +56,16 @@ type WorkItem = {
 type SchoolLevel = "" | "middle" | "high";
 type WorkMode = "" | "dialogue" | "passage" | "fourcut" | "summary";
 
+type AuthUser = {
+  id: string;
+  email: string;
+  displayName: string;
+  creditBalance: number;
+  createdAt: string;
+};
+
+type AuthModal = "login" | "signup" | null;
+
 export default function Home() {
   const [schoolLevel, setSchoolLevel] = useState<SchoolLevel>("");
   const [workMode, setWorkMode] = useState<WorkMode>("");
@@ -85,6 +95,139 @@ export default function Home() {
 
   const [backCoverImage, setBackCoverImage] = useState("");
   const [backCoverText, setBackCoverText] = useState("");
+
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authModal, setAuthModal] = useState<AuthModal>(null);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authDisplayName, setAuthDisplayName] = useState("");
+  const [authPasswordConfirmation, setAuthPasswordConfirmation] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authSubmitting, setAuthSubmitting] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    const restoreSession = async () => {
+      try {
+        const response = await fetch("/api/auth/me");
+        const data = await response.json();
+        if (active && data.authenticated) {
+          setAuthUser(data.user);
+        }
+      } catch (error) {
+        console.error("[auth] Failed to restore session:", error);
+      }
+    };
+
+    void restoreSession();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const resetAuthForm = () => {
+    setAuthEmail("");
+    setAuthPassword("");
+    setAuthDisplayName("");
+    setAuthPasswordConfirmation("");
+    setAuthError("");
+  };
+
+  const openAuthModal = (modal: Exclude<AuthModal, null>) => {
+    resetAuthForm();
+    setAuthModal(modal);
+  };
+
+  const switchAuthModal = (modal: Exclude<AuthModal, null>) => {
+    setAuthError("");
+    setAuthModal(modal);
+  };
+
+  const closeAuthModal = () => {
+    if (authSubmitting) return;
+    setAuthModal(null);
+    resetAuthForm();
+  };
+
+  const loginWithCredentials = async () => {
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email: authEmail,
+        password: authPassword,
+      }),
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data?.error || "이메일 또는 비밀번호를 확인해 주세요."
+      );
+    }
+
+    setAuthUser(data.user);
+  };
+
+  const submitAuth = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (authModal === "signup" && authPassword !== authPasswordConfirmation) {
+      setAuthError("비밀번호가 일치하지 않습니다.");
+      return;
+    }
+
+    try {
+      setAuthSubmitting(true);
+      setAuthError("");
+
+      if (authModal === "signup") {
+        const signupResponse = await fetch("/api/auth/signup", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: authEmail,
+            password: authPassword,
+            displayName: authDisplayName,
+          }),
+        });
+        const signupData = await signupResponse.json();
+
+        if (!signupResponse.ok) {
+          throw new Error(signupData?.error || "회원가입에 실패했습니다.");
+        }
+
+        await loginWithCredentials();
+      } else {
+        await loginWithCredentials();
+      }
+
+      setAuthModal(null);
+      resetAuthForm();
+    } catch (error) {
+      setAuthError(
+        error instanceof Error
+          ? error.message
+          : "잠시 후 다시 시도해 주세요."
+      );
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      setAuthUser(null);
+    }
+  };
 
   const makeId = () =>
     `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -1028,7 +1171,7 @@ export default function Home() {
       ctx.fillText(
         topLine ||
           gradeName ||
-          "SUMMIT EDU",
+          "SUMMIT VISUAL LAB",
         filmX,
         145
       );
@@ -1193,7 +1336,7 @@ export default function Home() {
       try {
         const logo =
           await loadImage(
-            "/summit-logo.png"
+            "/brand/summit-visual-lab-horizontal.png"
           );
 
         const maxLogoWidth =
@@ -1238,7 +1381,7 @@ export default function Home() {
           '800 42px "Noto Sans KR", "Malgun Gothic", sans-serif';
 
         ctx.fillText(
-          "SUMMIT EDU",
+          "SUMMIT VISUAL LAB",
           canvas.width / 2,
           950
         );
@@ -1441,26 +1584,187 @@ export default function Home() {
 
           {/* ACCOUNT */}
           <div className="mb-3 flex justify-end gap-2">
-            <button
-              type="button"
-              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 shadow-sm transition hover:border-emerald-300 hover:text-emerald-700"
-            >
-              로그인
-            </button>
+            {authUser ? (
+              <>
+                <div className="flex items-center rounded-full border border-emerald-100 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm">
+                  <span>{authUser.displayName}님</span>
+                  <span className="mx-2 text-slate-300">·</span>
+                  <span className="text-emerald-700">
+                    {authUser.creditBalance} 크레딧
+                  </span>
+                </div>
 
-            <button
-              type="button"
-              className="rounded-full bg-slate-900 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"
-            >
-              회원가입
-            </button>
+                <button
+                  type="button"
+                  onClick={() => void logout()}
+                  className="rounded-full bg-slate-900 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"
+                >
+                  로그아웃
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => openAuthModal("login")}
+                  className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 shadow-sm transition hover:border-emerald-300 hover:text-emerald-700"
+                >
+                  로그인
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => openAuthModal("signup")}
+                  className="rounded-full bg-slate-900 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"
+                >
+                  회원가입
+                </button>
+              </>
+            )}
           </div>
+
+          {authModal && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-8"
+              role="presentation"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) closeAuthModal();
+              }}
+            >
+              <section
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="auth-modal-title"
+                className="max-h-[calc(100vh-4rem)] w-full max-w-md overflow-y-auto rounded-[28px] bg-white p-6 shadow-2xl sm:p-8"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-black tracking-[0.18em] text-emerald-700">
+                      SUMMIT VISUAL LAB
+                    </p>
+                    <h2
+                      id="auth-modal-title"
+                      className="mt-2 text-2xl font-black text-slate-900"
+                    >
+                      {authModal === "signup" ? "회원가입" : "로그인"}
+                    </h2>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={closeAuthModal}
+                    disabled={authSubmitting}
+                    aria-label="모달 닫기"
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-xl font-bold text-slate-500 transition hover:bg-slate-200"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <form className="mt-6 space-y-4" onSubmit={submitAuth}>
+                  {authModal === "signup" && (
+                    <label className="block text-sm font-bold text-slate-700">
+                      표시 이름
+                      <input
+                        type="text"
+                        value={authDisplayName}
+                        onChange={(event) => setAuthDisplayName(event.target.value)}
+                        placeholder="표시 이름을 입력해 주세요"
+                        autoComplete="name"
+                        required
+                        className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 font-medium outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                      />
+                    </label>
+                  )}
+
+                  <label className="block text-sm font-bold text-slate-700">
+                    이메일
+                    <input
+                      type="email"
+                      value={authEmail}
+                      onChange={(event) => setAuthEmail(event.target.value)}
+                      placeholder="이메일을 입력해 주세요"
+                      autoComplete="email"
+                      required
+                      className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 font-medium outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                    />
+                  </label>
+
+                  <label className="block text-sm font-bold text-slate-700">
+                    비밀번호
+                    <input
+                      type="password"
+                      value={authPassword}
+                      onChange={(event) => setAuthPassword(event.target.value)}
+                      placeholder="8자 이상 입력해 주세요"
+                      autoComplete={authModal === "signup" ? "new-password" : "current-password"}
+                      minLength={8}
+                      required
+                      className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 font-medium outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                    />
+                  </label>
+
+                  {authModal === "signup" && (
+                    <label className="block text-sm font-bold text-slate-700">
+                      비밀번호 확인
+                      <input
+                        type="password"
+                        value={authPasswordConfirmation}
+                        onChange={(event) => setAuthPasswordConfirmation(event.target.value)}
+                        placeholder="비밀번호를 다시 입력해 주세요"
+                        autoComplete="new-password"
+                        minLength={8}
+                        required
+                        className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 font-medium outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                      />
+                    </label>
+                  )}
+
+                  {authError && (
+                    <p
+                      role="alert"
+                      className="rounded-2xl bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700"
+                    >
+                      {authError}
+                    </p>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={authSubmitting}
+                    className="w-full rounded-2xl bg-emerald-700 px-4 py-3.5 text-sm font-black text-white transition hover:bg-emerald-800 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {authSubmitting
+                      ? "처리 중입니다..."
+                      : authModal === "signup"
+                        ? "회원가입"
+                        : "로그인"}
+                  </button>
+                </form>
+
+                <p className="mt-5 text-center text-sm font-medium text-slate-500">
+                  {authModal === "signup"
+                    ? "이미 계정이 있으신가요?"
+                    : "계정이 없으신가요?"}{" "}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      switchAuthModal(authModal === "signup" ? "login" : "signup")
+                    }
+                    className="font-black text-emerald-700 underline underline-offset-4"
+                  >
+                    {authModal === "signup" ? "로그인" : "회원가입"}
+                  </button>
+                </p>
+              </section>
+            </div>
+          )}
 
           {/* BRAND */}
           <section className="relative flex min-h-[220px] flex-col items-center justify-center rounded-[30px] bg-white px-6 py-3 text-center shadow-sm md:px-10 md:py-4">
             <img
-              src="/summit-edu.png"
-              alt="SUMMIT EDU"
+              src="/brand/summit-visual-lab-horizontal.png"
+              alt="SUMMIT VISUAL LAB"
               className="mx-auto w-[120px] md:w-[135px]"
             />
 
@@ -1497,9 +1801,9 @@ export default function Home() {
               className="relative h-full min-h-[300px] overflow-hidden rounded-[34px] border border-emerald-100 bg-[#dff5ec] p-8 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
             >
               <img
-                src="/summit-bulb.png"
+                src="/brand/summit-visual-lab-icon.png"
                 alt=""
-                className="absolute -right-4 top-4 w-[210px] opacity-95 md:w-[240px]"
+                className="absolute right-8 top-8 w-[130px] opacity-95 md:w-[150px]"
               />
 
               <div className="relative z-10 flex h-full max-w-[64%] flex-col items-start justify-start">
@@ -1533,9 +1837,9 @@ export default function Home() {
               className="relative h-full min-h-[300px] overflow-hidden rounded-[34px] border border-amber-100 bg-[#fff0b8] p-8 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
             >
               <img
-                src="/summit-bulb.png"
+                src="/brand/summit-visual-lab-icon.png"
                 alt=""
-                className="absolute -right-4 top-4 w-[210px] opacity-95 md:w-[240px]"
+                className="absolute right-8 top-8 w-[130px] opacity-95 md:w-[150px]"
               />
 
               <div className="relative z-10 flex h-full max-w-[64%] flex-col items-start justify-start">
@@ -1572,9 +1876,9 @@ export default function Home() {
               className="relative h-full min-h-[300px] overflow-hidden rounded-[34px] border border-sky-100 bg-[#dfefff] p-8 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
             >
               <img
-                src="/summit-bulb.png"
+                src="/brand/summit-visual-lab-icon.png"
                 alt=""
-                className="absolute -right-4 top-4 w-[210px] opacity-95 md:w-[240px]"
+                className="absolute right-8 top-8 w-[130px] opacity-95 md:w-[150px]"
               />
 
               <div className="relative z-10 flex h-full max-w-[64%] flex-col items-start justify-start">
@@ -1601,9 +1905,9 @@ export default function Home() {
               className="relative h-full min-h-[300px] overflow-hidden rounded-[34px] border border-violet-100 bg-[#eee4ff] p-8 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
             >
               <img
-                src="/summit-bulb.png"
+                src="/brand/summit-visual-lab-icon.png"
                 alt=""
-                className="absolute -right-4 top-4 w-[210px] opacity-95 md:w-[240px]"
+                className="absolute right-8 top-8 w-[130px] opacity-95 md:w-[150px]"
               />
 
               <div className="relative z-10 flex h-full max-w-[64%] flex-col items-start justify-start">

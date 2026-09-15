@@ -105,7 +105,12 @@ DO NOT:
 
     const baseImage = Buffer.from(imageData, "base64");
 
-    const logoPath = path.join(process.cwd(), "public", "summit-logo.png");
+    const logoPath = path.join(
+      process.cwd(),
+      "public",
+      "brand",
+      "summit-visual-lab-horizontal.png"
+    );
     const logoFile = await fs.readFile(logoPath);
 
     const logoBuffer = await sharp(logoFile)

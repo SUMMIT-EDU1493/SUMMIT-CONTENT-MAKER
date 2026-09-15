@@ -934,7 +934,7 @@ ${pageText}
     try {
       const logo =
         await loadImage(
-          "/summit-logo-trimmed.png"
+          "/brand/summit-visual-lab-horizontal.png"
         );
 
       const maxLogoWidth = 250;
@@ -976,7 +976,7 @@ ${pageText}
         '800 36px "Noto Sans KR", "Malgun Gothic", sans-serif';
 
       ctx.fillText(
-        "SUMMIT EDU",
+        "SUMMIT VISUAL LAB",
         canvas.width / 2,
         880
       );
@@ -1027,13 +1027,13 @@ ${pageText}
     ctx.fillStyle = "#C4B5FD";
     ctx.font = "700 32px sans-serif";
     ctx.fillText(
-      "SUMMIT EDU",
+      "SUMMIT VISUAL LAB",
       768,
       550
     );
 
     const logo = new Image();
-    logo.src = "/summit-logo.png";
+    logo.src = "/brand/summit-visual-lab-horizontal.png";
 
     await new Promise<void>(
       (resolve, reject) => {
