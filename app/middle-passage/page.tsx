@@ -26,6 +26,15 @@ type ComicPanel = {
   scene: string;
   characters: string;
   dialogue: ComicDialogue[];
+  shotType?: string;
+  cameraAngle?: string;
+  characterAction?: string;
+  visualFocus?: string;
+  propOrObject?: string;
+  setting?: string;
+  panelRole?: string;
+  reactionBeat?: string;
+  humorBeat?: string;
 };
 
 type PassagePlan = {
@@ -36,6 +45,9 @@ type PassagePlan = {
   panels: ComicPanel[];
   image: string;
   loadingImage: boolean;
+  error?: string;
+  visualStyle?: string;
+  storyMode?: string;
 };
 
 type WorkItem = {
@@ -45,6 +57,19 @@ type WorkItem = {
   summary: string;
   image: string;
 };
+
+const MIDDLE_VISUAL_STYLES = [
+  "modern webtoon",
+  "clean graphic novel",
+  "soft editorial illustration",
+  "cinematic storyboard",
+  "expressive ink comic",
+  "painterly educational illustration",
+  "collage magazine comic",
+  "retro comic book",
+  "minimal conceptual comic",
+  "infographic comic",
+] as const;
 
 function makeId() {
   return `${Date.now()}-${Math.random()
@@ -170,6 +195,7 @@ export default function MiddlePassagePage() {
   const extractPdfText = async (
     file: File
   ) => {
+    const startedAt = performance.now();
     setLoadingPdf(true);
     setStatusText(
       "PDF를 읽는 중..."
@@ -240,12 +266,19 @@ ${pageText}
     setPdfText(text);
     setLoadingPdf(false);
 
+    console.info(
+      `[middle analyze] pdf text extraction: ${Math.round(
+        performance.now() - startedAt
+      )}ms (pages=${pdf.numPages}, text=${text.length} chars)`
+    );
+
     return text;
   };
 
   const requestPassages = async (
     text: string
   ): Promise<Passage[]> => {
+    const startedAt = performance.now();
     setLoadingAi(true);
 
     setStatusText(
@@ -268,6 +301,12 @@ ${pageText}
           }),
         }
       );
+
+    console.info(
+      `[middle analyze] client API total: ${Math.round(
+        performance.now() - startedAt
+      )}ms`
+    );
 
     const data =
       await response.json();
@@ -322,7 +361,8 @@ ${pageText}
   };
 
   const requestPlan = async (
-    passage: Passage
+    passage: Passage,
+    visualStyle?: string
   ) => {
     const response =
       await fetch(
@@ -338,6 +378,7 @@ ${pageText}
           body: JSON.stringify({
             title: passage.title,
             content: passage.content,
+            visualStyle,
           }),
         }
       );
@@ -374,72 +415,98 @@ ${pageText}
     setPlans([]);
     resetFinalOutput();
 
-    const nextPlans: PassagePlan[] =
-      [];
+    const startedAt = performance.now();
+    const results: (PassagePlan | null)[] = Array(
+      targetPassages.length
+    ).fill(null);
+    let nextIndex = 0;
+    let completedCount = 0;
 
-    for (
-      let index = 0;
-      index <
-      targetPassages.length;
-      index++
-    ) {
-      const passage =
-        targetPassages[index];
+    const worker = async () => {
+      while (true) {
+        const index = nextIndex++;
 
-      const progress =
-        `전체 설계 중 (${index + 1}/${targetPassages.length})`;
+        if (index >= targetPassages.length) {
+          return;
+        }
 
-      setPlanProgressText(
-        progress
-      );
+        const passage = targetPassages[index];
+        const itemStartedAt = performance.now();
+        const progress =
+          `설계안 생성 중 (${completedCount}/${targetPassages.length})`;
 
-      setStatusText(
-        `${progress} · ${passage.title}`
-      );
+        setPlanProgressText(progress);
+        setStatusText(`${progress} · ${passage.title}`);
 
-      const data =
-        await requestPlan(
-          passage
-        );
+        try {
+          const data = await requestPlan(
+            passage,
+            MIDDLE_VISUAL_STYLES[index % MIDDLE_VISUAL_STYLES.length]
+          );
 
-      nextPlans.push({
-        id: makeId(),
+          results[index] = {
+            id: makeId(),
+            passageId: passage.id,
+            title: String(data?.title || passage.title),
+            summary: String(data?.summary || ""),
+            panels: Array.isArray(data?.panels) ? data.panels : [],
+            image: "",
+            loadingImage: false,
+            visualStyle: data?.visualStyle,
+            storyMode: data?.storyMode,
+          };
+        } catch (error: any) {
+          console.error(`[middle-passage] 설계안 ${index + 1} 실패`, error);
+          results[index] = {
+            id: makeId(),
+            passageId: passage.id,
+            title: passage.title,
+            summary: "",
+            panels: [],
+            image: "",
+            loadingImage: false,
+            error: error?.message || "설계안 생성에 실패했습니다.",
+          };
+        } finally {
+          console.info(
+            `[middle-passage] 설계안 ${index + 1} 소요시간: ${Math.round(
+              performance.now() - itemStartedAt
+            )}ms`
+          );
+          completedCount += 1;
+          setPlanProgressText(
+            `설계안 생성 완료 ${completedCount}/${targetPassages.length}`
+          );
+        }
+      }
+    };
 
-        passageId:
-          passage.id,
-
-        title: String(
-          data?.title ||
-            passage.title
-        ),
-
-        summary: String(
-          data?.summary || ""
-        ),
-
-        panels: Array.isArray(
-          data?.panels
-        )
-          ? data.panels
-          : [],
-
-        image: "",
-
-        loadingImage:
-          false,
-      });
-
-      setPlans([
-        ...nextPlans,
-      ]);
-    }
-
-    setPlanProgressText(
-      `전체 설계 완료 (${targetPassages.length}/${targetPassages.length})`
+    await Promise.all(
+      Array.from(
+        { length: Math.min(3, targetPassages.length) },
+        () => worker()
+      )
     );
 
+    const nextPlans = results.filter(
+      (plan): plan is PassagePlan => plan !== null
+    );
+    setPlans(nextPlans);
+    console.info(
+      `[middle-passage] 전체 설계안 생성 소요시간: ${Math.round(
+        performance.now() - startedAt
+      )}ms`
+    );
+
+    setPlanProgressText(
+      `설계안 생성 완료 ${targetPassages.length}/${targetPassages.length}`
+    );
+
+    const failedCount = nextPlans.filter((plan) => plan.error).length;
     setStatusText(
-      `본문 ${targetPassages.length}개 · 전체 설계 완료`
+      failedCount > 0
+        ? `본문 ${targetPassages.length}개 · 설계 완료 ${targetPassages.length - failedCount}개 · 실패 ${failedCount}개`
+        : `본문 ${targetPassages.length}개 · 전체 설계 완료`
     );
 
     setCreatingAllPlans(
@@ -454,6 +521,7 @@ ${pageText}
   const processUploadedPdf =
     async (file: File) => {
       try {
+        const analysisStartedAt = performance.now();
         setErrorMessage("");
         setFileName(file.name);
         setPdfText("");
@@ -472,6 +540,12 @@ ${pageText}
           await requestPassages(
             text
           );
+
+        console.info(
+          `[middle-passage] 분석 전체 소요시간: ${Math.round(
+            performance.now() - analysisStartedAt
+          )}ms`
+        );
 
         await buildAllPlans(
           found
@@ -544,7 +618,8 @@ ${pageText}
 
       const data =
         await requestPlan(
-          passage
+          passage,
+          MIDDLE_VISUAL_STYLES[plans.length % MIDDLE_VISUAL_STYLES.length]
         );
 
       const newPlan: PassagePlan =
@@ -573,6 +648,12 @@ ${pageText}
 
           loadingImage:
             false,
+
+          visualStyle:
+            data?.visualStyle,
+
+          storyMode:
+            data?.storyMode,
         };
 
       setPlans((prev) => [
@@ -601,7 +682,8 @@ ${pageText}
   };
 
   const requestImage = async (
-    plan: PassagePlan
+    plan: PassagePlan,
+    comicIndex?: number
   ): Promise<string> => {
     const response =
       await fetch(
@@ -620,6 +702,9 @@ ${pageText}
               plan.summary,
             panels:
               plan.panels,
+            visualStyle: plan.visualStyle,
+            storyMode: plan.storyMode,
+            comicIndex,
           }),
         }
       );
@@ -803,6 +888,7 @@ ${pageText}
       }
 
       try {
+        const imageStartedAt = performance.now();
         setLoadingAllImages(
           true
         );
@@ -822,8 +908,7 @@ ${pageText}
             })
           );
 
-        // 만화 이미지를 만드는 동안 표지도 동시에 준비합니다.
-        // 만화 자체는 기존처럼 한 장씩 순차 생성합니다.
+        // 만화 이미지와 표지는 서로 독립적으로 준비합니다.
         const coverPromise =
           createCoverImage();
 
@@ -832,69 +917,76 @@ ${pageText}
             latestPlans
           );
 
-        for (
-          let index = 0;
-          index <
-          latestPlans.length;
-          index++
-        ) {
-          const current =
-            latestPlans[index];
+        const imageTargets = latestPlans.filter(
+          (plan) => !plan.image && plan.panels.length === 4
+        );
+        let imageNextIndex = 0;
+        let imageCompletedCount = 0;
+        const imageResults = new Map<string, string>();
+        const imageErrors = new Map<string, string>();
 
-          const progress =
-            `써밋네컷 이미지 생성 중 (${index + 1}/${latestPlans.length})`;
+        const imageWorker = async () => {
+          while (true) {
+            const index = imageNextIndex++;
 
-          setImageProgress(
-            progress
-          );
+            if (index >= imageTargets.length) {
+              return;
+            }
 
-          setStatusText(
-            `${progress} · ${current.title}`
-          );
-
-          if (!current.image) {
+            const current = imageTargets[index];
+            const itemStartedAt = performance.now();
             setPlans((prev) =>
-              prev.map(
-                (item) =>
-                  item.id ===
-                  current.id
-                    ? {
-                        ...item,
-
-                        loadingImage:
-                          true,
-                      }
-                    : item
+              prev.map((item) =>
+                item.id === current.id
+                  ? { ...item, loadingImage: true, error: undefined }
+                  : item
               )
             );
+            setImageProgress(
+              `이미지 생성 중 (${imageCompletedCount}/${imageTargets.length})`
+            );
+            setStatusText(
+              `이미지 생성 중 (${imageCompletedCount}/${imageTargets.length}) · ${current.title}`
+            );
 
-            const image =
-              await requestImage(
-                current
+            try {
+                imageResults.set(
+                  current.id,
+                  await requestImage(current, index)
+                );
+            } catch (error: any) {
+              const message =
+                error?.message || "이미지 생성에 실패했습니다.";
+              console.error(`[middle-passage] 이미지 ${index + 1} 실패`, error);
+              imageErrors.set(current.id, message);
+            } finally {
+              console.info(
+                `[middle-passage] 이미지 ${index + 1} 소요시간: ${Math.round(
+                  performance.now() - itemStartedAt
+                )}ms`
               );
-
-            latestPlans =
-              latestPlans.map(
-                (item) =>
-                  item.id ===
-                  current.id
-                    ? {
-                        ...item,
-
-                        image,
-
-                        loadingImage:
-                          false,
-                      }
-                    : item
+              imageCompletedCount += 1;
+              setImageProgress(
+                `이미지 생성 완료 ${imageCompletedCount}/${imageTargets.length}`
               );
-
-            setPlans([
-              ...latestPlans,
-            ]);
+            }
           }
-        }
+        };
 
+        await Promise.all(
+          Array.from(
+            { length: Math.min(3, imageTargets.length) },
+            () => imageWorker()
+          )
+        );
+
+        latestPlans = latestPlans.map((plan) => ({
+          ...plan,
+          image: imageResults.get(plan.id) || plan.image,
+          loadingImage: false,
+          error: imageErrors.get(plan.id) || plan.error,
+        }));
+        setPlans(latestPlans);
         setStatusText(
           "표지와 PDF용 이미지를 마무리하는 중..."
         );
@@ -943,6 +1035,12 @@ ${pageText}
 
         setWorkItems(
           nextWorkItems
+        );
+
+        console.info(
+          `[middle-passage] 전체 이미지 생성 소요시간: ${Math.round(
+            performance.now() - imageStartedAt
+          )}ms`
         );
 
         setImageProgress(
@@ -2310,7 +2408,7 @@ ${pageText}
                 {creatingAllPlans
                   ? planProgressText ||
                     "전체 설계 중..."
-                  : "전체 설계안 다시 만들기"}
+                  : `${passages.length}개 대화문 설계안 만들기`}
               </button>
             </div>
 
@@ -2437,7 +2535,7 @@ ${pageText}
                 {creatingAllPlans
                   ? planProgressText ||
                     "전체 설계 중..."
-                  : "전체 설계안 다시 만들기"}
+                  : `${passages.length}개 대화문 설계안 만들기`}
               </button>
             </div>
           </section>
@@ -2487,6 +2585,12 @@ ${pageText}
                     </div>
 
                     <div className="p-6">
+                      {plan.error && (
+                        <p className="mb-5 rounded-xl bg-red-50 p-4 font-bold text-red-700">
+                          이 설계안의 이미지 생성에 실패했습니다: {plan.error}
+                        </p>
+                      )}
+
                       <label className="text-sm font-bold">
                         만화 상단 한줄 제목
                       </label>

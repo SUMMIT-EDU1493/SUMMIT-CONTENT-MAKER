@@ -1,431 +1,54 @@
-import OpenAI from "openai";
-import { createTrackedOpenAI } from "@/lib/tracked-openai";
 import sharp from "sharp";
 import path from "path";
 import fs from "fs/promises";
 
-type ComicDialogue = {
-  speaker: string;
-  text: string;
-};
-
 type ComicPanel = {
-  cut: string;
-  scene: string;
-  characters: string;
-  dialogue: ComicDialogue[];
+  characters?: string;
 };
 
 type ComicPlan = {
-  title: string;
-  summary: string;
-  panels: ComicPanel[];
+  panels?: ComicPanel[];
 };
 
 type RequestBody = {
   plans: ComicPlan[];
 };
 
-type UniqueCharacter = {
-  id?: string;
-  role?: string;
-  description?: string;
-};
+const CHEER_MESSAGES = [
+  "오늘도 차근차근, 충분히 잘하고 있어요.",
+  "한 걸음씩 쌓은 노력이 실력이 됩니다.",
+  "지금의 꾸준함이 다음 성장을 만들어 줍니다.",
+  "끝까지 집중한 만큼 좋은 결과가 따라올 거예요.",
+  "오늘 배운 내용이 내일의 자신감이 됩니다.",
+  "천천히 해도 괜찮아요. 꾸준히 나아가고 있어요.",
+  "배운 만큼 시야가 넓어지고 실력이 자랍니다.",
+  "지금까지의 노력이 멋진 다음 장면을 준비하고 있어요.",
+] as const;
+
+function escapeXml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
 
 export async function POST(request: Request) {
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      return Response.json(
-        {
-          error: "OPENAI_API_KEY가 설정되어 있지 않습니다.",
-        },
-        { status: 500 }
-      );
-    }
-
     const body = (await request.json()) as RequestBody;
     const plans = body?.plans;
 
     if (!Array.isArray(plans) || plans.length === 0) {
       return Response.json(
-        {
-          error: "뒷표지에 사용할 설계안이 없습니다.",
-        },
+        { error: "뒷표지에 사용할 설계안이 없습니다." },
         { status: 400 }
       );
     }
 
-    const openai = createTrackedOpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    }, {
-        route: "/api/generate-cheer-page",
-        feature: "중등 써밋네컷 뒷표지",
-      });
-
-    // 모든 컷에 반복되어 있는 캐릭터 설명 수집
-    const characterDescriptions = plans
-      .flatMap((plan) =>
-        plan.panels
-          .map((panel) => panel.characters?.trim())
-          .filter(Boolean)
-      )
-      .filter(Boolean);
-
-    const combinedCharacters =
-      characterDescriptions.join("\n\n");
-
-    // 1단계:
-    // 반복되는 캐릭터 설명을 고유 인물 목록으로 먼저 정리
-    const dedupResponse =
-      await openai.responses.create({
-        model: "gpt-5-mini",
-        input: `
-다음은 한 Lesson의 여러 영어 학습 만화 컷에서 등장한 캐릭터 설명들이다.
-
-같은 인물이 여러 컷에서 반복해서 설명되어 있을 수 있다.
-
-==============================
-원본 캐릭터 설명
-==============================
-
-${combinedCharacters}
-
-==============================
-해야 할 일
-==============================
-
-위 설명을 분석하여 "고유 인물"만 추려라.
-
-매우 중요:
-
-- 같은 사람이 여러 컷에서 반복 설명되어도 반드시 한 명으로 합칠 것.
-- 이름, 역할, 성별, 나이대, 머리모양, 옷, 관계 등을 이용해 동일 인물을 판단할 것.
-- 같은 사람을 여러 명으로 중복 계산하지 말 것.
-- 서로 다른 사람을 억지로 하나로 합치지 말 것.
-- 친구, 학생, 교사, 부모 등 관계가 다른 인물은 명확히 구분할 것.
-- 각 인물의 반복 묘사를 하나의 안정적인 외형 설명으로 통합할 것.
-- 뒷표지에는 원본 설명의 반복 횟수와 관계없이 고유 인물만 등장해야 한다.
-- 등장인물이 너무 많다면 이야기에서 반복적으로 등장한 주요 인물을 우선한다.
-- 최종 인물은 최대 6명까지만 선택한다.
-- 가능하면 핵심 학생 캐릭터를 우선한다.
-- 부모/교사 등 성인은 실제로 주요 등장인물일 때만 포함한다.
-
-학생 캐릭터:
-- 중학생 또래의 자연스러운 청소년 체격
-- 여자 학생을 남학생보다 지나치게 작거나 어린아이처럼 설정하지 말 것
-
-JSON만 출력:
-
-{
-  "characters": [
-    {
-      "id": "character_1",
-      "role": "중학생 남학생 / 친구",
-      "description": "짧은 검은 머리, 네이비 후드티, 중학생 또래 체격"
-    }
-  ]
-}
-`,
-      });
-
-    const dedupText =
-      dedupResponse.output_text?.trim();
-
-    if (!dedupText) {
-      throw new Error(
-        "고유 캐릭터 목록을 만들지 못했습니다."
-      );
-    }
-
-    let parsedCharacters: {
-      characters?: UniqueCharacter[];
-    };
-
-    try {
-      parsedCharacters = JSON.parse(
-        dedupText
-          .replace(/^```json\s*/i, "")
-          .replace(/^```\s*/i, "")
-          .replace(/\s*```$/, "")
-      );
-    } catch {
-      throw new Error(
-        "고유 캐릭터 JSON을 해석하지 못했습니다."
-      );
-    }
-
-    const uniqueCharacters =
-      Array.isArray(
-        parsedCharacters?.characters
-      )
-        ? parsedCharacters.characters.slice(0, 6)
-        : [];
-
-    if (uniqueCharacters.length === 0) {
-      throw new Error(
-        "뒷표지에 사용할 고유 캐릭터가 없습니다."
-      );
-    }
-
-    const characterGuide =
-      uniqueCharacters
-        .map(
-          (
-            character,
-            index
-          ) => `
-CHARACTER ${index + 1}
-
-ROLE:
-${character.role || ""}
-
-DESCRIPTION:
-${character.description || ""}
-`
-        )
-        .join("\n");
-
-    // 2단계:
-    // 뒷표지 응원 문구 생성
-    const cheerTextResponse =
-      await openai.responses.create({
-        model: "gpt-5-mini",
-        input: `
-중학생 영어 학습 교재 한 Lesson의 마지막 뒷표지에 들어갈
-짧은 응원 문구를 한 문장으로 만들어라.
-
-조건:
-- 한국어
-- 18~32자 정도
-- 학생에게 자연스럽게 말하듯 쓸 것
-- 밝고 자신감을 주는 느낌
-- 너무 감성적이거나 유치하지 않을 것
-- 특정 시험명은 사용하지 말 것
-- 중간고사, 기말고사라는 표현도 사용하지 말 것
-- 따옴표 없이 문장만 출력
-- 매번 조금씩 다른 표현을 사용할 것
-
-예시 분위기:
-열심히 쌓아온 만큼 좋은 결과가 따라올 거야!
-여기까지 해낸 너, 정말 잘하고 있어!
-차근차근 준비한 만큼 자신 있게 보여주자!
-`,
-      });
-
     const cheerText =
-      cheerTextResponse.output_text?.trim() ||
-      "차근차근 준비한 만큼 자신 있게 보여주자!";
-
-    // 3단계:
-    // 고유 인물만 사용해 뒷표지 생성
-    const imagePrompt = `
-Create a polished LANDSCAPE back-cover illustration
-for a Korean middle-school English study workbook.
-
-This is the FINAL PAGE of a workbook called "써밋네컷".
-
-==================================================
-UNIQUE CHARACTERS
-==================================================
-
-The following character list has already been deduplicated.
-
-There are EXACTLY ${uniqueCharacters.length} unique people.
-
-${characterGuide}
-
-VERY IMPORTANT:
-
-- Show each listed character exactly ONCE.
-- Do NOT duplicate any listed character.
-- Do NOT create clones.
-- Do NOT repeat the same student on opposite sides of the group.
-- Do NOT create extra random students.
-- Do NOT interpret repeated clothing details as new people.
-- The total visible people should be approximately ${uniqueCharacters.length}.
-- Never double the character count.
-
-If there are:
-- 3 unique people -> show about 3 people.
-- 4 unique people -> show about 4 people.
-- 5 unique people -> show about 5 people.
-- 6 unique people -> show about 6 people.
-
-Different characters must look clearly different.
-
-Use clear visual differences such as:
-- hairstyle
-- hair length
-- face shape
-- glasses
-- clothing
-- backpack
-- accessories
-- silhouette
-
-==================================================
-AGE AND RELATIONSHIP
-==================================================
-
-Students:
-- should look like Korean middle-school students
-- should use natural teenage facial and body proportions
-- should not look preschool-like or elementary-school age
-
-Male and female classmates:
-- should look like same-age teenage peers
-- should have comparable adolescent body scale
-- female students must NOT automatically look much smaller or younger
-
-Parents:
-- clearly adult
-
-Teachers:
-- clearly adult
-
-Do not make an adult look like another teenage classmate.
-
-==================================================
-MAIN SCENE
-==================================================
-
-Show the unique characters together
-in one warm celebratory final scene.
-
-They are encouraging the student
-after finishing the Lesson.
-
-Use natural varied poses such as:
-- smiling
-- waving
-- thumbs-up
-- raised fists
-- holding notebooks
-- cheering together
-- holding a banner
-
-Do NOT line everybody up stiffly.
-
-The scene should feel satisfying and energetic,
-like finishing one Lesson successfully.
-
-==================================================
-BANNER
-==================================================
-
-The encouragement sentence MUST BE PART OF THE ARTWORK.
-
-Create a large natural celebratory banner,
-placard, hanging fabric sign,
-or similar physical object integrated into the scene.
-
-For example:
-- characters holding a banner
-- a festive banner hanging behind them
-- a large school-festival style placard
-
-Write ONLY this Korean sentence:
-
-"${cheerText}"
-
-VERY IMPORTANT:
-
-- Korean spelling must be accurate.
-- The full sentence must be visible.
-- Letters must be large, bold, clear and readable.
-- Do not cut off letters.
-- Do not add extra Korean or English words.
-- No speech bubbles.
-- No captions.
-- No fake logos.
-
-The banner must feel naturally integrated
-into the illustration.
-
-==================================================
-COMPOSITION
-==================================================
-
-LANDSCAPE format.
-
-UPPER AREA:
-large celebratory banner containing the Korean sentence.
-
-MIDDLE:
-the unique Lesson characters cheering naturally together.
-
-BOTTOM:
-leave a calm, uncluttered area
-for the official SUMMIT EDU logo
-which will be composited afterward.
-
-Do not place faces
-or important objects
-inside the bottom logo area.
-
-==================================================
-STYLE
-==================================================
-
-- modern Korean educational webtoon
-- warm
-- clean
-- polished
-- expressive
-- natural proportions
-- visually engaging
-- suitable for middle-school students
-- not childish
-- not preschool style
-- professional workbook finish
-- simple attractive background
-- no photorealism
-
-==================================================
-FINAL CHECK
-==================================================
-
-Before generating, verify:
-
-1. Use only the deduplicated unique character list.
-2. Each unique character appears once.
-3. No duplicated people.
-4. No clones.
-5. No extra random students.
-6. Total visible people approximately matches ${uniqueCharacters.length}.
-7. Adults look adult.
-8. Students look like teenagers.
-9. Male and female classmates look like same-age peers.
-10. Banner sentence is readable.
-11. No fake logo.
-`;
-
-    const imageResponse =
-      await openai.images.generate({
-        model: "gpt-image-2",
-        prompt: imagePrompt,
-        size: "1536x1024",
-        quality: "medium",
-        n: 1,
-      });
-
-    const imageBase64 =
-      imageResponse.data?.[0]?.b64_json;
-
-    if (!imageBase64) {
-      throw new Error(
-        "뒷표지 이미지가 생성되지 않았습니다."
-      );
-    }
-
-    const aiImageBuffer =
-      Buffer.from(
-        imageBase64,
-        "base64"
-      );
-
-    // 공식 SUMMIT EDU 로고는 AI에게 만들게 하지 않고
-    // 실제 로고 파일을 마지막에 합성
+      CHEER_MESSAGES[Math.floor(Math.random() * CHEER_MESSAGES.length)];
+    const safeText = escapeXml(cheerText);
     const logoPath = path.join(
       process.cwd(),
       "public",
@@ -433,55 +56,59 @@ Before generating, verify:
       "summit-visual-lab-horizontal.png"
     );
 
-    const logoBuffer =
-      await fs.readFile(logoPath);
+    const backgroundSvg = Buffer.from(`
+      <svg width="1536" height="1024" viewBox="0 0 1536 1024" xmlns="http://www.w3.org/2000/svg">
+        <rect width="1536" height="1024" fill="#f7f4ea"/>
+        <circle cx="130" cy="150" r="90" fill="#d9f2e6"/>
+        <circle cx="1400" cy="190" r="120" fill="#fde7b2"/>
+        <circle cx="1290" cy="820" r="170" fill="#e4e0f7"/>
+        <path d="M0 760 C260 650 430 900 700 790 S1170 650 1536 760 V1024 H0Z" fill="#e2f1ed"/>
+        <rect x="150" y="170" width="1236" height="235" rx="32" fill="#ffffff" stroke="#263238" stroke-width="8"/>
+        <path d="M220 170 V120 M1316 170 V120" stroke="#263238" stroke-width="8"/>
+        <text x="768" y="270" text-anchor="middle" font-family="Noto Sans KR, sans-serif" font-size="58" font-weight="700" fill="#17212b">${safeText}</text>
+        <text x="768" y="345" text-anchor="middle" font-family="Noto Sans KR, sans-serif" font-size="28" font-weight="600" fill="#52706a">SUMMIT VISUAL LAB · 오늘의 학습 기록</text>
+        <g transform="translate(330 620)">
+          <circle cx="0" cy="0" r="82" fill="#ffd9b8" stroke="#263238" stroke-width="8"/><path d="M-62 -22 Q0 -105 62 -22" fill="#263238"/><path d="M-95 150 Q0 42 95 150 V220 H-95Z" fill="#f28b82" stroke="#263238" stroke-width="8"/><path d="M-35 15 L-110 -45 M35 15 L110 -45" stroke="#263238" stroke-width="18" stroke-linecap="round"/><circle cx="-25" cy="0" r="7" fill="#263238"/><circle cx="25" cy="0" r="7" fill="#263238"/><path d="M-25 35 Q0 55 25 35" fill="none" stroke="#263238" stroke-width="7" stroke-linecap="round"/>
+        </g>
+        <g transform="translate(768 650)">
+          <circle cx="0" cy="0" r="92" fill="#f2c6a5" stroke="#263238" stroke-width="8"/><path d="M-75 -18 Q0 -120 75 -18 Q55 -70 0 -70 Q-55 -70 -75 -18" fill="#5c6470"/><path d="M-110 155 Q0 38 110 155 V225 H-110Z" fill="#6a9bd8" stroke="#263238" stroke-width="8"/><path d="M-38 18 L-120 -36 M38 18 L120 -36" stroke="#263238" stroke-width="18" stroke-linecap="round"/><circle cx="-28" cy="0" r="7" fill="#263238"/><circle cx="28" cy="0" r="7" fill="#263238"/><path d="M-28 38 Q0 58 28 38" fill="none" stroke="#263238" stroke-width="7" stroke-linecap="round"/>
+        </g>
+        <g transform="translate(1200 640)">
+          <circle cx="0" cy="0" r="78" fill="#ffd7b5" stroke="#263238" stroke-width="8"/><path d="M-70 -15 Q0 -108 70 -15 L48 -72 H-48Z" fill="#c58c63"/><path d="M-100 145 Q0 48 100 145 V215 H-100Z" fill="#8cc6a6" stroke="#263238" stroke-width="8"/><path d="M-32 14 L-100 -38 M32 14 L100 -38" stroke="#263238" stroke-width="18" stroke-linecap="round"/><circle cx="-24" cy="0" r="7" fill="#263238"/><circle cx="24" cy="0" r="7" fill="#263238"/><path d="M-24 34 Q0 54 24 34" fill="none" stroke="#263238" stroke-width="7" stroke-linecap="round"/>
+        </g>
+        <text x="768" y="950" text-anchor="middle" font-family="Noto Sans KR, sans-serif" font-size="30" font-weight="600" fill="#263238">오늘의 한 걸음이 내일의 자신감이 됩니다</text>
+      </svg>
+    `);
 
-    const resizedLogo =
-      await sharp(logoBuffer)
-        .trim()
-        .resize({
-          width: 330,
-          withoutEnlargement: true,
-        })
-        .png()
-        .toBuffer();
-
-    const finalImage =
-      await sharp(aiImageBuffer)
-        .resize(1536, 1024, {
-          fit: "cover",
-        })
-        .composite([
-          {
-            input: resizedLogo,
-            left: 603,
-            top: 855,
-          },
-        ])
-        .png()
-        .toBuffer();
+    const logoBuffer = await fs.readFile(logoPath);
+    const resizedLogo = await sharp(logoBuffer)
+      .trim()
+      .resize({ width: 330, withoutEnlargement: true })
+      .png()
+      .toBuffer();
+    const finalImage = await sharp(backgroundSvg)
+      .composite([{ input: resizedLogo, left: 603, top: 855 }])
+      .png()
+      .toBuffer();
 
     return Response.json({
-      image: `data:image/png;base64,${finalImage.toString(
-        "base64"
-      )}`,
+      image: `data:image/png;base64,${finalImage.toString("base64")}`,
       cheerText,
-      uniqueCharacterCount:
-        uniqueCharacters.length,
+      uniqueCharacterCount: Math.min(
+        6,
+        new Set(
+          plans.flatMap((plan) =>
+            (plan.panels || []).map((panel) => panel.characters).filter(Boolean)
+          )
+        ).size
+      ),
     });
   } catch (error: any) {
-    console.error(
-      "GENERATE BACK COVER ERROR:",
-      error
-    );
-
+    console.error("GENERATE BACK COVER ERROR:", error);
     return Response.json(
       {
-        error:
-          "뒷표지 생성 중 오류가 발생했습니다.",
-        detail:
-          error?.message ||
-          "알 수 없는 오류",
+        error: "뒷표지를 만드는 중 오류가 발생했습니다.",
+        detail: error?.message || "알 수 없는 오류",
       },
       { status: 500 }
     );

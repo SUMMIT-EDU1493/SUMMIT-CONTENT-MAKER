@@ -14,7 +14,6 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
-
     const openai = createTrackedOpenAI({
       apiKey,
     }, {
@@ -26,6 +25,138 @@ export async function POST(request: Request) {
 
     const title = body.title;
     const content = body.content;
+    const requestedVisualStyle =
+      typeof body.visualStyle === "string"
+        ? body.visualStyle
+        : "modern webtoon";
+
+    const batchItems = Array.isArray(body.items)
+      ? body.items
+          .slice(0, 6)
+          .filter(
+            (item: any) =>
+              typeof item?.content === "string" &&
+              item.content.trim()
+          )
+          .map((item: any, index: number) => ({
+            index,
+            title: String(item.title || `대화문 ${index + 1}`),
+            content: item.content.trim(),
+            visualStyle:
+              typeof item.visualStyle === "string"
+                ? item.visualStyle
+                : "modern webtoon",
+          }))
+      : [];
+
+    if (batchItems.length > 0) {
+      const batchStartedAt = performance.now();
+      const response = await openai.responses.create({
+        model: "gpt-5-mini",
+        max_output_tokens: Math.min(16000, 3200 * batchItems.length),
+        input: `
+너는 중학생 영어 교재를 자연스럽고 재미있는 4컷 학습만화로 재구성하는 전문 작가다.
+
+아래 대화문 ${batchItems.length}개를 각각 독립된 설계안으로 만들어라.
+입력 순서와 출력 plans 순서를 반드시 유지하라. 하나의 대화문을 합치거나 누락하지 마라.
+
+각 plan은 반드시 정확히 4개의 panel을 가진다.
+원문 정보 순서와 화자 소유권을 유지하고, 학생이 부모·교사·성인에게는 존댓말을 사용한다.
+각 panel에는 다음 필드를 모두 채운다:
+shotType, cameraAngle, characterAction, visualFocus, propOrObject,
+setting, panelRole, reactionBeat, humorBeat, scene, characters, dialogue.
+
+각 만화 안에서:
+- 4컷 모두 같은 two-shot 대화 구도를 사용하지 않는다.
+- 최소 2종 이상의 shotType을 사용한다.
+- 최소 1컷은 대화보다 행동·소품·환경이 중심이다.
+- 인접한 컷에서 같은 인물 배치를 반복하지 않는다.
+- 내용에 맞을 때만 작은 유머나 리액션을 넣고 핵심 의미를 왜곡하지 않는다.
+- 지정 visualStyle을 선, 채색, 질감, 조명, 구도에 실제로 반영한다.
+
+visualStyle 후보 해석:
+modern webtoon=crisp digital lineart and cel shading
+clean graphic novel=varied ink contours and restrained palette
+soft editorial illustration=soft hand-drawn shapes and paper texture
+cinematic storyboard=dynamic perspective and directional lighting
+expressive ink comic=lively ink strokes and energetic expressions
+painterly educational illustration=painted brush texture and rich environments
+collage magazine comic=mixed-media cut-paper shapes, never photographs
+retro comic book=vintage print texture and halftone-inspired illustration
+minimal conceptual comic=simplified forms and generous negative space
+infographic comic=structured diagrams, objects and comic composition
+
+반드시 JSON만 출력한다.
+{
+  "plans": [
+    {
+      "title": "원 대화문 제목",
+      "summary": "짧은 한글 제목",
+      "visualStyle": "지정 스타일",
+      "storyMode": "선택한 전개 방식",
+      "panels": [
+        {
+          "cut": "1컷",
+          "scene": "장면",
+          "characters": "외형과 관계",
+          "shotType": "wide",
+          "cameraAngle": "구도",
+          "characterAction": "행동",
+          "visualFocus": "초점",
+          "propOrObject": "소품 또는 없음",
+          "setting": "장소",
+          "panelRole": "역할",
+          "reactionBeat": "반응",
+          "humorBeat": "유머 또는 없음",
+          "dialogue": [{ "speaker": "화자", "text": "자연스러운 한국어 대사" }]
+        }
+      ]
+    }
+  ]
+}
+
+입력 대화문:
+${batchItems
+  .map(
+    (item: any) => `
+=== ITEM ${item.index + 1} ===
+TITLE: ${item.title}
+VISUAL STYLE: ${item.visualStyle}
+CONTENT:
+${item.content}`
+  )
+  .join("\n")}
+`,
+      });
+
+      const raw = response.output_text
+        .replace(/```json/gi, "")
+        .replace(/```/g, "")
+        .trim();
+      const parsed = JSON.parse(raw);
+      const plans = Array.isArray(parsed?.plans) ? parsed.plans : [];
+
+      console.info(
+        `[middle dialogue plan] batch OpenAI request: ${Math.round(
+          performance.now() - batchStartedAt
+        )}ms (items=${batchItems.length})`
+      );
+
+      return Response.json({
+        plans: batchItems.map((item: any, index: number) => {
+          const plan = plans[index];
+          return plan && Array.isArray(plan.panels) && plan.panels.length === 4
+            ? {
+                ...plan,
+                visualStyle: plan.visualStyle || item.visualStyle,
+                storyMode: plan.storyMode || "character dialogue",
+              }
+            : {
+                error: "설계안이 정확히 4컷으로 생성되지 않았습니다.",
+              };
+        }),
+      });
+    }
 
     if (
       !content ||
@@ -63,9 +194,14 @@ export async function POST(request: Request) {
 3. 등장인물 관계에 맞는 말투를 사용한다.
 4. 네 컷의 장면과 구도가 반복되지 않게 한다.
 5. 등장인물들이 서로 확실히 구분되도록
-   외형 특징을 설계한다.
+  외형 특징을 설계한다.
 6. 중요한 영어 학습어를
-   한글뜻(English) 형식으로 자연스럽게 넣는다.
+  한글뜻(English) 형식으로 자연스럽게 넣는다.
+
+7. 지정된 visualStyle을 선, 채색, 질감, 조명, 구도에 실제로 반영한다.
+
+지정 visualStyle:
+${requestedVisualStyle}
 
 ==================================================
 [원문 순서 - 절대 중요]
@@ -167,13 +303,10 @@ export async function POST(request: Request) {
 [영어 학습어 삽입 - 필수]
 ==================================================
 
-전체 4컷에
-영어 핵심 단어 또는 짧은 표현을
-반드시 총 4~6개 넣는다.
 
-형식은 반드시:
 
-한글뜻(English)
+전체 4컷에 영어 핵심 단어 또는 짧은 표현을 반드시 총 4~6개 넣는다.
+형식은 반드시 한글뜻(English)이다.
 
 예:
 직업(job)
@@ -188,18 +321,33 @@ export async function POST(request: Request) {
 - 영어 한 줄 / 한국어 한 줄 형태 금지.
 - 반드시 자연스러운 한국어 문장 안에서
   한글뜻 바로 뒤에 괄호로 넣는다.
-- 최소 3개 이상의 서로 다른 컷에
-  영어 표현이 들어가야 한다.
-- 0개, 1개, 2개만 넣는 것은 금지.
+
+- 최소 3개 이상의 서로 다른 컷에 영어 표현이 들어가야 한다.
+- 0개, 1개, 2개만 넣는 것은 금지한다.
 - 출력 전에 실제 개수를 세어라.
 
 ==================================================
 [장면 연출 - 매우 중요]
 ==================================================
 
-4컷이 전부
-"두 사람이 같은 배경에서 나란히 서서
-말하는 장면"이 되면 안 된다.
+4컷이 전부 두 사람이 같은 배경에서 나란히 서서 말하는 장면이 되면 안 된다.
+
+각 panel은 대사와 장소만 적지 말고 아래 시각 설계 필드를 모두 작성한다.
+- shotType: wide, medium, close-up, over-the-shoulder 중 하나
+- cameraAngle: 정면, 측면, 위에서, 아래에서, 대각선 등
+- characterAction: 인물이 실제로 하는 행동
+- visualFocus: 이 컷에서 가장 먼저 보이는 대상
+- propOrObject: 의미 있는 소품 또는 없음
+- setting: 구체적인 장소와 배경
+- panelRole: 시작, 행동, 발견, 반응, 결과, 마무리 중 하나
+- reactionBeat: 표정이나 감정 변화
+- humorBeat 또는 emotionalBeat: 자연스러운 웃음/감정 포인트 또는 없음
+
+네 컷 규칙:
+- 4컷 모두 같은 two-shot 대화 구도를 사용하지 않는다.
+- 최소 2종 이상의 shotType을 사용한다.
+- 최소 1컷은 대화보다 행동, 소품 또는 환경이 중심이다.
+- 인접한 두 컷에서 같은 인물 배치를 반복하지 않는다.
 
 각 컷의 시각적 연출을 다양하게 한다.
 
@@ -222,22 +370,32 @@ export async function POST(request: Request) {
 같은 장소의 대화여도
 각 컷의 카메라 거리와 행동을 바꿔라.
 
-예:
-
-1컷 - 두 사람 전체가 보이는 장면
-2컷 - 한 사람이 휴대폰을 보여주는 장면
-3컷 - 상대 인물 표정 클로즈업
-4컷 - 둘이 이동하거나 행동하며 마무리
-
 단, 원문에 없는 사건을 새로 만들어
 내용을 왜곡하지 않는다.
+
+==================================================
+[4컷 전개 방식 다양화]
+==================================================
+
+이번 만화에 가장 어울리는 storyMode를 하나 선택한다.
+가능한 방식:
+
+- 상황 시작 → 예상 밖 반응 → 설명 또는 발견 → 재치 있는 마무리
+- 질문 → 잘못된 추측 → 실제 예시 → 이해 또는 웃음
+- 문제 발생 → 행동 → 결과 → 짧은 반전
+- 일상 상황 → 정보 발견 → 실제 적용 → 자연스러운 결론
+- 즉각적인 사건 → 리액션 → 대화 확장 → 기억에 남는 엔딩
+- 이동 또는 행동 중심 → 관찰 → 대화 → 결과
+- 한 인물의 오해 → 상대의 설명 → 시각적 예시 → 납득 또는 유머
+
+내용에 맞지 않으면 억지 유머나 반전을 넣지 않는다.
+4컷 모두를 두 사람이 서서 설명하는 장면으로 만들지 않는다.
 
 ==================================================
 [등장인물 외형 구분 - 매우 중요]
 ==================================================
 
-서로 다른 등장인물이
-비슷한 복제 인간처럼 보이지 않게 한다.
+서로 다른 등장인물이 비슷한 복제 인간처럼 보이지 않게 한다.
 
 특히 두 명이 모두 남학생,
 또는 모두 여학생인 경우
@@ -273,13 +431,10 @@ export async function POST(request: Request) {
 맨투맨
 
 단,
-과장된 외모 묘사나
-불필요한 신체 평가를 하지 않는다.
+과장된 외모 묘사나 불필요한 신체 평가를 하지 않는다.
 
-한 번 정한 외형은
-4컷 내내 동일하게 유지한다.
+한 번 정한 외형은 4컷 내내 동일하게 유지한다.
 
-==================================================
 [장면 설명 작성법]
 ==================================================
 
@@ -339,11 +494,22 @@ summary는
 {
   "title": "원 대화문 제목",
   "summary": "짧은 한글 제목",
+  "visualStyle": "${requestedVisualStyle}",
+  "storyMode": "선택한 전개 방식",
   "panels": [
     {
       "cut": "1컷",
       "scene": "구체적인 장면과 구도 설명",
       "characters": "등장인물 외형 특징",
+      "shotType": "wide",
+      "cameraAngle": "카메라 구도",
+      "characterAction": "인물의 행동",
+      "visualFocus": "시각적 초점",
+      "propOrObject": "소품 또는 없음",
+      "setting": "장소와 배경",
+      "panelRole": "시작",
+      "reactionBeat": "표정 또는 없음",
+      "humorBeat": "유머 또는 없음",
       "dialogue": [
         {
           "speaker": "화자",
@@ -424,6 +590,15 @@ ${content}
 
     const parsed =
       JSON.parse(raw);
+
+    parsed.visualStyle =
+      typeof parsed.visualStyle === "string"
+        ? parsed.visualStyle
+        : requestedVisualStyle;
+    parsed.storyMode =
+      typeof parsed.storyMode === "string"
+        ? parsed.storyMode
+        : "character dialogue";
 
     if (
       !parsed?.panels ||

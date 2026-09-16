@@ -29,12 +29,23 @@ type ComicPanel = {
   scene: string;
   characters: string;
   dialogue: ComicDialogue[];
+  shotType?: string;
+  cameraAngle?: string;
+  characterAction?: string;
+  visualFocus?: string;
+  propOrObject?: string;
+  setting?: string;
+  panelRole?: string;
+  reactionBeat?: string;
+  humorBeat?: string;
 };
 
 type ComicPlan = {
   title: string;
   summary: string;
   panels: ComicPanel[];
+  visualStyle?: string;
+  storyMode?: string;
 };
 
 type ComicProject = {
@@ -44,6 +55,7 @@ type ComicProject = {
   plan: ComicPlan;
   image: string;
   loadingImage: boolean;
+  error?: string;
 };
 
 type WorkItem = {
@@ -52,6 +64,19 @@ type WorkItem = {
   summary: string;
   image: string;
 };
+
+const MIDDLE_VISUAL_STYLES = [
+  "modern webtoon",
+  "clean graphic novel",
+  "soft editorial illustration",
+  "cinematic storyboard",
+  "expressive ink comic",
+  "painterly educational illustration",
+  "collage magazine comic",
+  "retro comic book",
+  "minimal conceptual comic",
+  "infographic comic",
+] as const;
 
 type SchoolLevel = "" | "middle" | "high";
 type WorkMode = "" | "dialogue" | "passage" | "fourcut" | "summary";
@@ -233,6 +258,7 @@ export default function Home() {
     `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   const readPdf = async (file: File) => {
+    const startedAt = performance.now();
     try {
       setLoadingPdf(true);
       setErrorMessage("");
@@ -278,6 +304,11 @@ export default function Home() {
       }
 
       setPdfText(fullText.trim());
+      console.info(
+        `[middle analyze] pdf text extraction: ${Math.round(
+          performance.now() - startedAt
+        )}ms (pages=${pdf.numPages}, text=${fullText.trim().length} chars)`
+      );
     } catch (error) {
       console.error(error);
       setErrorMessage("PDF를 읽는 중 오류가 발생했습니다.");
@@ -293,6 +324,7 @@ export default function Home() {
     }
 
     try {
+      const startedAt = performance.now();
       setLoadingAi(true);
       setErrorMessage("");
       setAnalysis(null);
@@ -309,6 +341,12 @@ export default function Home() {
           text: pdfText,
         }),
       });
+
+      console.info(
+        `[middle analyze] client API total: ${Math.round(
+          performance.now() - startedAt
+        )}ms`
+      );
 
       const data = await response.json();
 
@@ -346,7 +384,8 @@ export default function Home() {
 
   const requestComicPlan = async (
     title: string,
-    content: string
+    content: string,
+    visualStyle?: string
   ): Promise<ComicPlan> => {
     const response = await fetch("/api/comic-plan", {
       method: "POST",
@@ -356,6 +395,7 @@ export default function Home() {
       body: JSON.stringify({
         title,
         content,
+        visualStyle,
       }),
     });
 
@@ -372,6 +412,34 @@ export default function Home() {
     return data;
   };
 
+  const requestComicPlanBatch = async (
+    items: Array<{
+      title: string;
+      content: string;
+      visualStyle: string;
+    }>
+  ): Promise<Array<ComicPlan | { error: string }>> => {
+    const response = await fetch("/api/comic-plan", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ items }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data?.detail ||
+          data?.error ||
+          "써밋네컷 설계안 생성에 실패했습니다."
+      );
+    }
+
+    return Array.isArray(data?.plans) ? data.plans : [];
+  };
+
   const makeComicPlan = async (
     title: string,
     content: string
@@ -383,7 +451,8 @@ export default function Home() {
 
       const plan = await requestComicPlan(
         title,
-        content
+        content,
+        MIDDLE_VISUAL_STYLES[comicProjects.length % MIDDLE_VISUAL_STYLES.length]
       );
 
       const newProject: ComicProject = {
@@ -424,7 +493,7 @@ export default function Home() {
       analysis?.dialogues || [];
 
     if (dialogues.length === 0) {
-      alert("남아 있는 대화문이 없어.");
+      alert("남아 있는 대화문이 없습니다.");
       return;
     }
 
@@ -435,35 +504,75 @@ export default function Home() {
       setBackCoverImage("");
       setBackCoverText("");
 
-      const newProjects: ComicProject[] = [];
+      const results: ComicProject[] = [];
+      const batchSize = 3;
 
-      for (
-        let index = 0;
-        index < dialogues.length;
-        index++
-      ) {
-        const dialogue = dialogues[index];
-
+      for (let start = 0; start < dialogues.length; start += batchSize) {
+        const batch = dialogues.slice(start, start + batchSize);
         setCurrentCreatingTitle(
-          `${index + 1}/${dialogues.length} · ${dialogue.title}`
+          `설계안 생성 중 ${start}/${dialogues.length}`
         );
 
-        const plan = await requestComicPlan(
-          dialogue.title,
-          dialogue.content
-        );
+        let plans: Array<ComicPlan | { error: string }>;
+        try {
+          plans = await requestComicPlanBatch(
+            batch.map((dialogue, batchIndex) => ({
+              title: dialogue.title,
+              content: dialogue.content,
+              visualStyle:
+                MIDDLE_VISUAL_STYLES[
+                  (start + batchIndex) % MIDDLE_VISUAL_STYLES.length
+                ],
+            }))
+          );
+        } catch (error: any) {
+          plans = batch.map(() => ({
+            error: error?.message || "설계안 생성에 실패했습니다.",
+          }));
+        }
 
-        newProjects.push({
-          id: makeId(),
-          sourceTitle: dialogue.title,
-          sourceContent: dialogue.content,
-          plan,
-          image: "",
-          loadingImage: false,
+        batch.forEach((dialogue, batchIndex) => {
+          const index = start + batchIndex;
+          const planResult = plans[batchIndex];
+          const isPlan =
+            planResult &&
+            !("error" in planResult) &&
+            Array.isArray(planResult.panels) &&
+            planResult.panels.length === 4;
+
+          results.push({
+            id: makeId(),
+            sourceTitle: dialogue.title,
+            sourceContent: dialogue.content,
+            plan: isPlan
+              ? planResult
+              : {
+                  title: dialogue.title,
+                  summary: "",
+                  panels: [],
+                  visualStyle:
+                    MIDDLE_VISUAL_STYLES[index % MIDDLE_VISUAL_STYLES.length],
+                  storyMode: "character dialogue",
+                },
+            image: "",
+            loadingImage: false,
+            error: isPlan
+              ? undefined
+              : "설계안 생성에 실패했습니다.",
+          });
         });
 
-        setComicProjects([...newProjects]);
+        setCurrentCreatingTitle(
+          `설계안 생성 완료 ${Math.min(
+            start + batch.length,
+            dialogues.length
+          )}/${dialogues.length}`
+        );
       }
+
+      setComicProjects(
+        results
+      );
 
       setTimeout(() => {
         document
@@ -705,7 +814,8 @@ export default function Home() {
   };
 
   const requestComicImage = async (
-    plan: ComicPlan
+    plan: ComicPlan,
+    comicIndex?: number
   ): Promise<string> => {
     const response = await fetch(
       "/api/generate-comic",
@@ -715,7 +825,10 @@ export default function Home() {
           "Content-Type":
             "application/json",
         },
-        body: JSON.stringify(plan),
+        body: JSON.stringify({
+          ...plan,
+          comicIndex,
+        }),
       }
     );
 
@@ -824,54 +937,66 @@ export default function Home() {
         setLoadingAllImages(true);
         setErrorMessage("");
 
-        for (
-          let index = 0;
-          index < targets.length;
-          index++
-        ) {
-          const project =
-            targets[index];
+        let nextIndex = 0;
+        let completedCount = 0;
+        const imageResults = new Map<string, string>();
+        const imageErrors = new Map<string, string>();
 
-          const originalIndex =
-            comicProjects.findIndex(
-              (item) =>
+        const worker = async () => {
+          while (true) {
+            const index = nextIndex++;
+
+            if (index >= targets.length) {
+              return;
+            }
+
+            const project = targets[index];
+            setImageProgress(
+              `이미지 생성 중 ${completedCount}/${targets.length} · ${project.sourceTitle}`
+            );
+            setComicProjects((prev) =>
+              prev.map((item) =>
                 item.id === project.id
+                  ? { ...item, loadingImage: true, error: undefined }
+                  : item
+              )
             );
 
-          setImageProgress(
-            `${index + 1}/${targets.length} · 설계안 ${
-              originalIndex + 1
-            } · ${project.sourceTitle}`
-          );
+            try {
+              imageResults.set(
+                project.id,
+                await requestComicImage(project.plan, index)
+              );
+            } catch (error: any) {
+              console.error(`[middle dialogue] 이미지 ${index + 1} 실패`, error);
+              imageErrors.set(
+                project.id,
+                error?.message || "만화 이미지 생성에 실패했습니다."
+              );
+            } finally {
+              completedCount += 1;
+              setImageProgress(
+                `이미지 생성 완료 ${completedCount}/${targets.length}`
+              );
+            }
+          }
+        };
 
-          setComicProjects((prev) =>
-            prev.map((item) =>
-              item.id === project.id
-                ? {
-                    ...item,
-                    loadingImage: true,
-                  }
-                : item
-            )
-          );
+        await Promise.all(
+          Array.from(
+            { length: Math.min(3, targets.length) },
+            () => worker()
+          )
+        );
 
-          const image =
-            await requestComicImage(
-              project.plan
-            );
-
-          setComicProjects((prev) =>
-            prev.map((item) =>
-              item.id === project.id
-                ? {
-                    ...item,
-                    loadingImage: false,
-                    image,
-                  }
-                : item
-            )
-          );
-        }
+        setComicProjects((prev) =>
+          prev.map((project) => ({
+            ...project,
+            image: imageResults.get(project.id) || project.image,
+            loadingImage: false,
+            error: imageErrors.get(project.id) || project.error,
+          }))
+        );
 
         setImageProgress(
           "전체 이미지 생성 완료!"
@@ -975,7 +1100,7 @@ export default function Home() {
 
     if (alreadyAdded) {
       alert(
-        "이 이미지는 이미 PDF에 넣을 이미지에 들어가 있어."
+        "이 이미지는 이미 PDF 작업함에 들어가 있습니다."
       );
       return;
     }
@@ -1031,7 +1156,7 @@ export default function Home() {
         newItems.length === 0
       ) {
         alert(
-          "새로 작업함에 넣을 이미지가 없어."
+          "새로 작업함에 넣을 이미지가 없습니다."
         );
         return;
       }
@@ -1042,7 +1167,7 @@ export default function Home() {
       ]);
 
       alert(
-        `${newItems.length}장을 작업함에 추가했어.`
+        `${newItems.length}장을 작업함에 추가했습니다.`
       );
     };
 

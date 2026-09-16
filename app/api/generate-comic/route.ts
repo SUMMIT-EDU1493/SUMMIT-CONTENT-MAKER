@@ -15,12 +15,38 @@ type ComicPanel = {
   scene: string;
   characters: string;
   dialogue: ComicDialogue[];
+  shotType?: string;
+  cameraAngle?: string;
+  characterAction?: string;
+  visualFocus?: string;
+  propOrObject?: string;
+  setting?: string;
+  panelRole?: string;
+  reactionBeat?: string;
+  humorBeat?: string;
+  emotionalBeat?: string;
 };
 
 type ComicPlan = {
   title?: string;
   summary?: string;
   panels?: ComicPanel[];
+  visualStyle?: string;
+  storyMode?: string;
+  comicIndex?: number;
+};
+
+const STYLE_DIRECTIVES: Record<string, string> = {
+  "modern webtoon": "crisp digital lineart, bright flat and cel shading, expressive facial reactions, contemporary Korean webtoon composition",
+  "clean graphic novel": "strong varied ink contours, restrained palette, dramatic framing, graphic-novel panel energy and controlled shadows",
+  "soft editorial illustration": "soft hand-drawn shapes, paper-like texture, restrained expressions, editorial magazine illustration composition",
+  "cinematic storyboard": "dynamic cinematic perspective, intentional framing, dramatic directional light, storyboard scene direction",
+  "expressive ink comic": "lively visible ink strokes, hand-drawn texture, high-expression faces, loose energetic comic rendering",
+  "painterly educational illustration": "painted brush texture, softened edges, rich environmental detail, illustrated-book finish",
+  "collage magazine comic": "mixed-media cut-paper shapes, layered graphic composition, editorial collage rhythm, illustrated textures only and no photographs",
+  "retro comic book": "vintage print texture, bold outlines, halftone-inspired illustrated rendering, controlled comic expressions",
+  "minimal conceptual comic": "simplified forms, generous negative space, concept-focused visuals, clean restrained illustration",
+  "infographic comic": "characters combined with diagrams, icons and meaningful objects, structured visual explanation, clean comic infographic composition",
 };
 
 export async function POST(request: Request) {
@@ -53,6 +79,19 @@ export async function POST(request: Request) {
     const panels = body.panels;
     const summaryText =
       body.summary?.trim() || "써밋네컷";
+    const visualStyle =
+      body.visualStyle?.trim() || "modern webtoon";
+    const storyMode =
+      body.storyMode?.trim() || "character dialogue";
+    const styleDirective =
+      STYLE_DIRECTIVES[visualStyle] ||
+      STYLE_DIRECTIVES["modern webtoon"];
+
+    console.info(
+      `[middle image] comic index=${body.comicIndex ?? "unknown"} visualStyle=${visualStyle} styleDirective=${
+        STYLE_DIRECTIVES[visualStyle] ? visualStyle : "modern webtoon"
+      }`
+    );
 
     if (
       !panels ||
@@ -88,6 +127,16 @@ PANEL ${panelIndex + 1}
 
 SCENE:
 ${panel.scene}
+
+SHOT TYPE: ${panel.shotType || ""}
+CAMERA ANGLE: ${panel.cameraAngle || ""}
+CHARACTER ACTION: ${panel.characterAction || ""}
+VISUAL FOCUS: ${panel.visualFocus || ""}
+PROP OR OBJECT: ${panel.propOrObject || ""}
+SETTING: ${panel.setting || ""}
+PANEL ROLE: ${panel.panelRole || ""}
+REACTION BEAT: ${panel.reactionBeat || ""}
+HUMOR OR EMOTIONAL BEAT: ${panel.humorBeat || panel.emotionalBeat || ""}
 
 CHARACTERS:
 ${panel.characters}
@@ -128,7 +177,27 @@ The title and official logo will be added separately later.
 OVERALL VISUAL STYLE
 ==================================================
 
-Make it feel like a modern Korean educational webtoon.
+ILLUSTRATION ONLY — NO PHOTOREALISM.
+
+This must be an illustrated comic page, never a photograph.
+Do not use photorealistic people, realistic photography,
+live-action appearance, camera-photo textures, or documentary photography.
+
+Assigned visual style:
+${visualStyle}
+
+Concrete rendering directive:
+${styleDirective}
+
+Interpret the assigned style strongly through line quality,
+color treatment, shading, texture, lighting, framing,
+background treatment, and panel rhythm.
+Do not fall back to the same generic webtoon look for every request.
+
+Assigned story mode:
+${storyMode}
+
+The story mode must affect the visual sequence and staging.
 
 The artwork should be:
 
@@ -181,6 +250,13 @@ Use visual variety such as:
 
 At least THREE of the four panels must use clearly different
 camera framing or character positioning.
+
+Do not make all four panels two people standing and talking.
+Use walking, sitting, looking at an object, showing a phone or page,
+an over-the-shoulder view, a close reaction, an establishing view,
+an action moment, or an environment-led panel when supported by the scene.
+Backgrounds may remain in one location when natural; do not force
+an artificial location change just to create variety.
 
 If all four panels occur in the same location,
 vary the camera angle, crop, pose, actions and focus.
@@ -512,6 +588,9 @@ Before generating, verify:
 13. Parent/teacher/adult roles are visually distinguishable from students.
 14. Male and female classmates look like same-age middle-school peers.
 15. Female students do NOT look like small elementary-school children.
+16. The result is clearly illustrated and contains no photorealism.
+17. The assigned visual style is visibly different in rendering,
+    not only in its name.
 
 Produce only the comic artwork.
 `;

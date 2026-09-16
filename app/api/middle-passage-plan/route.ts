@@ -13,11 +13,22 @@ type ComicPanel = {
   scene: string;
   characters: string;
   dialogue: ComicDialogue[];
+  shotType: string;
+  cameraAngle: string;
+  characterAction: string;
+  visualFocus: string;
+  propOrObject: string;
+  setting: string;
+  panelRole: string;
+  reactionBeat: string;
+  humorBeat: string;
 };
 
 type ComicPlan = {
   title: string;
   summary: string;
+  visualStyle: string;
+  storyMode: string;
   panels: ComicPanel[];
 };
 
@@ -64,6 +75,11 @@ export async function POST(request: Request) {
       cleanText(body?.title) ||
       "본문";
 
+    const requestedVisualStyle =
+      typeof body?.visualStyle === "string"
+        ? body.visualStyle
+        : "modern webtoon";
+
     const content =
       cleanText(body?.content);
 
@@ -91,6 +107,12 @@ export async function POST(request: Request) {
 당신은 대한민국 중학생용 영어 학습만화
 "써밋네컷"을 설계하는 전문 영어교사이자
 자연스러운 한국어 대사를 쓰는 웹툰 작가입니다.
+
+이번 설계안의 visualStyle은 다음과 같습니다.
+${requestedVisualStyle}
+
+이 화풍을 단순한 이름이 아니라 선, 채색, 질감,
+조명, 카메라 구도, 배경 표현에 실제로 반영하십시오.
 
 아래 영어 교과서 본문을
 정확히 4컷의 학습만화로 구성하십시오.
@@ -242,6 +264,34 @@ when the final movie is completed."
 자연스러운 실제 대화를 우선하십시오.
 
 ==================================================
+4컷 전개와 시각적 다양화
+==================================================
+
+본문에 가장 어울리는 storyMode를 하나 선택하십시오.
+다음 방식에서 고르되 내용을 억지로 맞추지 마십시오.
+
+- 상황 시작 → 예상 밖 반응 → 설명 또는 발견 → 재치 있는 마무리
+- 질문 → 잘못된 추측 → 실제 예시 → 이해 또는 웃음
+- 문제 발생 → 행동 → 결과 → 짧은 반전
+- 일상 상황 → 정보 발견 → 실제 적용 → 자연스러운 결론
+- 즉각적인 사건 → 리액션 → 대화 확장 → 기억에 남는 엔딩
+- 이동 또는 행동 중심 → 관찰 → 대화 → 결과
+- 한 인물의 오해 → 상대의 설명 → 시각적 예시 → 납득 또는 유머
+
+4컷 모두를 두 사람이 서서 설명하는 장면으로 만들지 마십시오.
+걷기, 앉기, 물건을 살펴보기, 이동 중 행동하기,
+표정 클로즈업, 오버숄더, 넓은 환경 장면,
+시각적 비유나 실제 행동 장면을 내용에 맞게 활용하십시오.
+한 장소를 유지해도 카메라 거리와 행동을 바꿀 수 있습니다.
+원문에 없는 핵심 사건이나 정보를 추가하지 마십시오.
+
+각 panel에 다음 시각 설계 필드를 반드시 작성하십시오:
+shotType, cameraAngle, characterAction, visualFocus,
+propOrObject, setting, panelRole, reactionBeat, humorBeat.
+최소 2종 이상의 shotType을 사용하고,
+최소 1컷은 대화보다 행동, 소품 또는 환경이 중심이어야 합니다.
+
+==================================================
 매우 중요: 누가 말하는가
 ==================================================
 
@@ -325,6 +375,9 @@ Yeji가 자신의 직업을 설명하고 있다면
 예:
 "이 일은 어떻게 시작하셨어요?"
 "그게 정말 도움이 되나요?"
+
+학생 → 부모도 자연스러운 가족 존댓말을 사용하십시오.
+학생이 부모, 선생님 또는 성인에게 친구처럼 반말하면 안 됩니다.
 
 3. 어른 → 학생
 → 자연스러운 존댓말 또는 부드러운 설명체
@@ -582,6 +635,7 @@ JSON을 출력하기 직전에
 3. 앞뒤 컷과 말투가 같은가?
 4. 반말/존댓말이 갑자기 바뀌지 않았는가?
 5. 다른 인물의 경험을 대신 말하고 있지 않은가?
+6. 학생이 부모, 선생님 또는 성인에게 반말하고 있지 않은가?
 
 하나라도 맞지 않으면 수정한 뒤 출력하십시오.
 
@@ -594,11 +648,22 @@ JSON
 {
   "title": "본문 또는 만화 제목",
   "summary": "짧은 만화 상단 한줄 제목",
+  "visualStyle": "${requestedVisualStyle}",
+  "storyMode": "선택한 전개 방식",
   "panels": [
     {
       "cut": "1컷",
       "scene": "누가 말하고 누가 듣는지까지 명확한 장면 설명",
       "characters": "등장인물 외모, 역할, 관계",
+      "shotType": "wide",
+      "cameraAngle": "카메라 구도",
+      "characterAction": "인물의 행동",
+      "visualFocus": "시각적 초점",
+      "propOrObject": "소품 또는 없음",
+      "setting": "장소와 배경",
+      "panelRole": "시작",
+      "reactionBeat": "표정 또는 없음",
+      "humorBeat": "유머 또는 없음",
       "dialogue": [
         {
           "speaker": "정확한 인물 이름",
@@ -820,6 +885,42 @@ ${content}
                   panel.characters
                 ),
 
+              shotType:
+                cleanText(panel.shotType) ||
+                "medium",
+
+              cameraAngle:
+                cleanText(panel.cameraAngle) ||
+                "자연스러운 시선 높이",
+
+              characterAction:
+                cleanText(panel.characterAction) ||
+                "장면에 맞는 자연스러운 행동",
+
+              visualFocus:
+                cleanText(panel.visualFocus) ||
+                "인물과 상황",
+
+              propOrObject:
+                cleanText(panel.propOrObject) ||
+                "없음",
+
+              setting:
+                cleanText(panel.setting) ||
+                "장면에 맞는 장소",
+
+              panelRole:
+                cleanText(panel.panelRole) ||
+                `${index + 1}컷 전개`,
+
+              reactionBeat:
+                cleanText(panel.reactionBeat) ||
+                "자연스러운 반응",
+
+              humorBeat:
+                cleanText(panel.humorBeat) ||
+                "없음",
+
               dialogue,
             };
           }
@@ -861,6 +962,14 @@ ${content}
         title,
 
       summary,
+
+      visualStyle:
+        cleanText(parsed?.visualStyle) ||
+        requestedVisualStyle,
+
+      storyMode:
+        cleanText(parsed?.storyMode) ||
+        "character dialogue",
 
       panels,
     };

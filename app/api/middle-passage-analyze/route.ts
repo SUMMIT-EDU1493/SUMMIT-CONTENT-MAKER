@@ -30,6 +30,8 @@ function parseJsonOutput(output: string) {
 export async function POST(
   request: Request
 ) {
+  const totalStartedAt = performance.now();
+
   try {
     const apiKey =
       process.env.OPENAI_API_KEY;
@@ -51,6 +53,8 @@ export async function POST(
 
     const text =
       cleanText(body?.text);
+
+    const promptStartedAt = performance.now();
 
     if (!text) {
       return Response.json(
@@ -295,12 +299,27 @@ PDF 추출 텍스트
 ${text}
 `;
 
+    console.info(
+      `[middle analyze] prompt preparation: ${Math.round(
+        performance.now() - promptStartedAt
+      )}ms (text=${text.length} chars)`
+    );
+
+    const openaiStartedAt = performance.now();
     const result =
       await openai.responses.create({
         model: "gpt-5-mini",
         input: prompt,
+        max_output_tokens: 8000,
       });
 
+    console.info(
+      `[middle analyze] OpenAI request: ${Math.round(
+        performance.now() - openaiStartedAt
+      )}ms`
+    );
+
+    const parseStartedAt = performance.now();
     const output =
       result.output_text?.trim() ??
       "";
@@ -360,6 +379,12 @@ ${text}
             80
         );
 
+    console.info(
+      `[middle analyze] parse/result: ${Math.round(
+        performance.now() - parseStartedAt
+      )}ms (passages=${passages.length})`
+    );
+
     if (
       passages.length === 0
     ) {
@@ -367,6 +392,12 @@ ${text}
         "영어 본문을 찾지 못했습니다."
       );
     }
+
+    console.info(
+      `[middle analyze] total: ${Math.round(
+        performance.now() - totalStartedAt
+      )}ms`
+    );
 
     return Response.json({
       passages,
