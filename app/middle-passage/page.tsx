@@ -364,37 +364,33 @@ ${pageText}
     passage: Passage,
     visualStyle?: string
   ) => {
-    const response =
-      await fetch(
-        "/api/middle-passage-plan",
-        {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        const response = await fetch("/api/middle-passage-plan", {
           method: "POST",
-
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             title: passage.title,
             content: passage.content,
             visualStyle,
           }),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data?.detail || data?.error || "써밋네컷 설계에 실패했습니다."
+          );
         }
-      );
-
-    const data =
-      await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        data?.detail ||
-          data?.error ||
-          "써밋네컷 설계에 실패했습니다."
-      );
+        if (!Array.isArray(data?.panels) || data.panels.length !== 4) {
+          throw new Error("설계안은 정확히 4컷이어야 합니다.");
+        }
+        return data;
+      } catch (error) {
+        if (attempt >= 1) throw error;
+        await new Promise<void>((resolve) => setTimeout(resolve, 750));
+      }
     }
-
-    return data;
   };
 
   const buildAllPlans = async (
@@ -421,6 +417,8 @@ ${pageText}
     ).fill(null);
     let nextIndex = 0;
     let completedCount = 0;
+    let successCount = 0;
+    let failureCount = 0;
 
     const worker = async () => {
       while (true) {
@@ -433,7 +431,7 @@ ${pageText}
         const passage = targetPassages[index];
         const itemStartedAt = performance.now();
         const progress =
-          `설계안 생성 중 (${completedCount}/${targetPassages.length})`;
+          `설계안 처리 ${completedCount}/${targetPassages.length} · 성공 ${successCount}개 · 실패 ${failureCount}개`;
 
         setPlanProgressText(progress);
         setStatusText(`${progress} · ${passage.title}`);
@@ -455,7 +453,9 @@ ${pageText}
             visualStyle: data?.visualStyle,
             storyMode: data?.storyMode,
           };
+          successCount += 1;
         } catch (error: any) {
+          failureCount += 1;
           console.error(`[middle-passage] 설계안 ${index + 1} 실패`, error);
           results[index] = {
             id: makeId(),
@@ -475,7 +475,7 @@ ${pageText}
           );
           completedCount += 1;
           setPlanProgressText(
-            `설계안 생성 완료 ${completedCount}/${targetPassages.length}`
+            `설계안 처리 ${completedCount}/${targetPassages.length} · 성공 ${successCount}개 · 실패 ${failureCount}개`
           );
         }
       }
@@ -499,7 +499,7 @@ ${pageText}
     );
 
     setPlanProgressText(
-      `설계안 생성 완료 ${targetPassages.length}/${targetPassages.length}`
+      `설계안 생성 종료 · 성공 ${successCount}개 · 실패 ${failureCount}개 (전체 ${targetPassages.length}개)`
     );
 
     const failedCount = nextPlans.filter((plan) => plan.error).length;
@@ -967,7 +967,7 @@ ${pageText}
               );
               imageCompletedCount += 1;
               setImageProgress(
-                `이미지 생성 완료 ${imageCompletedCount}/${imageTargets.length}`
+                `이미지 처리 ${imageCompletedCount}/${imageTargets.length} · 성공 ${imageResults.size}개 · 실패 ${imageErrors.size}개`
               );
             }
           }
@@ -1044,7 +1044,7 @@ ${pageText}
         );
 
         setImageProgress(
-          "전체 이미지 생성 완료"
+          `이미지 생성 종료 · 성공 ${nextWorkItems.length}개 · 실패 ${latestPlans.length - nextWorkItems.length}개`
         );
 
         setStatusText(
