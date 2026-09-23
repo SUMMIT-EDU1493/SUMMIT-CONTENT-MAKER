@@ -1,7 +1,14 @@
 import OpenAI from "openai";
+import sharp from "sharp";
+import fs from "fs/promises";
+import path from "path";
 
 import { createTrackedOpenAI } from "@/lib/tracked-openai";
+
 export const maxDuration = 300;
+export const runtime = "nodejs";
+
+// KOREAN_SUMMARY_FINAL_BRAND_LAYOUT_V2
 
 type FlowItem = {
   label?: string;
@@ -33,44 +40,32 @@ function cleanText(value: unknown, max = 100) {
     .slice(0, max);
 }
 
+function hashString(value: string) {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = (hash * 31 + value.charCodeAt(i)) % 1000003;
+  }
+  return Math.abs(hash);
+}
+
 function decideLayoutType(body: VisualRequest) {
-  const hasComparison =
-    Array.isArray(body.comparisonRows) &&
-    body.comparisonRows.length > 0;
+  const comparisonRows = Array.isArray(body.comparisonRows)
+    ? body.comparisonRows
+    : [];
+  const flowCount = Array.isArray(body.flow) ? body.flow.length : 0;
+  const conceptCount = Array.isArray(body.concepts) ? body.concepts.length : 0;
+  const hint = cleanText(body.visualPrompt, 240).toLowerCase();
 
-  const flowCount = Array.isArray(body.flow)
-    ? body.flow.length
-    : 0;
-
-  const visualPrompt = cleanText(
-    body.visualPrompt,
-    200
-  ).toLowerCase();
-
-  if (hasComparison) {
-    return "comparison";
-  }
-
-  if (
-    visualPrompt.includes("과정") ||
-    visualPrompt.includes("흐름") ||
-    visualPrompt.includes("단계") ||
-    visualPrompt.includes("변화") ||
-    flowCount >= 4
-  ) {
-    return "process";
-  }
-
-  if (
-    visualPrompt.includes("원인") ||
-    visualPrompt.includes("결과") ||
-    visualPrompt.includes("영향") ||
-    visualPrompt.includes("인과")
-  ) {
-    return "cause-effect";
-  }
-
+  if (comparisonRows.length > 0) return "comparison";
+  if (/원인|결과|영향|인과|문제|해결/.test(hint)) return "cause-effect";
+  if (/과정|흐름|단계|변화|전개|순서/.test(hint) || flowCount >= 5) return "process";
+  if (/사례|장면|실험|예시|상황/.test(hint)) return "example";
+  if (conceptCount >= 4) return "concept-network";
   return "concept";
+}
+
+function toDataUri(buffer: Buffer) {
+  return `data:image/png;base64,${buffer.toString("base64")}`;
 }
 
 export async function POST(request: Request) {
@@ -79,23 +74,17 @@ export async function POST(request: Request) {
 
     if (!apiKey) {
       return Response.json(
-        {
-          error: "OPENAI_API_KEY가 설정되어 있지 않습니다.",
-        },
+        { error: "OPENAI_API_KEY가 설정되어 있지 않습니다." },
         { status: 500 }
       );
     }
 
-    const body: VisualRequest =
-      await request.json();
+    const body: VisualRequest = await request.json();
 
     const title = cleanText(body.title, 24);
     const oneLine = cleanText(body.oneLine, 40);
     const caution = cleanText(body.caution, 32);
-    const visualIdea = cleanText(
-      body.visualPrompt,
-      180
-    );
+    const visualIdea = cleanText(body.visualPrompt, 180);
 
     const flow = Array.isArray(body.flow)
       ? body.flow.slice(0, 5).map((item, index) => ({
@@ -106,306 +95,238 @@ export async function POST(request: Request) {
       : [];
 
     const concepts = Array.isArray(body.concepts)
-      ? body.concepts
-          .slice(0, 5)
-          .map((item) => ({
-            name: cleanText(item?.name, 10),
-            description: cleanText(
-              item?.description,
-              18
-            ),
-          }))
+      ? body.concepts.slice(0, 5).map((item) => ({
+          name: cleanText(item?.name, 10),
+          description: cleanText(item?.description, 18),
+        }))
       : [];
 
-    const comparisonHeaders = Array.isArray(
-      body.comparisonHeaders
-    )
-      ? body.comparisonHeaders
-          .slice(0, 3)
-          .map((item) => cleanText(item, 12))
+    const comparisonHeaders = Array.isArray(body.comparisonHeaders)
+      ? body.comparisonHeaders.slice(0, 3).map((item) => cleanText(item, 12))
       : [];
 
-    const comparisonRows = Array.isArray(
-      body.comparisonRows
-    )
-      ? body.comparisonRows
-          .slice(0, 4)
-          .map((row) =>
-            Array.isArray(row)
-              ? row
-                  .slice(0, 3)
-                  .map((cell) =>
-                    cleanText(cell, 14)
-                  )
-              : []
-          )
+    const comparisonRows = Array.isArray(body.comparisonRows)
+      ? body.comparisonRows.slice(0, 4).map((row) =>
+          Array.isArray(row)
+            ? row.slice(0, 3).map((cell) => cleanText(cell, 14))
+            : []
+        )
       : [];
 
-    const testPoints = Array.isArray(
-      body.testPoints
-    )
-      ? body.testPoints
-          .slice(0, 3)
-          .map((item) => cleanText(item, 20))
+    const testPoints = Array.isArray(body.testPoints)
+      ? body.testPoints.slice(0, 3).map((item) => cleanText(item, 20))
       : [];
 
-    const layoutType =
-      decideLayoutType(body);
+    const layoutType = decideLayoutType(body);
+    const variantSeed = hashString([title, oneLine, visualIdea].join('|'));
 
-    const leftName =
-      comparisonHeaders[1] || "";
-    const rightName =
-      comparisonHeaders[2] || "";
+    const variants: Record<string, string[]> = {
+      comparison: [
+        "editorial split-board with two unequal visual zones",
+        "notebook-spread comparison with a strong center contrast",
+        "comparison collage with two large illustrated anchors",
+      ],
+      process: [
+        "curving visual journey across the page",
+        "horizontal timeline with large illustrated milestones",
+        "staggered step path with arrows and scene changes",
+      ],
+      "cause-effect": [
+        "cause-mechanism-result chain with strong directional movement",
+        "branching cause map converging into one result",
+        "problem-to-impact visual story with arrows and grouped notes",
+      ],
+      example: [
+        "case-study scene board with one large scene and surrounding notes",
+        "two-scene example collage with callouts",
+        "illustrated case notebook with evidence pinned around the scene",
+      ],
+      "concept-network": [
+        "central concept hub with asymmetric branches",
+        "clustered mind-map with varied note sizes",
+        "concept constellation with one dominant visual anchor",
+      ],
+      concept: [
+        "mixed editorial study-note layout",
+        "large central metaphor illustration with scattered compact notes",
+        "asymmetric concept board with varied paper-note shapes",
+      ],
+    };
+
+    const candidates = variants[layoutType] || variants.concept;
+    const layoutVariant = candidates[variantSeed % candidates.length];
+
+    const leftName = comparisonHeaders[1] || "A";
+    const rightName = comparisonHeaders[2] || "B";
 
     const flowGuide = flow.length
-      ? flow
-          .map(
-            (item) =>
-              `${item.number}. ${item.label} - ${item.content}`
-          )
-          .join("\n")
-      : "1. 핵심 개념 파악 - 요지 이해\n2. 구조 확인 - 비교/과정/원인결과\n3. 핵심어 정리 - 개념 연결";
+      ? flow.map((item) => `${item.number}. ${item.label} - ${item.content}`).join("\n")
+      : "핵심 흐름은 짧게 3~4개만";
 
     const conceptGuide = concepts.length
-      ? concepts
-          .map(
-            (item) =>
-              `${item.name} - ${item.description}`
-          )
-          .join("\n")
-      : "핵심 개념 - 중요한 용어를 짧게 정리";
+      ? concepts.map((item) => `${item.name} - ${item.description}`).join("\n")
+      : "핵심 개념은 꼭 필요한 것만";
 
     const comparisonGuide = comparisonRows.length
-      ? comparisonRows
-          .map(
-            (row) =>
-              `${row[0] || ""} | ${row[1] || ""} | ${row[2] || ""}`
-          )
-          .join("\n")
+      ? comparisonRows.map((row) => `${row[0] || ""} | ${row[1] || ""} | ${row[2] || ""}`).join("\n")
       : "";
 
     const testGuide = testPoints.length
-      ? testPoints
-          .map(
-            (item, index) =>
-              `${index + 1}. ${item}`
-          )
-          .join("\n")
-      : "1. 핵심 차이 파악\n2. 중심 개념 비교\n3. 논지 흐름 정리";
+      ? testPoints.map((item, index) => `${index + 1}. ${item}`).join("\n")
+      : "핵심 시험 포인트 2~3개";
 
-    const layoutInstructionMap = {
-      comparison: `
-This passage is COMPARISON-based.
-Make the page composition similar to a premium English visual summary sheet:
-- left side: short numbered flow / 핵심 흐름
-- center: BIG visual comparison area
-- two main sides clearly distinguished
-- small captions around the visual
-- comparison notes integrated naturally
-- not a strict table, but a visual comparison note page
+    const layoutSpecific =
+      layoutType === "comparison"
+        ? `Make the contrast between "${leftName}" and "${rightName}" instantly visible.`
+        : layoutType === "process"
+          ? "The viewer should visually follow the sequence without reading every note."
+          : layoutType === "cause-effect"
+            ? "The direction from cause to mechanism to result must be unmistakable."
+            : layoutType === "example"
+              ? "Use the example scene as the visual anchor instead of a generic diagram."
+              : layoutType === "concept-network"
+                ? "Show relationships among concepts spatially, not as a simple list."
+                : "Choose the most natural visual metaphor for the passage.";
 
-Main contrast:
-LEFT = "${leftName}"
-RIGHT = "${rightName}"
-`,
-      process: `
-This passage is PROCESS/FLOW-based.
-Make the page composition like an English-style visual summary sheet:
-- left side: numbered 핵심 흐름
-- center/right: large flowing process diagram
-- use arrows, steps, transitions, visual movement
-- compact handwritten notes around the main process
-- the process illustration must dominate the page
-`,
-      "cause-effect": `
-This passage is CAUSE-EFFECT based.
-Make the page composition like an English-style visual summary sheet:
-- left side: short numbered 흐름
-- center: strong cause -> mechanism -> result visual chain
-- use arrows and visual relationships
-- notes placed around the mechanism
-- overall composition should feel like a high-quality English summary worksheet
-`,
-      concept: `
-This passage is CONCEPT-based.
-Make the page composition like an English-style visual summary sheet:
-- left side: short numbered 흐름
-- center: one large core concept illustration
-- around it: small compact concept notes
-- use little paper notes, arrows, small labels
-- overall look should feel like a premium English summary page
-`,
-    } as const;
-
-    const layoutInstruction =
-      layoutInstructionMap[
-        layoutType as keyof typeof layoutInstructionMap
-      ] || layoutInstructionMap.concept;
-
-    const openai = createTrackedOpenAI({
-      apiKey,
-    }, {
+    const openai = createTrackedOpenAI(
+      { apiKey },
+      {
         route: "/api/korean-summary-visual",
         feature: "국어 요약 시각자료",
-      });
+      }
+    );
 
     const prompt = `
-Create ONE finished LANDSCAPE Korean visual summary page.
+Create ONE finished LANDSCAPE Korean visual summary page for a high-school study booklet.
 
-This page must follow the SAME DESIGN LANGUAGE as a premium English summary workbook page:
-- horizontal 1-page layout
-- cream / ivory paper background
-- scrapbook / study-note feeling
-- pastel highlighter strokes
-- taped paper title
-- small doodles
-- soft hand-drawn note aesthetic
-- compact handwritten Korean-style typography
-- visually polished and cute, but suitable for high-school students
-- educational but stylish
-- clean, breathable layout
+DESIGN LANGUAGE
+- warm ivory / clean notebook-paper background
+- polished Korean study-note aesthetic
+- black hand-drawn lines
+- soft mint, yellow, peach, blue accents
+- highlighter strokes, tape, memo paper, arrows, tiny doodles
+- mature high-school level, never childish
+- clean, printable, visually memorable
 
-VERY IMPORTANT:
-Do NOT use the old Korean template.
-Do NOT make a rigid 3-column infographic.
-Do NOT fill the page with long paragraphs.
-Do NOT make dense dashboard boxes.
-Do NOT overlap text and illustrations.
+MOST IMPORTANT: LAYOUT DIVERSITY
+This page must NOT follow a fixed reusable template.
+Do NOT automatically place 핵심 흐름 on the left, a big illustration in the center, and 시험 POINT / 기억하자 on the right every time.
+Do NOT create the same sidebar + center + sticky-note composition used on other pages.
 
-The final result should look much closer to the English summary sample style:
-- one large central visual explanation
-- left-side short numbered summary flow
-- short note fragments
-- compact concept tags
-- highlighted one-line summary
-- irregular but balanced editorial composition
+For THIS page, use this composition family:
+${layoutType}
 
-No logo.
-No watermark.
-No SUMMIT EDU text.
+Preferred visual variant:
+${layoutVariant}
 
-========================
-TEXT CONTENT
-========================
+${layoutSpecific}
 
-Main title:
-"${title}"
+The page should feel designed around THIS passage, not content poured into a pre-made frame.
+Use asymmetric balance when helpful.
+Vary box shapes, note positions, visual scale, and reading direction naturally.
 
-One-line summary:
-"${oneLine}"
+BRAND SAFE ZONE
+The official SUMMIT VISUAL LAB logo will be overlaid later by software.
+Reserve a small calm zone ONLY in the extreme upper-left corner, approximately x=35..275 px and y=25..135 px.
+Do not place title, subtitle, icon, doodle, box, or important illustration inside that small area.
+Do not draw a placeholder or fake logo there.
+Use the rest of the top area normally; do not leave a large empty top band.
 
-Main visual idea:
-"${visualIdea}"
+CONTENT
+Main title: "${title}"
+One-line core: "${oneLine}"
+Visual idea: "${visualIdea}"
 
-핵심 흐름:
+Flow notes:
 ${flowGuide}
 
-핵심 개념:
+Concept notes:
 ${conceptGuide}
 
-비교 정보:
-${comparisonGuide || "비교형 정보 없음"}
+Comparison data:
+${comparisonGuide || "No explicit comparison table needed."}
 
-시험 포인트:
+Test points:
 ${testGuide}
 
-기억하자:
+Memory caution:
 "${caution}"
 
-========================
-LAYOUT RULE
-========================
+TEXT RULES
+- Korean must be legible and short.
+- No long paragraphs.
+- Do not invent facts.
+- Do not repeat the same idea in several boxes.
+- Prefer 5~16 Korean characters per small phrase.
+- If crowded, remove decoration and secondary notes before shrinking text.
 
-${layoutInstruction}
+SECTION FLEXIBILITY
+The page may contain labels such as VISUAL SUMMARY, 핵심 흐름, 핵심 개념, 시험 POINT, 기억하자!, but they do NOT all need to appear in the same positions or same shapes.
+Use only the most useful labels naturally.
+A section can be integrated into the diagram rather than boxed separately.
 
-========================
-TEXT STYLE RULE
-========================
+ABSOLUTE NO
+- no rigid repeated 3-column infographic
+- no identical box grid repeated from page to page
+- no fake SUMMIT logo
+- no watermark
+- no SUMMIT EDU text
+- no giant decorative header that wastes space
+- no tiny unreadable Korean text
 
-All Korean text must be SHORT and COMPACT.
-
-Do not expand the supplied text into long explanations.
-Do not create paragraphs.
-Use short Korean phrases only.
-
-Examples of good text length:
-- 6~16 characters per phrase
-- 1 short sentence maximum per small note
-- very compact captions
-
-If the page feels crowded:
-1. reduce decoration first
-2. shorten note count
-3. keep the main illustration and title readable
-
-Never shrink text into tiny unreadable text.
-
-========================
-REQUIRED SECTIONS
-========================
-
-Include these sections naturally:
-1. small label: "VISUAL SUMMARY"
-2. small subtitle: "그림으로 한눈에 이해하기"
-3. main title
-4. highlighted one-line summary
-5. "핵심 흐름" with 3~5 short numbered items
-6. one large central visual explanation
-7. small "핵심 개념" notes
-8. small "시험 POINT" memo
-9. small "기억하자!" sticky note
-
-========================
-VISUAL FEEL
-========================
-
-The result should feel like:
-- a polished teacher-made English summary sheet
-- a visual note page
-- a study scrapbook
-- a compact A4 landscape explanation page
-
-The main illustration should dominate the page.
-Text should support the visual.
-
-Korean should render cleanly and legibly.
-Use a soft, friendly, rounded handwritten note style.
-Avoid stiff textbook-looking typography.
-
-Final output: ONE landscape visual summary page image.
+Final output: ONE landscape 1536x1024 visual summary page image.
 `;
 
-    const result =
-      await openai.images.generate({
-        model: "gpt-image-2",
-        prompt,
-        size: "1536x1024",
-        quality: "medium",
-        n: 1,
-      });
+    const result = await openai.images.generate({
+      model: "gpt-image-2",
+      prompt,
+      size: "1536x1024",
+      quality: "medium",
+      n: 1,
+    });
 
-    const imageBase64 =
-      result.data?.[0]?.b64_json;
-
+    const imageBase64 = result.data?.[0]?.b64_json;
     if (!imageBase64) {
-      throw new Error(
-        "생성된 비주얼 요약 이미지를 받지 못했습니다."
-      );
+      throw new Error("생성된 비주얼 요약 이미지를 받지 못했습니다.");
     }
 
+    const generatedImage = Buffer.from(imageBase64, "base64");
+
+    const logoPath = path.join(
+      process.cwd(),
+      "public",
+      "brand",
+      "summit-visual-lab-horizontal.png"
+    );
+
+    const logoFile = await fs.readFile(logoPath);
+    const logoBuffer = await sharp(logoFile)
+      .trim()
+      .resize({ width: 210, withoutEnlargement: true })
+      .png()
+      .toBuffer();
+
+    const finalImage = await sharp(generatedImage)
+      .resize({ width: 1536, height: 1024, fit: "cover" })
+      .composite([
+        {
+          input: logoBuffer,
+          left: 55,
+          top: 45,
+        },
+      ])
+      .png()
+      .toBuffer();
+
     return Response.json({
-      imageUrl: `data:image/png;base64,${imageBase64}`,
+      imageUrl: toDataUri(finalImage),
     });
   } catch (error: any) {
-    console.error(
-      "KOREAN VISUAL SUMMARY ERROR:",
-      error
-    );
+    console.error("KOREAN VISUAL SUMMARY ERROR:", error);
 
     return Response.json(
       {
-        error:
-          "국어 비주얼 요약 생성 중 오류가 발생했습니다.",
+        error: "국어 비주얼 요약 생성 중 오류가 발생했습니다.",
         detail:
           error?.message ||
           error?.error?.message ||

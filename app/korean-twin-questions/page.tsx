@@ -210,7 +210,7 @@ export default function KoreanQuestionMakerPage() {
       [passages]
     );
 
-  const questionCount =
+  const perPassageQuestionCount =
     useMemo(
       () =>
         typeSettings.reduce(
@@ -223,6 +223,17 @@ export default function KoreanQuestionMakerPage() {
           0
         ),
       [typeSettings]
+    );
+
+  const totalQuestionCount =
+    useMemo(
+      () =>
+        perPassageQuestionCount *
+        selectedPassages.length,
+      [
+        perPassageQuestionCount,
+        selectedPassages.length,
+      ]
     );
 
   const updateTypeCount = (
@@ -444,17 +455,6 @@ export default function KoreanQuestionMakerPage() {
       setPassages(
         nextPassages
       );
-
-      setTypeSettings(
-        (prev) =>
-          prev.map(
-            (item) => ({
-              ...item,
-              count:
-                nextPassages.length,
-            })
-          )
-      );
     } catch (
       error: any
     ) {
@@ -598,7 +598,7 @@ export default function KoreanQuestionMakerPage() {
       }
 
       if (
-        questionCount ===
+        perPassageQuestionCount ===
         0
       ) {
         alert(
@@ -640,77 +640,27 @@ export default function KoreanQuestionMakerPage() {
         const nextSkipped: SkippedType[] =
           [];
 
-        const passageCount =
-          selectedPassages.length;
-
-        const requestsByPassage =
+        const passageTypesByPassage =
           selectedPassages.map(
             () =>
-              [] as {
-                type: string;
-                count: number;
-              }[]
+              typeSettings
+                .filter(
+                  (
+                    item
+                  ) =>
+                    item.count > 0
+                )
+                .map(
+                  (
+                    item
+                  ) => ({
+                    type:
+                      item.type,
+                    count:
+                      item.count,
+                  })
+                )
           );
-
-        typeSettings.forEach(
-          (
-            setting,
-            typeIndex
-          ) => {
-            if (
-              setting.count <=
-              0
-            ) {
-              return;
-            }
-
-            const base =
-              Math.floor(
-                setting.count /
-                  passageCount
-              );
-
-            const remainder =
-              setting.count %
-              passageCount;
-
-            for (
-              let offset = 0;
-              offset <
-              passageCount;
-              offset++
-            ) {
-              const passageIndex =
-                (
-                  offset +
-                  typeIndex
-                ) %
-                passageCount;
-
-              const count =
-                base +
-                (
-                  offset <
-                  remainder
-                    ? 1
-                    : 0
-                );
-
-              if (
-                count >
-                0
-              ) {
-                requestsByPassage[
-                  passageIndex
-                ].push({
-                  type:
-                    setting.type,
-                  count,
-                });
-              }
-            }
-          }
-        );
 
         for (
           let index = 0;
@@ -724,7 +674,7 @@ export default function KoreanQuestionMakerPage() {
             ];
 
           const passageTypes =
-            requestsByPassage[
+            passageTypesByPassage[
               index
             ];
 
@@ -1514,16 +1464,16 @@ export default function KoreanQuestionMakerPage() {
                   </p>
 
                   <p className="mt-1 text-sm text-slate-500">
-                    문항 수는 선택한 전체 지문에 고르게 분배합니다. 0문항이면 해당 유형은 출제하지 않습니다.
+                    각 문제 유형의 문항 수는 지문마다 동일하게 적용됩니다. 0문항이면 해당 유형은 출제하지 않습니다.
+                  </p>
+
+                  <p className="mt-2 text-sm text-slate-500">
+                    예: 유형별 5문항 선택 시, 7개 유형이면 지문 1개당 35문항
                   </p>
                 </div>
 
                 <p className="rounded-full bg-violet-100 px-4 py-2 text-sm font-black text-violet-700">
-                  전체 최대{" "}
-                  {
-                    questionCount
-                  }
-                  문항
+                  지문당 {perPassageQuestionCount}문항 · 선택 지문 {selectedPassages.length}개 · 총 {totalQuestionCount}문항
                 </p>
               </div>
 
@@ -1683,11 +1633,7 @@ export default function KoreanQuestionMakerPage() {
                 {
                   selectedPassages.length
                 }
-                개 · 전체 최대{" "}
-                {
-                  questionCount
-                }
-                문항
+                개 · 지문당 {perPassageQuestionCount}문항 · 총 {totalQuestionCount}문항
               </p>
 
               <button
@@ -1699,7 +1645,7 @@ export default function KoreanQuestionMakerPage() {
                   generating ||
                   selectedPassages.length ===
                     0 ||
-                  questionCount ===
+                  perPassageQuestionCount ===
                     0
                 }
                 className="mt-5 w-full rounded-xl bg-violet-500 px-6 py-4 text-lg font-black text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
@@ -1787,9 +1733,7 @@ export default function KoreanQuestionMakerPage() {
 
             <div className="mt-8 rounded-3xl bg-white p-7 shadow-sm ring-1 ring-slate-200 print-card">
               <div className="border-b-2 border-slate-900 pb-5">
-                <p className="text-sm font-black tracking-[0.15em] text-violet-600">
-                  SUMMIT VISUAL LAB
-                </p>
+                <img src="/brand/summit-visual-lab-horizontal.png" alt="SUMMIT VISUAL LAB" className="mb-1 w-[28mm] object-contain" />
 
                 <h2 className="mt-2 text-3xl font-black">
                   수능형 국어 독서 문제

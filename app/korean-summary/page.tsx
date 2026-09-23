@@ -180,10 +180,11 @@ ${pageText}
 
       setPassages(foundPassages);
 
+      // KOREAN_SUMMARY_UNLIMITED_SELECTION
       setSelectedIds(
-        foundPassages
-          .slice(0, 2)
-          .map((passage) => passage.id)
+        foundPassages.map(
+          (passage) => passage.id
+        )
       );
 
       if (foundPassages.length === 0) {
@@ -231,14 +232,6 @@ ${pageText}
     setSelectedIds((prev) => {
       if (prev.includes(id)) {
         return prev.filter((item) => item !== id);
-      }
-
-      if (prev.length >= 2) {
-        alert(
-          "이번에는 지문 2개까지만 선택할 수 있어."
-        );
-
-        return prev;
       }
 
       return [...prev, id];
@@ -579,6 +572,8 @@ ${pageText}
           undefined,
           "FAST"
         );
+
+
       }
 
       const safeName =
@@ -719,13 +714,12 @@ ${pageText}
                 </h2>
 
                 <p className="mt-2 text-sm text-slate-500">
-                  최대 2개까지 선택.
+                  원하는 지문을 모두 선택할 수 있어.
                 </p>
               </div>
 
               <div className="rounded-full bg-purple-100 px-5 py-2 text-sm font-black text-purple-700">
-                {selectedIds.length}
-                /2 선택
+                {selectedIds.length}개 선택
               </div>
             </div>
 
@@ -932,7 +926,7 @@ ${pageText}
                   </p>
 
                   <h3 className="mt-2 text-2xl font-black">
-                    두 지문을 한 PDF로 저장
+                    선택한 모든 요약을 하나의 PDF로 저장
                   </h3>
 
                   <p className="mt-2 text-sm text-slate-300">

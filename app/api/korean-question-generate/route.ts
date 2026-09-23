@@ -19,6 +19,70 @@ function cleanText(value: unknown) {
     .trim();
 }
 
+
+function normalizeQuestionBox(
+  stemValue: unknown,
+  boxValue: unknown
+) {
+  let stem =
+    cleanText(stemValue);
+
+  let boxText =
+    cleanText(boxValue);
+
+  // "보기" 또는 "<보기>"만 들어온 가짜 빈 보기 제거
+  if (
+    /^(?:보기|<\s*보기\s*>)$/.test(
+      boxText
+    )
+  ) {
+    boxText = "";
+  }
+
+  // boxText에 "보기: 내용"으로 들어온 경우
+  // 접두어만 제거
+  boxText =
+    boxText.replace(
+      /^(?:<\s*보기\s*>\s*)?보기\s*:\s*/,
+      ""
+    );
+
+  // 실제 보기 내용이 stem 뒤에
+  // "보기: ..." 형태로 붙은 경우
+  // 보기 상자로 이동
+  if (!boxText) {
+    const match =
+      stem.match(
+        /(?:\n|\s)(?:<\s*보기\s*>\s*)?보기\s*:\s*([\s\S]+)$/
+      );
+
+    if (
+      match &&
+      match[1] &&
+      typeof match.index ===
+        "number"
+    ) {
+      boxText =
+        cleanText(
+          match[1]
+        );
+
+      stem =
+        cleanText(
+          stem.slice(
+            0,
+            match.index
+          )
+        );
+    }
+  }
+
+  return {
+    stem,
+    boxText,
+  };
+}
+
 function parseJsonOutput(output: string) {
   const cleaned = output
     .replace(/^```json\s*/i, "")
@@ -189,6 +253,73 @@ export async function POST(
         )
       );
 
+    // FINAL_BOX_DIFFICULTY_FIX
+    const requestedQuestionCount =
+      types.reduce(
+        (sum, item) =>
+          sum + item.count,
+        0
+      );
+
+    const difficultyPlan:
+      Difficulty[] = (() => {
+        if (
+          activeDifficulties.length ===
+          1
+        ) {
+          return Array.from(
+            {
+              length:
+                requestedQuestionCount,
+            },
+            () =>
+              activeDifficulties[0]
+          );
+        }
+
+        const pool:
+          Difficulty[] =
+          Array.from(
+            {
+              length:
+                requestedQuestionCount,
+            },
+            (_, index) =>
+              index % 2 === 0
+                ? "중"
+                : "상"
+          );
+
+        // 순서만 자연스럽게 랜덤화
+        for (
+          let i =
+            pool.length - 1;
+          i > 0;
+          i--
+        ) {
+          const j =
+            Math.floor(
+              Math.random() *
+                (i + 1)
+            );
+
+          [
+            pool[i],
+            pool[j],
+          ] = [
+            pool[j],
+            pool[i],
+          ];
+        }
+
+        return pool;
+      })();
+
+    const difficultyPlanText =
+      difficultyPlan.join(
+        ", "
+      );
+
     const openai =
       createTrackedOpenAI({
         apiKey,
@@ -222,6 +353,15 @@ export async function POST(
 ==================================================
 
 사용 가능한 난이도: ${activeDifficulties.join(", ")}
+
+문항별 실제 난이도 계획:
+${difficultyPlanText}
+
+- questions 배열의 각 문항은 위 난이도 계획 순서와 정확히 대응하십시오.
+- "중"으로 지정된 문항은 실제 내용도 중 난이도로 만드십시오.
+- "상"으로 지정된 문항은 실제 내용도 상 난이도로 만드십시오.
+- difficulty 필드 역시 해당 계획의 "중" 또는 "상"을 그대로 기록하십시오.
+- 난이도 표지만 바꾸고 문제 내용은 똑같이 만드는 것은 금지합니다.
 
 - 한 가지 난이도만 전달된 경우 모든 문항을 그 난이도로 출제하십시오.
 - "중"과 "상"이 함께 전달된 경우 전체 문항에서 두 난이도를 가능한 한 균등하게 섞으십시오.
@@ -487,7 +627,7 @@ JSON
   "questions": [
     {
       "type": "세부 내용 파악",
-      "difficulty": "중",
+      "difficulty": "${difficultyPlan[0] ?? activeDifficulties[0]}",
       "stem": "문제 발문",
       "boxText": "",
       "targetWord": "",
@@ -778,9 +918,137 @@ ${passage}
       });
     }
 
+    // ANSWER_EXPLANATION_SYNC_CHECK
+    // 선택지 순서와 정답 분포는 건드리지 않고
+    // 선지별 해설의 명확한 정답 표시와 answer만 맞춥니다.
+    const checkedQuestions =
+      limitedQuestions.map(
+        (question: any) => {
+          const explanations =
+            Array.isArray(
+              question.choiceExplanations
+            )
+              ? question.choiceExplanations
+              : [];
+
+          const detectedAnswers =
+            explanations
+              .map(
+                (
+                  raw: unknown,
+                  index: number
+                ) => {
+                  const text =
+                    cleanText(raw)
+                      .replace(
+                        /^(?:[①②③④⑤]|[1-5][.)])\\s*/,
+                        ""
+                      )
+                      .trim();
+
+                  // "정답 아님"은 제외
+                  if (
+                    /^정답\\s*아님/.test(
+                      text
+                    )
+                  ) {
+                    return 0;
+                  }
+
+                  // "정답.", "정답:", "정답 "처럼
+                  // 명확하게 정답이라고 시작하는 경우만 인정
+                  if (
+                    /^정답(?:\\s|[.!,:：()\\-]|$)/.test(
+                      text
+                    )
+                  ) {
+                    return index + 1;
+                  }
+
+                  return 0;
+                }
+              )
+              .filter(
+                (value: number) =>
+                  value > 0
+              );
+
+          // 선지별 해설에 정답 표시가
+          // 정확히 하나일 때만 answer를 맞춤
+          if (
+            detectedAnswers.length ===
+            1
+          ) {
+            const detectedAnswer =
+              detectedAnswers[0];
+
+            if (
+              Number(
+                question.answer
+              ) !== detectedAnswer
+            ) {
+              console.warn(
+                "정답-해설 불일치 자동 수정",
+                {
+                  before:
+                    question.answer,
+                  after:
+                    detectedAnswer,
+                  stem:
+                    question.stem,
+                }
+              );
+
+              return {
+                ...question,
+                answer:
+                  detectedAnswer,
+              };
+            }
+          }
+
+          return question;
+        }
+      );
+
+    const finalQuestions =
+      checkedQuestions.map(
+        (
+          question: any,
+          index: number
+        ) => {
+          const normalized =
+            normalizeQuestionBox(
+              question.stem,
+              question.boxText
+            );
+
+          return {
+            ...question,
+
+            stem:
+              normalized.stem,
+
+            boxText:
+              normalized.boxText,
+
+            // 단일 난이도 선택이면 그대로,
+            // 중+상 선택이면 실제 생성 계획대로 표시
+            difficulty:
+              activeDifficulties.length ===
+              1
+                ? activeDifficulties[0]
+                : difficultyPlan[
+                    index %
+                      difficultyPlan.length
+                  ],
+          };
+        }
+      );
+
     return Response.json({
       questions:
-        limitedQuestions,
+        finalQuestions,
       skippedTypes,
     });
   } catch (
