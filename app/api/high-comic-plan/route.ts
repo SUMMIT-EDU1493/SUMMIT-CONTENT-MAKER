@@ -112,29 +112,36 @@ export async function POST(
       }
       throw last;
     };
+    // Stable server-assigned word IDs avoid copying PDF whitespace/punctuation.
+    const sourceWords = Array.from(sourceText.matchAll(/\S+/gu), match => ({
+      text: match[0], offset: match.index!,
+    }));
+    const indexedSource = sourceWords.map((word, index) => `[${index + 1}]${word.text}`).join(" ");
     const boundaries = await retry(async () => {
       const response = await openai.responses.create({
         model: "gpt-5-mini",
         max_output_tokens: 8000,
-        input: `입력은 PDF에서 추출한 고등 영어 자료다. 설계안은 만들지 말고 독립 영어 지문의 시작만 찾는다.
-문제 번호, 연도, 월 모의고사, 지문 읽기 표시를 참고한다. 같은 지문의 다음 페이지와 한국어 해석은 새 지문이 아니다.
-각 독립 지문에 대해 영어 원문의 첫 부분을 입력에서 공백과 문장부호까지 정확히 복사한 start 문자열로 반환한다.
-start는 최소 60자(짧은 지문은 전체 원문), 최대 180자이며 입력에서 유일하게 나타나야 한다.
-모든 독립 지문을 원래 순서대로 빠짐없이 한 번씩 포함한다. 제목이나 요약은 생성하지 않는다.
-JSON만 반환: {"starts":["정확히 복사한 영어 지문 시작", "다음 영어 지문 시작"]}
-입력 자료:\n${sourceText}`,
+        input: `입력은 PDF에서 추출한 고등 영어 자료다. 설계안은 만들지 말고 독립 영어 지문의 시작 위치만 찾는다.
+서버가 각 단어 앞에 [1], [2]처럼 위치 번호를 붙였다. 이 번호는 문제 번호가 아니라 원문 내 단어 위치다.
+각 독립 지문의 영어 원문 첫 단어 앞에 붙은 위치 번호를 startWordIds 배열에 정수로 반환한다.
+지문 첫 단어 바로 앞의 문제 번호·제목·문장 번호는 선택하지 않는다. 첫 단어가 문장 번호와 붙어 있으면 그 단어 위치를 선택한다.
+문제 번호, 연도, 월 모의고사, 지문 읽기 표시를 참고한다.
+같은 지문의 다음 페이지·한국어 해석·해설·단어 목록·보기·선택지는 새 지문이 아니다.
+같은 첫 문장이라도 서로 다른 실제 지문이면 서로 다른 위치 번호로 구분한다.
+모든 독립 영어 지문을 입력 순서대로 빠짐없이 한 번씩 포함한다. 문장 복사나 제목·요약 생성은 금지한다.
+JSON만 반환: {"startWordIds":[12,340,721]}
+위 숫자는 형식 예시다. 반드시 실제 입력에 붙어 있는 번호를 사용한다.
+입력 자료:\n${indexedSource}`,
       });
-      const data = parseCompleted(response) as ParsedResponse & { starts?: string[] };
-      if (!Array.isArray(data.starts) || !data.starts.length) throw new Error("지문 경계를 찾지 못했습니다.");
-      let previous = -1;
-      return data.starts.map((anchor) => {
-        if (typeof anchor !== "string" || !anchor.trim()) throw new Error("지문 경계가 잘못되었습니다.");
-        const offset = sourceText.indexOf(anchor);
-        if (offset < 0 || sourceText.indexOf(anchor, offset + 1) !== -1 || offset <= previous) {
-          throw new Error("지문 경계의 위치·중복·순서 검증에 실패했습니다.");
+      const data = parseCompleted(response) as ParsedResponse & { startWordIds?: number[] };
+      if (!Array.isArray(data.startWordIds) || !data.startWordIds.length) throw new Error("지문 시작 위치 번호를 찾지 못했습니다.");
+      let previous = 0;
+      return data.startWordIds.map((id) => {
+        if (!Number.isInteger(id) || id < 1 || id > sourceWords.length || id <= previous) {
+          throw new Error("지문 시작 위치 번호가 범위를 벗어나거나 중복·역순입니다.");
         }
-        previous = offset;
-        return offset;
+        previous = id;
+        return sourceWords[id - 1].offset;
       });
     });
     // Contiguous slices cover every input character exactly once, including preamble.
@@ -143,8 +150,9 @@ JSON만 반환: {"starts":["정확히 복사한 영어 지문 시작", "다음 �
     ));
     const batchResults: ParsedResponse[] = new Array(passages.length);
     let nextBatch = 0;
+    let batchFailed = false;
     const worker = async () => {
-      while (nextBatch < passages.length) {
+      while (!batchFailed && nextBatch < passages.length) {
         const index = nextBatch++;
         const passageText = passages[index];
         const expectedId = `passage-${index + 1}`;
@@ -726,6 +734,7 @@ ${passageText}
             return result;
           });
         } catch (error) {
+          batchFailed = true;
           throw new Error(`${index + 1}번 지문 설계 실패: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
