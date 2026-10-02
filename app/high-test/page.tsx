@@ -1149,6 +1149,27 @@ ${pageText}
             }
           );
 
+        // Rotate only the back cover for this booklet print workflow.
+        let printableBackCover = backCoverImage;
+        if (mode === "booklet") {
+          const back = new Image();
+          const loaded = new Promise<void>((resolve, reject) => {
+            back.onload = () => resolve();
+            back.onerror = () => reject(new Error("뒷표지 이미지를 불러오지 못했습니다."));
+          });
+          back.src = backCoverImage;
+          await loaded;
+          const canvas = document.createElement("canvas");
+          canvas.width = back.naturalWidth;
+          canvas.height = back.naturalHeight;
+          const context = canvas.getContext("2d");
+          if (!context) throw new Error("뒷표지 방향 보정에 실패했습니다.");
+          context.translate(canvas.width, canvas.height);
+          context.rotate(Math.PI);
+          context.drawImage(back, 0, 0);
+          printableBackCover = canvas.toDataURL("image/png");
+        }
+
         const logicalPages: Array<
           string | null
         > = [
@@ -1156,7 +1177,7 @@ ${pageText}
           ...workItems.map(
             (item) => item.image
           ),
-          backCoverImage,
+          printableBackCover,
         ];
 
         let pagesToWrite:

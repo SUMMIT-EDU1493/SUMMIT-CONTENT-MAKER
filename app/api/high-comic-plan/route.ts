@@ -98,15 +98,62 @@ export async function POST(
         feature: "고등 써밋네컷 설계안",
       });
 
-    const response =
-      await openai.responses.create({
-        model:
-          "gpt-5-mini",
-
-        max_output_tokens:
-          16000,
-
-        input: `
+    // Identify boundaries with a compact response; never generate all plans at once.
+    const parseCompleted = (response: { status?: string; output_text?: string }): ParsedResponse => {
+      if (response.status !== "completed") throw new Error("설계 응답이 완료되지 않았습니다.");
+      const raw = response.output_text?.trim();
+      if (!raw) throw new Error("설계 응답이 비어 있습니다.");
+      return JSON.parse(raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, ""));
+    };
+    const retry = async <T,>(task: () => Promise<T>): Promise<T> => {
+      let last: unknown;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try { return await task(); } catch (error) { last = error; }
+      }
+      throw last;
+    };
+    const boundaries = await retry(async () => {
+      const response = await openai.responses.create({
+        model: "gpt-5-mini",
+        max_output_tokens: 8000,
+        input: `입력은 PDF에서 추출한 고등 영어 자료다. 설계안은 만들지 말고 독립 영어 지문의 시작만 찾는다.
+문제 번호, 연도, 월 모의고사, 지문 읽기 표시를 참고한다. 같은 지문의 다음 페이지와 한국어 해석은 새 지문이 아니다.
+각 독립 지문에 대해 영어 원문의 첫 부분을 입력에서 공백과 문장부호까지 정확히 복사한 start 문자열로 반환한다.
+start는 최소 60자(짧은 지문은 전체 원문), 최대 180자이며 입력에서 유일하게 나타나야 한다.
+모든 독립 지문을 원래 순서대로 빠짐없이 한 번씩 포함한다. 제목이나 요약은 생성하지 않는다.
+JSON만 반환: {"starts":["정확히 복사한 영어 지문 시작", "다음 영어 지문 시작"]}
+입력 자료:\n${sourceText}`,
+      });
+      const data = parseCompleted(response) as ParsedResponse & { starts?: string[] };
+      if (!Array.isArray(data.starts) || !data.starts.length) throw new Error("지문 경계를 찾지 못했습니다.");
+      let previous = -1;
+      return data.starts.map((anchor) => {
+        if (typeof anchor !== "string" || !anchor.trim()) throw new Error("지문 경계가 잘못되었습니다.");
+        const offset = sourceText.indexOf(anchor);
+        if (offset < 0 || sourceText.indexOf(anchor, offset + 1) !== -1 || offset <= previous) {
+          throw new Error("지문 경계의 위치·중복·순서 검증에 실패했습니다.");
+        }
+        previous = offset;
+        return offset;
+      });
+    });
+    // Contiguous slices cover every input character exactly once, including preamble.
+    const passages = boundaries.map((offset, index) => sourceText.slice(
+      index === 0 ? 0 : offset, boundaries[index + 1] ?? sourceText.length
+    ));
+    const batchResults: ParsedResponse[] = new Array(passages.length);
+    let nextBatch = 0;
+    const worker = async () => {
+      while (nextBatch < passages.length) {
+        const index = nextBatch++;
+        const passageText = passages[index];
+        const expectedId = `passage-${index + 1}`;
+        try {
+          batchResults[index] = await retry(async () => {
+            const response = await openai.responses.create({
+              model: "gpt-5-mini",
+              max_output_tokens: 16000,
+              input: `
 너는 고등 영어 지문을 각각 "써밋네컷"으로 바꾸는 전문 편집자다.
 
 ==================================================
@@ -660,47 +707,40 @@ keyWords 배열에 넣기만 하고 끝내지 마라.
 입력 자료
 ==================================================
 
-${sourceText}
-`,
-      });
+${passageText}
 
-    const raw =
-      response.output_text?.trim();
-
-    if (!raw) {
-      throw new Error(
-        "고등 써밋네컷 설계안 생성 결과가 비어 있습니다."
-      );
-    }
-
-    const cleaned =
-      raw
-        .replace(
-          /^```json\s*/i,
-          ""
-        )
-        .replace(
-          /^```\s*/i,
-          ""
-        )
-        .replace(
-          /\s*```$/,
-          ""
-        )
-        .trim();
-
-    let parsed:
-      ParsedResponse;
-
-    try {
-      parsed =
-        JSON.parse(
-          cleaned
-        );
-    } catch {
-      throw new Error(
-        "고등 설계안 JSON 해석에 실패했습니다."
-      );
+추가 필수 규칙: 이번 입력은 서버가 구분한 독립 지문 1개다. plans는 정확히 1개여야 한다.
+한국어 해석과 다음 문제의 머리말은 별도 지문으로 만들지 않는다.
+해당 plan의 id는 반드시 "${expectedId}"로 출력한다.`,
+            });
+            const result = parseCompleted(response);
+            const plan = result.plans?.[0];
+            if (result.plans?.length !== 1 || !plan || plan.id !== expectedId ||
+                !plan.englishTitle || !plan.blockSummary || !Array.isArray(plan.keyWords) ||
+                !Array.isArray(plan.panels) || plan.panels.length !== 4 ||
+                plan.panels.some(panel => !panel || typeof panel.scene !== "string" ||
+                  typeof panel.characters !== "string" || !Array.isArray(panel.dialogue) ||
+                  panel.dialogue.some(line => !line || typeof line.speaker !== "string" || typeof line.text !== "string"))) {
+              throw new Error("지문별 설계안 개수·ID·4컷 검증에 실패했습니다.");
+            }
+            return result;
+          });
+        } catch (error) {
+          throw new Error(`${index + 1}번 지문 설계 실패: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+    };
+    // At most three paid requests in flight; settled workers finish before responding.
+    const workers = await Promise.allSettled(Array.from({ length: Math.min(3, passages.length) }, () => worker()));
+    const failed = workers.find((entry): entry is PromiseRejectedResult => entry.status === "rejected");
+    if (failed) throw failed.reason;
+    const parsed: ParsedResponse = {
+      overallTitle: `${lessonName || "고등 영어"} 써밋네컷`,
+      overallSummary: `총 ${passages.length}개 지문의 써밋네컷 설계안`,
+      plans: batchResults.flatMap(batch => batch.plans || []),
+    };
+    if (parsed.plans?.length !== passages.length || new Set(parsed.plans.map(plan => plan.id)).size !== passages.length) {
+      throw new Error("전체 지문 수·중복 검증에 실패했습니다.");
     }
 
     const plans =
@@ -726,7 +766,6 @@ ${sourceText}
           index
         ) => ({
           id:
-            plan.id ||
             `passage-${index + 1}`,
 
           englishTitle:
