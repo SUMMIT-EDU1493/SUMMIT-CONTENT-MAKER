@@ -606,6 +606,27 @@ export default function HighSummaryTestPage() {
         const back =
           await createBackCover();
 
+        // Match the verified four-cut booklet back-cover orientation.
+        let printableBack = back;
+        if (mode === "booklet") {
+          const backImage = new Image();
+          const loaded = new Promise<void>((resolve, reject) => {
+            backImage.onload = () => resolve();
+            backImage.onerror = () => reject(new Error("요약집 뒷표지 이미지를 불러오지 못했습니다."));
+          });
+          backImage.src = back;
+          await loaded;
+          const canvas = document.createElement("canvas");
+          canvas.width = backImage.naturalWidth;
+          canvas.height = backImage.naturalHeight;
+          const context = canvas.getContext("2d");
+          if (!context) throw new Error("요약집 뒷표지 방향 보정에 실패했습니다.");
+          context.translate(canvas.width, canvas.height);
+          context.rotate(Math.PI);
+          context.drawImage(backImage, 0, 0);
+          printableBack = canvas.toDataURL("image/png");
+        }
+
         const logicalPages: Array<
           string | null
         > = [
@@ -613,7 +634,7 @@ export default function HighSummaryTestPage() {
           ...workItems.map(
             (item) => item.image
           ),
-          back,
+          printableBack,
         ];
 
         let pagesToWrite:

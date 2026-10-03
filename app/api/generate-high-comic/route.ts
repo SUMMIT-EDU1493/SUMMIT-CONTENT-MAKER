@@ -1,3 +1,4 @@
+import { deduplicateHighVocabulary } from "../high-comic-plan/vocabulary";
 import OpenAI from "openai";
 import { createTrackedOpenAI } from "@/lib/tracked-openai";
 import sharp from "sharp";
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as RequestBody;
-    const plan = body?.plan;
+    const plan = body?.plan ? deduplicateHighVocabulary(body.plan) : undefined;
 
     if (!plan) {
       return Response.json(
@@ -488,7 +489,14 @@ Examples:
 The finished page should visibly contain approximately 5–8 useful English vocabulary expressions
 distributed naturally through the four panels whenever they are supplied in the plan.
 
-Do not omit most of the supplied keyWords.
+Do not omit the supplied keyWords. These were selected from the source for high-school exam study.
+Do not substitute elementary words or invent new vocabulary to reach a count.
+Use each supplied English learning expression EXACTLY ONCE across this entire comic page.
+If the concept recurs, render only its Korean meaning, without English parentheses.
+Follow the supplied dialogue placement; do not repeat English on signs, scene captions, or background labels.
+Treat capitalization, plural and tense variants as the same vocabulary item.
+The 5–8 target is a number of DISTINCT expressions, never repeated occurrences.
+If fewer useful expressions are supplied, preserve that smaller set instead of padding with easy words.
 
 Preserve the Korean(English) format exactly.
 
