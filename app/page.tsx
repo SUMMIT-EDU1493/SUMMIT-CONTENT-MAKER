@@ -2873,7 +2873,7 @@ export default function Home() {
               </h3>
 
               <p className="mt-2 text-sm text-slate-600">
-                이 Lesson에 등장한 캐릭터를 활용하여 마지막 뒷표지를 제작합니다.
+                흰 배경 정가운데에 써비랩 로고만 넣은 뒷표지를 만듭니다.
               </p>
 
               <p className="mt-1 text-xs text-slate-500">

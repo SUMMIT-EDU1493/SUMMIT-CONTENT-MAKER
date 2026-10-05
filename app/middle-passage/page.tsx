@@ -2582,6 +2582,11 @@ ${pageText}
                       <h3 className="mt-1 text-2xl font-black">
                         {plan.title}
                       </h3>
+                      <button type="button" onClick={() => deletePassage(plan.passageId)}
+                        disabled={loadingAllImages || creatingAllPlans || Boolean(creatingPlanId) || plans.some(item => item.loadingImage) || makingPdf}
+                        className="mt-3 rounded-xl bg-red-500/20 px-4 py-2 text-sm font-bold text-red-100 disabled:opacity-40">
+                        이 지문 설계안 삭제
+                      </button>
                     </div>
 
                     <div className="p-6">

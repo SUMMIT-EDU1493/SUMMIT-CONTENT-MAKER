@@ -11,6 +11,20 @@ const englishKey = (text: string) => text.normalize("NFKC").toLowerCase()
   .replace(/[’‘]/g, "'").replace(/[‐‑–—]/g, "-").replace(/\s+/g, " ").trim();
 const isEnglish = (text: string) => /[a-z]/i.test(text) && !/[가-힣]/.test(text);
 
+
+// Apply only unambiguous nominal uses; do not conjugate arbitrary Korean sentences.
+export function normalizeVocabularyDialogue(text: string): string {
+  const expression = /([가-힣]+)다\(([A-Za-z][^()\n]*)\)/g;
+  return text.replace(expression, (whole, stem: string, english: string, offset: number) => {
+    const after = text.slice(offset + whole.length);
+    if (/^(?:가|를|은|도|만|에|랑|이랑)(?=\s|[,.!?]|$)/u.test(after) ||
+        /^\s+(?:힘들|어렵|쉽|중요|필요)/u.test(after)) {
+      return `${stem}기(${english})`;
+    }
+    return whole;
+  });
+}
+
 // Never mutate saved plans. A separate call resets vocabulary for each comic.
 export function deduplicateHighVocabulary<T extends VocabularyPlan>(plan: T): T {
   const displayed = new Set<string>();
@@ -23,7 +37,7 @@ export function deduplicateHighVocabulary<T extends VocabularyPlan>(plan: T): T 
   });
   const panels = (plan.panels || []).map(panel => ({
     ...panel,
-    dialogue: (panel.dialogue || []).map(line => ({ ...line, text: stripRepeated(line.text) })),
+    dialogue: (panel.dialogue || []).map(line => ({ ...line, text: stripRepeated(normalizeVocabularyDialogue(line.text)) })),
   }));
   // Dialogue gets priority; scene notes cannot reintroduce printed duplicates.
   for (const panel of panels) {

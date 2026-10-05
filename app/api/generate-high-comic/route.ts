@@ -498,7 +498,12 @@ Treat capitalization, plural and tense variants as the same vocabulary item.
 The 5–8 target is a number of DISTINCT expressions, never repeated occurrences.
 If fewer useful expressions are supplied, preserve that smaller set instead of padding with easy words.
 
-Preserve the Korean(English) format exactly.
+Preserve the Korean(English) format exactly, including natural Korean conjugation.
+The Korean before parentheses must fit its sentence, not be a dictionary headword.
+Use 기억하기(remember) 힘들어, 적응하는(adapt) 중이야, 해결해야(solve) 해.
+Never print 기억하다(remember)가 힘들어, 적응하다(adapt)는 중, 해결하다(solve)해야.
+When parentheses are removed, each Korean sentence must still be grammatical.
+Keep meaningful high-school verbs and phrases; do not evade this rule by selecting only nouns.
 
 If the supplied plan accidentally contains an English-only dialogue sentence,
 do NOT reproduce it as English.
@@ -537,7 +542,7 @@ Important vocabulary may appear naturally in this format:
 
 Examples:
 원동력(driving force)
-적응하다(adapt)
+적응하는(adapt)
 회복력(resilience)
 
 Do not create a separate word list.

@@ -28,6 +28,7 @@ type HighComicPlan = {
   koreanSubtitle: string;
   blockSummary: string;
   sourceRange: string;
+  sourceText?: string;
   visualStyle?: string;
   storyMode?: string;
   keyWords: string[];
@@ -273,12 +274,12 @@ export default function HighTestPage() {
         const pageText = content.items
           .map((item: any) => {
             if ("str" in item) {
-              return item.str;
+              return item.str + (item.hasEOL ? "\n" : " ");
             }
 
             return "";
           })
-          .join(" ");
+          .join("");
 
         fullText += `
 
@@ -305,6 +306,22 @@ ${pageText}
     } finally {
       setLoadingPdf(false);
     }
+  };
+
+  const removePlan = (id: string) => {
+    if (generatingAll || generatingId || loadingPlan || makingPdf) return;
+    setResult(prev => {
+      if (!prev) return prev;
+      const plans = prev.plans.filter(plan => plan.id !== id);
+      return { ...prev, plans, blockCount: plans.length, overallSummary: `총 ${plans.length}개 지문의 써밋네컷 설계안` };
+    });
+    setGeneratedImages(prev => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setWorkItems(prev => prev.filter(item => item.id !== id));
+    setEditingDialogue(null);
   };
 
   const createPlans = async () => {
@@ -396,7 +413,7 @@ ${pageText}
   const generateImage = async (
     plan: HighComicPlan
   ) => {
-    if (generatingId) {
+    if (generatingId || generatingAll) {
       return;
     }
 
@@ -989,81 +1006,10 @@ ${pageText}
   };
 
   const createHighBackCoverImage = async () => {
-    const canvas = document.createElement("canvas");
-    canvas.width = 1536;
-    canvas.height = 1024;
-
-    const ctx = canvas.getContext("2d");
-
-    if (!ctx) {
-      throw new Error("뒷표지 캔버스를 만들 수 없습니다.");
-    }
-
-    ctx.fillStyle = "#111827";
-    ctx.fillRect(
-      0,
-      0,
-      canvas.width,
-      canvas.height
-    );
-
-    ctx.fillStyle = "#FFFFFF";
-    ctx.textAlign = "center";
-
-    ctx.font = "900 64px sans-serif";
-    ctx.fillText(
-      "끝까지 읽었으면",
-      768,
-      360
-    );
-
-    ctx.font = "900 78px sans-serif";
-    ctx.fillText(
-      "이미 반은 끝난 거지.",
-      768,
-      460
-    );
-
-    ctx.fillStyle = "#C4B5FD";
-    ctx.font = "700 32px sans-serif";
-    ctx.fillText(
-      "SUMMIT VISUAL LAB",
-      768,
-      550
-    );
-
-    const logo = new Image();
-    logo.src = "/brand/summit-visual-lab-horizontal.png";
-
-    await new Promise<void>(
-      (resolve, reject) => {
-        logo.onload = () => resolve();
-        logo.onerror = () =>
-          reject(
-            new Error(
-              "SUMMIT 로고를 불러오지 못했습니다."
-            )
-          );
-      }
-    );
-
-    const logoWidth = 360;
-    const logoHeight =
-      (logo.height / logo.width) *
-      logoWidth;
-
-    ctx.drawImage(
-      logo,
-      (1536 - logoWidth) / 2,
-      690,
-      logoWidth,
-      logoHeight
-    );
-
-    return canvas.toDataURL(
-      "image/png",
-      1
-    );
+    const response = await fetch("/api/high-back-cover", { method: "POST" });
+    const data = await response.json();
+    if (!response.ok || !data?.image) throw new Error(data?.detail || data?.error || "로고 뒷표지를 만들지 못했습니다.");
+    return data.image as string;
   };
 
   const addImagePageToPdf = (
@@ -1291,7 +1237,7 @@ ${pageText}
     };
 
   const generateAllImages = async () => {
-    if (!result) {
+    if (!result || generatingAll || generatingId) {
       return;
     }
 
@@ -1610,6 +1556,11 @@ ${pageText}
                       <p className="text-sm font-bold text-purple-300">
                         BLOCK {planIndex + 1}
                       </p>
+                      <button type="button" onClick={() => removePlan(plan.id)}
+                        disabled={generatingAll || Boolean(generatingId) || loadingPlan || makingPdf}
+                        className="mt-3 rounded-xl bg-red-500/20 px-4 py-2 text-sm font-bold text-red-100 disabled:opacity-40">
+                        이 지문 설계안 삭제
+                      </button>
 
                       <input
                         value={plan.englishTitle}
@@ -1637,6 +1588,12 @@ ${pageText}
                     </div>
 
                     <div className="p-6">
+                      {plan.sourceText && (
+                        <details className="mb-5 rounded-xl border border-slate-200 p-4">
+                          <summary className="cursor-pointer font-bold">이 설계안의 원문 확인</summary>
+                          <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-600">{plan.sourceText}</pre>
+                        </details>
+                      )}
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="rounded-2xl bg-slate-50 p-5">
                           <p className="text-xs font-bold text-slate-500">

@@ -1,3 +1,4 @@
+import { partitionSourceSections } from "./source-sections";
 import { deduplicateHighVocabulary } from "./vocabulary";
 import OpenAI from "openai";
 
@@ -22,6 +23,7 @@ type HighComicPlan = {
   koreanSubtitle: string;
   blockSummary: string;
   sourceRange: string;
+  sourceText?: string;
   visualStyle?: string;
   storyMode?: string;
   keyWords: string[];
@@ -113,12 +115,12 @@ export async function POST(
       }
       throw last;
     };
-    // Stable server-assigned word IDs avoid copying PDF whitespace/punctuation.
-    const sourceWords = Array.from(sourceText.matchAll(/\S+/gu), match => ({
+    const discoverBoundaries = async (regionText: string): Promise<number[]> => {
+    const sourceWords = Array.from(regionText.matchAll(/\S+/gu), match => ({
       text: match[0], offset: match.index!,
     }));
-    const indexedSource = sourceWords.map((word, index) => `[${index + 1}]${word.text}`).join(" ");
-    const boundaries = await retry(async () => {
+    const indexedSource = sourceWords.map((word, index) => `[${index + 1}]${word.text}${regionText.slice(word.offset + word.text.length, sourceWords[index + 1]?.offset ?? regionText.length)}`).join("");
+    return await retry(async () => {
       const response = await openai.responses.create({
         model: "gpt-5-mini",
         max_output_tokens: 8000,
@@ -145,10 +147,23 @@ JSON만 반환: {"startWordIds":[12,340,721]}
         return sourceWords[id - 1].offset;
       });
     });
-    // Contiguous slices cover every input character exactly once, including preamble.
-    const passages = boundaries.map((offset, index) => sourceText.slice(
-      index === 0 ? 0 : offset, boundaries[index + 1] ?? sourceText.length
-    ));
+    };
+    const passages: string[] = [];
+    const passageLabels: string[] = [];
+    for (const section of partitionSourceSections(sourceText)) {
+      if (section.label) {
+        // A known question never shares a design request with another question.
+        passages.push(section.text);
+        passageLabels.push(section.label);
+        continue;
+      }
+      const boundaries = await discoverBoundaries(section.text);
+      for (let i = 0; i < boundaries.length; i++) {
+        passages.push(section.text.slice(i === 0 ? 0 : boundaries[i], boundaries[i + 1] ?? section.text.length));
+        passageLabels.push("");
+      }
+    }
+    if (passages.join("") !== sourceText) throw new Error("지문 분리 후 원문 누락·중복 검증에 실패했습니다.");
     const batchResults: ParsedResponse[] = new Array(passages.length);
     let nextBatch = 0;
     let batchFailed = false;
@@ -475,10 +490,20 @@ important, good, bad, people, student, school, time, make, think, learn, life �
 예:
 
 원동력(driving force)
-적응하다(adapt)
+적응하는(adapt)
 회복력(resilience)
 
 핵심어는 만화 대사 속에 자연스럽게 포함한다.
+
+동사 영어표기의 한국어 활용 — 필수:
+keyWords 목록에서는 사전형을 써도 되지만, dialogue에서는 실제 한국어 문장에 맞게 활용한 표현 뒤에 영어 괄호를 붙인다.
+영어를 괄호에서 빼고 읽어도 문장이 자연스러워야 한다.
+금지: 기억하다(remember)가 힘들어 / 기억하다(remember) 힘들어 / 적응하다(adapt)는 중 / 해결하다(solve)해야 해.
+올바른 예: 기억하기(remember)가 힘들어 / 기억하기(remember) 힘들어 / 적응하는(adapt) 중이야 / 해결해야(solve) 해.
+꽃을 기르고(grow), 자료를 분석하면서(analyze), 변화를 받아들이는(accept) 것처럼 한국어 조사·어미까지 문맥에 맞게 활용한다.
+명사만 뽑아서 회피하지 말고 학습 가치 있는 동사·숙어도 선택하되, 사전형 뜻을 대사에 그대로 끼워 넣지 않는다.
+최종 출력 전에 모든 대사를 괄호 없이 읽어 보고 어색한 사전형+조사/어미를 고친다.
+
 
 단어장처럼 마지막 컷에 몰아서 넣지 마라.
 
@@ -742,6 +767,8 @@ ${passageText}
                   panel.dialogue.some(line => !line || typeof line.speaker !== "string" || typeof line.text !== "string"))) {
               throw new Error("지문별 설계안 개수·ID·4컷 검증에 실패했습니다.");
             }
+            plan.sourceRange = passageLabels[index] || plan.sourceRange;
+            plan.sourceText = passageText;
             result.plans = [deduplicateHighVocabulary(plan)];
             return result;
           });
@@ -804,6 +831,8 @@ ${passageText}
           sourceRange:
             plan.sourceRange ||
             "",
+
+          sourceText: plan.sourceText || "",
 
           visualStyle:
             [
