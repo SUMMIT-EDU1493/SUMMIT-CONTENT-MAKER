@@ -252,6 +252,27 @@ export default function HighSummaryTestPage() {
   // 개별 이미지 생성
   // -----------------------------
 
+  // Remove a whole source plan before spending money on its image.
+  const removeSummaryPage = (id: string) => {
+    if (makingPlan || loadingPdf || generatingAll || generatingId !== null || makingFinalPdf) return;
+    setResult((prev) => {
+      if (!prev) return prev;
+      const pages = prev.pages.filter((page) => page.id !== id);
+      return {
+        ...prev,
+        pages,
+        pageCount: pages.length,
+        overallSummary: pages.map((page) => page.oneLineSummary).filter(Boolean).join(" "),
+      };
+    });
+    setGeneratedImages((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setWorkItems((prev) => prev.filter((item) => item.id !== id));
+  };
+
   const generateImage = async (
     page: SummaryPage
   ) => {
@@ -333,7 +354,7 @@ export default function HighSummaryTestPage() {
 
   const generateAllImages =
     async () => {
-      if (!result) {
+      if (!result || generatingAll || generatingId !== null || makingPlan || loadingPdf || makingFinalPdf) {
         return;
       }
 
@@ -954,8 +975,9 @@ export default function HighSummaryTestPage() {
                 }
                 disabled={
                   generatingAll ||
-                  generatingId !==
-                    null
+                  generatingId !== null ||
+                  result.pages.length === 0 ||
+                  makingPlan || loadingPdf || makingFinalPdf
                 }
                 className="mt-5 w-full rounded-2xl bg-emerald-600 px-5 py-4 font-black text-white disabled:opacity-40"
               >
@@ -990,6 +1012,15 @@ export default function HighSummaryTestPage() {
                         PAGE{" "}
                         {index + 1}
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={() => removeSummaryPage(page.id)}
+                        disabled={makingPlan || loadingPdf || generatingAll || generatingId !== null || makingFinalPdf}
+                        className="mt-3 rounded-xl border border-red-200 px-4 py-2 text-sm font-bold text-red-600 disabled:opacity-40"
+                      >
+                        이 지문 설계안 삭제
+                      </button>
 
                       <h3 className="mt-1 text-xl font-black">
                         {
@@ -1040,8 +1071,8 @@ export default function HighSummaryTestPage() {
                             image
                           ) ||
                           generatingAll ||
-                          generatingId ===
-                            page.id
+                          generatingId !== null ||
+                          makingPlan || loadingPdf || makingFinalPdf
                         }
                         className="mt-5 w-full rounded-2xl bg-black px-5 py-4 font-black text-white disabled:opacity-40"
                       >

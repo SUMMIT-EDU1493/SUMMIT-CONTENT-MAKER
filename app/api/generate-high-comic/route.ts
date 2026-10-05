@@ -470,6 +470,21 @@ Avoid:
 
 
 ==================================================
+MANDATORY VOCABULARY TEXT COLOR
+==================================================
+
+Render EVERY supplied Korean(English) learning expression in bold vivid blue (#0057C8).
+Color the entire expression: the Korean meaning or naturally conjugated Korean phrase,
+the opening parenthesis, the English word or phrase, and the closing parenthesis.
+Example: in "상상력(imagination)을 키워줘요", only "상상력(imagination)" is blue.
+Keep the following Korean particle "을" and all surrounding dialogue black (#111111).
+Apply this to every speech bubble and learning expression across all four panels.
+Use the same blue consistently, on white speech bubbles, with readable bold lettering.
+Do not color the whole sentence blue, add blue boxes, or invent extra vocabulary.
+Preserve the supplied words, natural Korean grammar, placement, and no-repeat rules.
+Before finishing, check that every Korean(English) expression is blue, and other dialogue is black.
+
+==================================================
 MANDATORY LANGUAGE AND VOCABULARY
 ==================================================
 
