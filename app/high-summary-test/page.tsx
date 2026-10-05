@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import { jsPDF } from "jspdf";
 import HomeButton from "../components/HomeButton";
@@ -41,6 +41,7 @@ type WorkItem = {
 };
 
 export default function HighSummaryTestPage() {
+  const firstSummaryImageRef = useRef<HTMLDivElement | null>(null);
   const [schoolName, setSchoolName] =
     useState("");
 
@@ -389,6 +390,15 @@ export default function HighSummaryTestPage() {
         alert(
           "전체 요약 이미지 생성 완료!"
         );
+        // Wait for the final image state to render before finding its DOM node.
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            firstSummaryImageRef.current?.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+          });
+        });
       } catch {
         // 개별 함수가 오류 표시
       } finally {
@@ -969,22 +979,7 @@ export default function HighSummaryTestPage() {
                 }
               </div>
 
-              <button
-                onClick={
-                  generateAllImages
-                }
-                disabled={
-                  generatingAll ||
-                  generatingId !== null ||
-                  result.pages.length === 0 ||
-                  makingPlan || loadingPdf || makingFinalPdf
-                }
-                className="mt-5 w-full rounded-2xl bg-emerald-600 px-5 py-4 font-black text-white disabled:opacity-40"
-              >
-                {generatingAll
-                  ? `전체 이미지 생성 중... ${generatedCount}/${result.pages.length}`
-                  : "전체 이미지 만들기"}
-              </button>
+
 
             </div>
 
@@ -1086,7 +1081,10 @@ export default function HighSummaryTestPage() {
 
                       {image && (
                         <>
-                          <div className="mt-5 overflow-hidden rounded-3xl border p-3">
+                          <div
+                            ref={index === 0 ? firstSummaryImageRef : undefined}
+                            className="mt-5 scroll-mt-6 overflow-hidden rounded-3xl border p-3"
+                          >
                             <img
                               src={
                                 image
@@ -1115,6 +1113,23 @@ export default function HighSummaryTestPage() {
               )}
 
             </div>
+
+              <button
+                onClick={
+                  generateAllImages
+                }
+                disabled={
+                  generatingAll ||
+                  generatingId !== null ||
+                  result.pages.length === 0 ||
+                  makingPlan || loadingPdf || makingFinalPdf
+                }
+                className="mt-5 w-full rounded-2xl bg-emerald-600 px-5 py-4 font-black text-white disabled:opacity-40"
+              >
+                {generatingAll
+                  ? `전체 이미지 생성 중... ${generatedCount}/${result.pages.length}`
+                  : "전체 이미지 만들기"}
+              </button>
 
             <button
               onClick={addAllToWorkbox}
