@@ -45,6 +45,7 @@ type HighComicResult = {
 
 export default function HighTestPage() {
   const imageActionRef = useRef(false);
+  const firstComicImageRef = useRef<HTMLDivElement | null>(null);
   const [schoolName, setSchoolName] = useState("");
   const [gradeName, setGradeName] = useState("");
   const [lessonName, setLessonName] = useState("");
@@ -1285,6 +1286,9 @@ ${pageText}
       setBatchProgress(
         `완료 · ${total}장 생성되었습니다.`
       );
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        firstComicImageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }));
     } catch (error: any) {
       console.error(
         "HIGH BATCH IMAGE ERROR:",
@@ -1779,7 +1783,8 @@ ${pageText}
                       {generatedImages[
                         plan.id
                       ] && (
-                        <div className="mt-6">
+                        <div ref={planIndex === 0 ? firstComicImageRef : undefined}
+                          className="mt-6 scroll-mt-6">
                           <div className="overflow-hidden rounded-3xl bg-slate-100 p-3">
                             <img
                               src={

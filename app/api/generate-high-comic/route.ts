@@ -93,7 +93,7 @@ export async function POST(request: Request) {
           ? panel.dialogue
               .map(
                 (line) =>
-                  `${line.speaker}: ${line.text}`
+                  JSON.stringify({ speakerMetadata: line.speaker, bubbleText: line.text })
               )
               .join("\n")
           : "";
@@ -112,7 +112,7 @@ ${panel.scene || ""}
 CHARACTERS:
 ${panel.characters || ""}
 
-DIALOGUE:
+DIALOGUE (speakerMetadata is hidden attribution; render ONLY bubbleText):
 ${dialogueText}
 `;
       })
@@ -465,6 +465,7 @@ DIALOGUE STYLE
 ==================================================
 
 Use the supplied Korean dialogue as faithfully as possible.
+The supplied dialogue is edited for students who struggle with English reading. Preserve its short, clear Korean sentences, concrete subjects and natural word order exactly. Do not replace easy expressions with abstract nouns, literal English translations, formal textbook language or longer explanations. Do not add new dialogue. Keep the existing polite speech, meaning, vocabulary parentheses and blue emphasis rules.
 
 Do NOT rewrite the meaning.
 
@@ -645,6 +646,13 @@ Do not invent unrelated Korean text.
 Do not replace meaningful Korean dialogue with gibberish.
 
 Do not add random English labels.
+
+SPEAKER METADATA IS NEVER VISIBLE ARTWORK.
+In each DIALOGUE entry, speakerMetadata identifies the speaker only for polite speech, staging and tail direction. It is not printed text. Render ONLY bubbleText as the actual dialogue.
+Do NOT draw speaker-name tags such as 해설자, 학생, 연구원 above, inside or beside speech bubbles.
+Do NOT add circular profile pictures, head silhouettes, avatar badges, speaker icons, role labels or numbered speaker markers attached to or floating near bubbles. No standalone avatar circles elsewhere in a panel.
+Keep normal characters in the scenes; use bubble tails and placement to identify who speaks. Narration may use a clean text box without a speaker-name header or avatar.
+Preserve all supplied dialogue words, Korean(English) blue emphasis, readable bubbles and role-based polite speech.
 
 If a speech bubble has a speaker,
 make its tail clearly point to the correct speaker.
