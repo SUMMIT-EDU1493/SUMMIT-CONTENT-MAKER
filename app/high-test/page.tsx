@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { runLimited } from "../lib/run-limited";
 import * as pdfjsLib from "pdfjs-dist";
 import { jsPDF } from "jspdf";
 import HomeButton from "../components/HomeButton";
@@ -43,6 +44,7 @@ type HighComicResult = {
 };
 
 export default function HighTestPage() {
+  const imageActionRef = useRef(false);
   const [schoolName, setSchoolName] = useState("");
   const [gradeName, setGradeName] = useState("");
   const [lessonName, setLessonName] = useState("");
@@ -413,11 +415,12 @@ ${pageText}
   const generateImage = async (
     plan: HighComicPlan
   ) => {
-    if (generatingId || generatingAll) {
+    if (imageActionRef.current || generatingId || generatingAll || loadingPlan || makingPdf) {
       return;
     }
 
     try {
+      imageActionRef.current = true;
       setGeneratingId(plan.id);
       setErrorMessage("");
 
@@ -439,6 +442,7 @@ ${pageText}
           "이미지 생성 중 오류가 발생했습니다."
       );
     } finally {
+      imageActionRef.current = false;
       setGeneratingId("");
     }
   };
@@ -1183,7 +1187,7 @@ ${pageText}
               "landscape",
             unit: "mm",
             format: "a4",
-            compress: true,
+            compress: false,
           });
 
         pagesToWrite.forEach(
@@ -1237,7 +1241,7 @@ ${pageText}
     };
 
   const generateAllImages = async () => {
-    if (!result || generatingAll || generatingId) {
+    if (!result || imageActionRef.current || generatingAll || generatingId || loadingPlan || makingPdf) {
       return;
     }
 
@@ -1261,59 +1265,22 @@ ${pageText}
     }
 
     try {
+      imageActionRef.current = true;
       setGeneratingAll(true);
       setGeneratingId("");
       setErrorMessage("");
 
-      const concurrency = 3;
       const total = remainingPlans.length;
-
-      let nextIndex = 0;
       let completed = 0;
-
-      setBatchProgress(
-        `전체 이미지 생성 중 · 0 / ${total}`
-      );
-
-      const worker = async () => {
-        while (true) {
-          const currentIndex = nextIndex;
-          nextIndex += 1;
-
-          if (currentIndex >= total) {
-            return;
-          }
-
-          const plan =
-            remainingPlans[currentIndex];
-
-          const image =
-            await generateImageRequest(plan);
-
-          setGeneratedImages((prev) => ({
-            ...prev,
-            [plan.id]: image,
-          }));
-
-          completed += 1;
-
-          setBatchProgress(
-            `전체 이미지 생성 중 · ${completed} / ${total}`
-          );
-        }
-      };
-
-      const workerCount = Math.min(
-        concurrency,
-        total
-      );
-
-      await Promise.all(
-        Array.from(
-          { length: workerCount },
-          () => worker()
-        )
-      );
+      const startedAt = performance.now();
+      setBatchProgress(`전체 이미지 생성 중 · 0 / ${total}`);
+      await runLimited(remainingPlans, 3, async (plan) => {
+        const image = await generateImageRequest(plan);
+        setGeneratedImages((prev) => ({ ...prev, [plan.id]: image }));
+        completed += 1;
+        setBatchProgress(`전체 이미지 생성 중 · ${completed} / ${total}`);
+      });
+      console.info("[high-images]", { count: total, elapsedMs: Math.round(performance.now() - startedAt) });
 
       setBatchProgress(
         `완료 · ${total}장 생성되었습니다.`
@@ -1333,13 +1300,17 @@ ${pageText}
         "중간에 오류가 발생했습니다. 이미 생성된 이미지는 그대로 유지됩니다."
       );
     } finally {
+      imageActionRef.current = false;
       setGeneratingId("");
       setGeneratingAll(false);
     }
   };
 
+  const isBusy = loadingPdf || loadingPlan || generatingAll || Boolean(generatingId) || makingPdf;
+
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-10">
+      <fieldset disabled={isBusy} className="min-w-0 border-0 p-0">
       <div className="mx-auto max-w-6xl">
         
       <div className="mb-6 flex flex-wrap gap-3">
@@ -2185,6 +2156,7 @@ ${pageText}
           </div>
         </div>
       )}
+      </fieldset>
     </main>
   );
 }

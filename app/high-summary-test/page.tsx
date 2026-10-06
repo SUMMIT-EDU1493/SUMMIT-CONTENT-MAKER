@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import { jsPDF } from "jspdf";
 import HomeButton from "../components/HomeButton";
+import { runLimited } from "../lib/run-limited";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
@@ -41,6 +42,8 @@ type WorkItem = {
 };
 
 export default function HighSummaryTestPage() {
+  const imageActionRef = useRef(false);
+  const coverCacheRef = useRef<{ key: string; cover: string; back: string } | null>(null);
   const firstSummaryImageRef = useRef<HTMLDivElement | null>(null);
   const [schoolName, setSchoolName] =
     useState("");
@@ -156,13 +159,13 @@ export default function HighSummaryTestPage() {
           content.items
             .map((item: any) =>
               "str" in item
-                ? item.str
+                ? item.str + (item.hasEOL ? "\n" : " ")
                 : ""
             )
-            .join(" ");
+            .join("");
 
         pages.push(
-          `[PAGE ${pageNumber}]\n${text}`
+          `--- ${pageNumber}페이지 ---\n${text}`
         );
       }
 
@@ -275,21 +278,25 @@ export default function HighSummaryTestPage() {
   };
 
   const generateImage = async (
-    page: SummaryPage
+    page: SummaryPage,
+    batch = false
   ) => {
+    if (!batch) {
+      if (imageActionRef.current || makingPlan || loadingPdf || makingFinalPdf) return;
+      imageActionRef.current = true;
+    }
     if (
       generatedImages[
         page.id
       ]
     ) {
+      if (!batch) imageActionRef.current = false;
       return generatedImages[
         page.id
       ];
     }
 
-    setGeneratingId(
-      page.id
-    );
+    if (!batch) setGeneratingId(page.id);
 
     try {
       const response =
@@ -338,14 +345,14 @@ export default function HighSummaryTestPage() {
         error
       );
 
-      alert(
-        error?.message ||
-          "요약.ZIP 이미지 생성 중 오류가 발생했습니다."
-      );
+      if (!batch) alert(error?.message || "요약.ZIP 이미지 생성 중 오류가 발생했습니다.");
 
       throw error;
     } finally {
-      setGeneratingId(null);
+      if (!batch) {
+        imageActionRef.current = false;
+        setGeneratingId(null);
+      }
     }
   };
 
@@ -355,7 +362,7 @@ export default function HighSummaryTestPage() {
 
   const generateAllImages =
     async () => {
-      if (!result || generatingAll || generatingId !== null || makingPlan || loadingPdf || makingFinalPdf) {
+      if (!result || imageActionRef.current || generatingAll || generatingId !== null || makingPlan || loadingPdf || makingFinalPdf) {
         return;
       }
 
@@ -376,16 +383,14 @@ export default function HighSummaryTestPage() {
         return;
       }
 
+      imageActionRef.current = true;
       setGeneratingAll(true);
-
+      const startedAt = performance.now();
       try {
-        for (
-          const page of remaining
-        ) {
-          await generateImage(
-            page
-          );
-        }
+        await runLimited(remaining, 3, async (page) => {
+          await generateImage(page, true);
+        });
+        console.info("[summary-images]", { count: remaining.length, elapsedMs: Math.round(performance.now() - startedAt) });
 
         alert(
           "전체 요약 이미지 생성 완료!"
@@ -399,9 +404,10 @@ export default function HighSummaryTestPage() {
             });
           });
         });
-      } catch {
-        // 개별 함수가 오류 표시
+      } catch (error: unknown) {
+        alert((error instanceof Error ? error.message : "이미지 생성 오류") + " 이미 완성된 이미지는 유지됩니다. 전체 이미지 만들기를 다시 누르면 미완성 지문만 생성합니다.");
       } finally {
+        imageActionRef.current = false;
         setGeneratingAll(false);
         setGeneratingId(null);
       }
@@ -605,7 +611,9 @@ export default function HighSummaryTestPage() {
       0,
       0,
       pageWidth,
-      pageHeight
+      pageHeight,
+      undefined,
+      "FAST"
     );
   };
 
@@ -631,11 +639,15 @@ export default function HighSummaryTestPage() {
           true
         );
 
-        const cover =
-          await createFrontCover();
-
-        const back =
-          await createBackCover();
+        const startedAt = performance.now();
+        const coverKey = JSON.stringify([schoolName.trim(), gradeName.trim(), lessonName.trim()]);
+        let cached = coverCacheRef.current;
+        if (!cached || cached.key !== coverKey) {
+          const [cover, back] = await Promise.all([createFrontCover(), createBackCover()]);
+          cached = { key: coverKey, cover, back };
+          coverCacheRef.current = cached;
+        }
+        const { cover, back } = cached;
 
         // Match the verified four-cut booklet back-cover orientation.
         let printableBack = back;
@@ -725,7 +737,7 @@ export default function HighSummaryTestPage() {
               "landscape",
             unit: "mm",
             format: "a4",
-            compress: true,
+            compress: false,
           });
 
         pagesToWrite.forEach(
@@ -764,6 +776,7 @@ export default function HighSummaryTestPage() {
         pdf.save(
           `${fileName}-${suffix}.pdf`
         );
+        console.info("[summary-pdf]", { pages: pagesToWrite.length, elapsedMs: Math.round(performance.now() - startedAt) });
       } catch (error) {
         console.error(
           "SUMMARY FINAL PDF ERROR:",
@@ -792,8 +805,11 @@ export default function HighSummaryTestPage() {
         ).length
       : 0;
 
+  const isBusy = makingPlan || loadingPdf || generatingAll || generatingId !== null || makingFinalPdf;
+
   return (
     <main className="min-h-screen bg-[#f5f4ef] px-6 py-10">
+      <fieldset disabled={isBusy} className="min-w-0 border-0 p-0">
       <div className="mx-auto max-w-6xl">
 
         
@@ -1251,6 +1267,7 @@ export default function HighSummaryTestPage() {
         )}
 
       </div>
+      </fieldset>
     </main>
   );
 }

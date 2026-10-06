@@ -1,3 +1,5 @@
+import { partitionSourceSections } from "../high-comic-plan/source-sections";
+import { runLimited } from "../../lib/run-limited";
 import OpenAI from "openai";
 
 import { createTrackedOpenAI } from "@/lib/tracked-openai";
@@ -57,7 +59,7 @@ export async function POST(
         feature: "고등 요약집 설계안",
       });
 
-    const prompt = `
+    const buildPrompt = (sectionText: string) => `
 너는 고등학교 영어 본문을
 '시험 직전 한눈에 복습하는 시각형 요약집'으로 설계하는 전문 편집자다.
 
@@ -323,18 +325,49 @@ JSON만 출력한다.
 본문
 ==================================================
 
-${sourceText}
+${sectionText}
 `;
 
-    const response =
-      await openai.responses.create({
-        model:
-          "gpt-5-mini",
-        max_output_tokens:
-          16000,
-        input:
-          prompt,
-      });
+    const startedAt = performance.now();
+    const sections = partitionSourceSections(sourceText);
+    const batches: Array<{ overallTitle?: string; pages: Array<Record<string, unknown>> }> = new Array(sections.length);
+    await runLimited(sections, 3, async (section, index) => {
+      let lastError: unknown;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const generated = await openai.responses.create({
+            model: "gpt-5-mini", max_output_tokens: 16000,
+            input: buildPrompt(section.text) + (section.label
+              ? "\n이 입력은 독립 지문 하나입니다. pages에 정확히 한 항목만 반환하세요. 출처: " + section.label
+              : "\n이 구간의 독립 지문을 모두 순서대로 포함하세요."),
+          });
+          if (generated.status !== "completed") throw new Error("요약집 설계 응답이 끝나기 전에 잘렸습니다.");
+          const parsed = JSON.parse((generated.output_text || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, ""));
+          if (!Array.isArray(parsed.pages) || !parsed.pages.length || (section.label && parsed.pages.length !== 1))
+            throw new Error("요약집 지문 개수 검증에 실패했습니다.");
+          for (const page of parsed.pages) {
+            if (!page || typeof page !== "object" || typeof page.englishTitle !== "string"
+              || typeof page.oneLineSummary !== "string" || !Array.isArray(page.keyWords))
+              throw new Error("요약집 설계 형식 검증에 실패했습니다.");
+          }
+          batches[index] = parsed;
+          return;
+        } catch (error) { lastError = error; }
+      }
+      throw lastError;
+    });
+    const pages: Array<Record<string, unknown>> = batches.flatMap((batch, index) => batch.pages.map((page, localIndex) => ({
+      ...page,
+      id: `summary-${index + 1}-${localIndex + 1}`,
+      sourceRange: sections[index].label || page.sourceRange || "",
+    })));
+    console.info("[high-summary-plan]", { batches: sections.length, pages: pages.length,
+      elapsedMs: Math.round(performance.now() - startedAt) });
+    const response = { output_text: JSON.stringify({
+      overallTitle: batches[0]?.overallTitle || "고등 요약집",
+      overallSummary: pages.map(page => page.oneLineSummary).filter(Boolean).join(" "),
+      pages,
+    }) };
 
     let output =
       response.output_text?.trim() ||
