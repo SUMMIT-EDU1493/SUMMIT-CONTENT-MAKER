@@ -1,5 +1,5 @@
 import { partitionSourceSections } from "./source-sections";
-import { deduplicateHighVocabulary, findUninflectedVocabularyDialogue } from "./vocabulary";
+import { deduplicateHighVocabulary, findVocabularyDialogueIssues } from "./vocabulary";
 import OpenAI from "openai";
 
 import { createTrackedOpenAI } from "@/lib/tracked-openai";
@@ -232,7 +232,8 @@ ${verbFeedback}
 
 [고등 수준 핵심 영어 어휘]
 영어 원문에 실제 있는 내신·수능 수준 어휘/숙어 5~8개를 우선 고른다. 학습 가치 있는 추상어·학술어·다의어의 문맥상 의미·구동사·동사·숙어를 우선한다.
-important, good, bad, people, student, school, time, make, think, learn, life 같은 쉬운 단어로 개수를 채우지 않는다.
+pencil, pen, book, school, student, teacher, people, good, bad, food, water, day, time, happy는 단독 핵심 영어로 표시하지 않는다. 한국어 대사에서는 필요하면 그대로 말하되 영어 괄호와 keyWords에서는 제외한다.
+important, make, think, learn, life 같은 쉬운 기본 뜻으로 개수를 채우지 않는다. 문맥상 고등 수준의 숙어·다의어 용법은 구 전체로 선정할 수 있다.
 적절한 어휘가 5개 미만이면 실제 학습 가치가 있는 것만 선택한다. 원문에 없는 전문용어를 만들지 않는다.
 keyWords는 '한글뜻(English)' 배열이다. 대소문자·복수·시제 차이도 같은 어휘로 보고 형태를 통일한다.
 각 핵심 영어는 해당 만화 4컷의 대사 안에 '한글뜻(English)'으로 정확히 한 번만 표시한다. 뒤에서 다시 필요하면 영어 괄호 없이 한글만 쓴다. 배경·표지판에 중복시키지 않는다.
@@ -263,6 +264,15 @@ speaker에는 '해설자', '연구원', '학생 A'처럼 화자 이름/역할만
 마지막으로 영어 괄호를 전부 빼고 대사를 읽어 보라. 어려운 한국어를 해석해야 뜻이 보이는 문장이 남으면 짧고 명확한 한국어로 다시 쓴다.
 내용·조건·가능성·부정은 유지하고 설명을 쉽게 만든다는 이유로 주장 강도를 바꾸지 않는다.
 
+[이번 지문 최종 검수 — 하나라도 어기면 출력 전에 고친다]
+- 모든 동사: 하다뿐 아니라 억누르다·받아들이다·피하다·자르다 등도 문장에 맞게 활용한다. '억누르다(suppress) 않는' 금지 → '억누르지(suppress) 않는'. '받아들이다(accept)는 중' 금지 → '받아들이는(accept) 중'. 사전형을 없애려고 문장의 부정·시제·조건을 바꾸지 않는다.
+- 영어 위치: 문장 전체 끝에 단어를 덧붙이지 않는다. 해당 영어를 풀이하는 활용된 한국어 표현 바로 뒤에 둔다. 예: '퍼졌어요(spread).'처럼 동사가 마지막이면 끝 위치도 자연스럽다. '부담을 줘서(discourage), 읽기를 망설일 수 있어요.'처럼 문장 중간에 뜻이 있으면 그 위치에 붙인다. 원문의 대상과 의미가 맞는지 확인한다.
+- 쉬운 설명: '너무 많은 아주 작은 단락의 연속' 같은 명사 나열을 피한다. '짧은 단락이 너무 많이 이어지면(succession), 생각의 흐름이 뚝뚝 끊겨요(chop).'처럼 행동과 결과로 설명한다. 원문의 주장·인과·조건은 그대로 유지한다.
+- 구체성: '바꿔도 괜찮다고 스스로 알 수 있을지'처럼 대상이 모호하면 원문에서 무엇을 바꾼다는 것인지 확인해 명시한다. 이미 앞 대사에서 밝혀졌다면 반복하지 않아도 된다.
+- 인물 말투: 친구 A/B는 한 장면 안에서 서로 자연스러운 반말을 사용해도 된다. 어른에게는 존댓말이다. 해설자·연구원은 항상 존댓말이다. '난 ... 피했어요'처럼 인칭과 말끝을 혼합하지 않는다. 존댓말 대사는 '저는 ... 피했어요', 친구끼리 반말은 '난 ... 피했어'로 관계에 맞춘다.
+- 감정: 원문에 없는 비꼼·비난·과장을 덧붙이지 않는다. '그 잘난 샐러드' 같은 표현은 원문에 그런 태도가 명확히 있을 때만 허용한다. 잘게 썬 샐러드 같은 실제 특징을 비꼬는 형용사로 바꾸지 않는다.
+- 위 예문은 표현 방식 참고용이다. 현재 지문과 무관한 내용을 추가하거나 예문의 영어를 원문 밖에서 가져오지 않는다.
+
 [그림과 전개]
 visualStyle은 서버 지정값 "${selectedVisualStyle}"로 쓴다.
 storyMode는 character dialogue, narrator driven, visual metaphor, comparison, process sequence, cause and effect, symbolic scene, real world example, documentary style, inner monologue 중 원문의 논리에 맞게 고른다.
@@ -290,10 +300,10 @@ ${passageText}
             plan.sourceRange = passageLabels[index] || plan.sourceRange;
             plan.sourceText = passageText;
             const normalizedPlan = deduplicateHighVocabulary(plan);
-            const badLines = findUninflectedVocabularyDialogue(normalizedPlan);
-            if (badLines.length) {
-              verbFeedback = "직전 작성에서 사전형 동사 오류가 발견됐다. 아래 대사의 뜻과 영어는 유지하면서 한국어 동사를 문장에 맞게 활용해서 새 설계안에 반영한다: " + JSON.stringify(badLines);
-              throw new Error("대사에 사전형 ~하다(영어)가 남아 있습니다.");
+            const dialogueIssues = findVocabularyDialogueIssues(plan);
+            if (dialogueIssues.length) {
+              verbFeedback = "직전 작성 검수에서 문제가 발견됐다. 아래 항목을 수정한다. 동사는 의미·부정·시제를 유지해 자연스럽게 활용한다. 기초 단어는 한국어 내용은 유지하고 영어 병기/keyWords에서 제외한다. 대체 고등 어휘는 이 원문에 실제 있을 때만 선택하며 개수를 채우지 않는다. 인칭/말투는 인물 관계에 맞춘다. 수정 설명 없이 같은 ID의 전체 4컷 JSON을 반환한다: " + JSON.stringify(dialogueIssues);
+              throw new Error("대사 동사 활용·어휘·말투 검증에 실패했습니다.");
             }
             result.plans = [normalizedPlan];
             return result;

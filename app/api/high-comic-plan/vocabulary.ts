@@ -38,7 +38,44 @@ export function normalizeVocabularyDialogue(text: string): string {
 export function findUninflectedVocabularyDialogue(plan: VocabularyPlan): string[] {
   return (plan.panels || []).flatMap(panel => (panel.dialogue || [])
     .map(line => line.text)
-    .filter(text => /[가-힣]+하다\s*\([A-Za-z][^()\n]*\)/u.test(text)));
+    .filter(text => /[가-힣]+하다\s*\([A-Za-z][^()\n]*\)/u.test(text) ||
+      // Reject dictionary forms before negation or duplicated endings, not every 다-ending.
+      // Natural completed forms and nouns such as 바다(ocean)는 must remain valid.
+      /[가-힣]+다\s*\([A-Za-z][^()\n]*\)\s*(?:않|못|해야|해요|하는|하고|하면|는\s*중)/u.test(text)));
+}
+
+// A small explicit exclusion list, not a CEFR classifier. Contextual idioms stay allowed.
+const basicVocabulary = new Set([
+  "pencil", "pen", "book", "school", "student", "teacher", "people",
+  "good", "bad", "food", "water", "day", "time", "happy",
+]);
+
+export function findVocabularyDialogueIssues(plan: VocabularyPlan): string[] {
+  // Inspect before English deduplication so a repeated gloss cannot hide an error.
+  const inspected = { ...plan, panels: (plan.panels || []).map(panel => ({
+    ...panel, dialogue: (panel.dialogue || []).map(line => ({
+      ...line, text: normalizeVocabularyDialogue(line.text),
+    })),
+  })) };
+  const issues = findUninflectedVocabularyDialogue(inspected)
+    .map(text => `동사 활용 오류: ${text}`);
+  const texts = (inspected.panels || []).flatMap(panel => panel.dialogue.map(line => line.text));
+  for (const text of texts) {
+    for (const match of text.matchAll(/\(([^()]*)\)/gu)) {
+      if (isEnglish(match[1]) && basicVocabulary.has(englishKey(match[1]))) {
+        issues.push(`기초 단어 영어 병기 제외: ${match[1]} — ${text}`);
+      }
+    }
+    if (/(?:^|[\s,.!?])(?:난|나는|나도|내가|내)\s/u.test(text) &&
+        /(?:어요|아요|예요|이에요|거예요|습니다|합니다)[.!?]?$/u.test(text.replace(/\([^()]*\)/gu, "").trim())) {
+      issues.push(`인칭과 말투 확인: ${text}`);
+    }
+  }
+  for (const word of plan.keyWords || []) {
+    const english = word.match(/\(([^()]*)\)/u)?.[1] || word;
+    if (basicVocabulary.has(englishKey(english))) issues.push(`핵심 어휘의 기초 단어 제외: ${word}`);
+  }
+  return [...new Set(issues)];
 }
 
 // Speech-register notes are editor metadata, never part of a character's name.
