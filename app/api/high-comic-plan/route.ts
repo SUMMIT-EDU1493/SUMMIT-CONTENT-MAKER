@@ -1,5 +1,5 @@
 import { partitionSourceSections } from "./source-sections";
-import { deduplicateHighVocabulary } from "./vocabulary";
+import { deduplicateHighVocabulary, findUninflectedVocabularyDialogue } from "./vocabulary";
 import OpenAI from "openai";
 
 import { createTrackedOpenAI } from "@/lib/tracked-openai";
@@ -179,6 +179,7 @@ JSON만 반환: {"startWordIds":[12,340,721]}
         const passageText = passages[index];
         const expectedId = `passage-${index + 1}`;
         const selectedVisualStyle = visualStyles[index % visualStyles.length];
+        let verbFeedback = "";
         try {
           batchResults[index] = await retry(async (attempt) => {
             const response = await openai.responses.create({
@@ -219,6 +220,16 @@ blockSummary와 koreanSubtitle도 번역체 없이 핵심을 쉽게 설명한다
 연구원: '이게 핵심이야' 금지 → '이게 핵심이에요'. 학생이 어른에게 '왜 그래?' 금지 → '왜 그런 거예요?'.
 speaker와 dialogue.text는 한국어다. 영어 문장 전체를 대사로 쓰지 않는다.
 
+[동사 활용 검수 — 반드시 지킬 것]
+keyWords의 사전형 뜻을 대사에 복사하지 않는다. 먼저 자연스러운 한국어 문장을 쓰고 그 문장의 활용된 동사에 영어 괄호를 붙인다.
+dialogue.text에는 '기억하다(remember)', '분석하다(analyze)', '기여하다(contribute)' 같은 사전형 하다를 그대로 넣지 않는다.
+금지: 분석하다(analyze)해요 / 기여하다(contribute)는 중이에요 / 해결하다(solve)해야 해요.
+올바른 예: 분석해요(analyze) / 기여하는(contribute) 중이에요 / 해결해야(solve) 해요.
+금지: 기억하다(remember)가 어려워요. 올바른 예: 기억하기(remember)가 어려워요.
+문장 끝도 사전형으로 끝내지 않는다. 발화자·상대에 맞는 자연스러운 어미를 포함한다.
+영어 괄호를 지워서 소리 내어 읽어도 문장이 자연스러워야 한다. 영어·원문 의미·존댓말은 유지한다.
+${verbFeedback}
+
 [고등 수준 핵심 영어 어휘]
 영어 원문에 실제 있는 내신·수능 수준 어휘/숙어 5~8개를 우선 고른다. 학습 가치 있는 추상어·학술어·다의어의 문맥상 의미·구동사·동사·숙어를 우선한다.
 important, good, bad, people, student, school, time, make, think, learn, life 같은 쉬운 단어로 개수를 채우지 않는다.
@@ -257,7 +268,13 @@ ${passageText}
             plan.visualStyle = selectedVisualStyle;
             plan.sourceRange = passageLabels[index] || plan.sourceRange;
             plan.sourceText = passageText;
-            result.plans = [deduplicateHighVocabulary(plan)];
+            const normalizedPlan = deduplicateHighVocabulary(plan);
+            const badLines = findUninflectedVocabularyDialogue(normalizedPlan);
+            if (badLines.length) {
+              verbFeedback = "직전 작성에서 사전형 동사 오류가 발견됐다. 아래 대사의 뜻과 영어는 유지하면서 한국어 동사를 문장에 맞게 활용해서 새 설계안에 반영한다: " + JSON.stringify(badLines);
+              throw new Error("대사에 사전형 ~하다(영어)가 남아 있습니다.");
+            }
+            result.plans = [normalizedPlan];
             return result;
           });
         } catch (error) {

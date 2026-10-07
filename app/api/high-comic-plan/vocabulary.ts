@@ -14,15 +14,31 @@ const isEnglish = (text: string) => /[a-z]/i.test(text) && !/[가-힣]/.test(tex
 
 // Apply only unambiguous nominal uses; do not conjugate arbitrary Korean sentences.
 export function normalizeVocabularyDialogue(text: string): string {
+  // Fix explicit duplicated 하다 + inflection without guessing arbitrary verb stems.
+  const repaired = text.replace(/([가-힣]+)하다\(([A-Za-z][^()\n]*)\)(해요|해!|해\?|해야|해서|해도|했어요|했다|하는|하고|하면|하니까|하니|는|고|면)/gu,
+    (_whole, root: string, english: string, ending: string) => {
+      const form = ending === "는" ? "하는" : ending === "고" ? "하고" : ending === "면" ? "하면" : ending;
+      // Punctuation belongs after the English gloss.
+      const punctuation = /[!?]$/.test(form) ? form.slice(-1) : "";
+      const inflection = punctuation ? form.slice(0, -1) : form;
+      return `${root}${inflection}(${english})${punctuation}`;
+    });
   const expression = /([가-힣]+)다\(([A-Za-z][^()\n]*)\)/g;
-  return text.replace(expression, (whole, stem: string, english: string, offset: number) => {
-    const after = text.slice(offset + whole.length);
+  return repaired.replace(expression, (whole, stem: string, english: string, offset: number) => {
+    const after = repaired.slice(offset + whole.length);
     if (/^(?:가|를|은|도|만|에|랑|이랑)(?=\s|[,.!?]|$)/u.test(after) ||
         /^\s+(?:힘들|어렵|쉽|중요|필요)/u.test(after)) {
       return `${stem}기(${english})`;
     }
     return whole;
   });
+}
+
+// Only inspect dialogue: dictionary forms in keyWords are deliberately allowed.
+export function findUninflectedVocabularyDialogue(plan: VocabularyPlan): string[] {
+  return (plan.panels || []).flatMap(panel => (panel.dialogue || [])
+    .map(line => line.text)
+    .filter(text => /[가-힣]+하다\s*\([A-Za-z][^()\n]*\)/u.test(text)));
 }
 
 // Never mutate saved plans. A separate call resets vocabulary for each comic.
