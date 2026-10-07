@@ -41,6 +41,11 @@ export function findUninflectedVocabularyDialogue(plan: VocabularyPlan): string[
     .filter(text => /[가-힣]+하다\s*\([A-Za-z][^()\n]*\)/u.test(text)));
 }
 
+// Speech-register notes are editor metadata, never part of a character's name.
+export function cleanVocabularySpeaker(speaker: string): string {
+  return speaker.replace(/\s*[（(]\s*(?:존댓말|존대말|존대|반말|존댓말\s*사용|반말\s*사용)\s*[)）]/gu, "").trim();
+}
+
 // Never mutate saved plans. A separate call resets vocabulary for each comic.
 export function deduplicateHighVocabulary<T extends VocabularyPlan>(plan: T): T {
   const displayed = new Set<string>();
@@ -53,7 +58,7 @@ export function deduplicateHighVocabulary<T extends VocabularyPlan>(plan: T): T 
   });
   const panels = (plan.panels || []).map(panel => ({
     ...panel,
-    dialogue: (panel.dialogue || []).map(line => ({ ...line, text: stripRepeated(normalizeVocabularyDialogue(line.text)) })),
+    dialogue: (panel.dialogue || []).map(line => ({ ...line, speaker: cleanVocabularySpeaker(line.speaker), text: stripRepeated(normalizeVocabularyDialogue(line.text)) })),
   }));
   // Dialogue gets priority; scene notes cannot reintroduce printed duplicates.
   for (const panel of panels) {
