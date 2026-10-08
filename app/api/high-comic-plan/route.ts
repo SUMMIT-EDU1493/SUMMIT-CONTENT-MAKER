@@ -43,6 +43,35 @@ type ParsedResponse = {
   plans?: HighComicPlan[];
 };
 
+// Structural checks only: semantic fidelity and visible action still need review.
+function findCharacterStoryIssues(plan: HighComicPlan): string[] {
+  const isNarrator = (speaker: string) => /^(?:해설자|해설|내레이터|내레이션|나레이터|나레이션|내레이터|내래이터|내래이션|해설자\s*[A-Z0-9]|narrator|narration)$/iu
+    .test(speaker.replace(/\([^()]*\)/gu, "").trim());
+  const spoken = plan.panels.flatMap(panel => panel.dialogue.filter(line => line.text.trim()));
+  const narration = spoken.filter(line => isNarrator(line.speaker));
+  const characterPanels = plan.panels.filter(panel => panel.dialogue.some(line =>
+    line.text.trim() && line.speaker.trim() && !isNarrator(line.speaker)));
+  const issues: string[] = [];
+  if (narration.length > 1) issues.push("해설자/내레이션은 전체 4컷에서 최대 한 발화만 허용한다. 나머지는 캐릭터가 상황 속에서 말하고 행동하게 다시 구성한다.");
+  if (narration.some(line => line.text.replace(/\([^()]*\)/gu, "").trim().length > 60)) {
+    issues.push("해설은 짧은 연결 문장만 쓴다(영어 괄호 제외 60자 이내). 핵심 내용은 캐릭터의 사건과 반응으로 전달한다.");
+  }
+  if (characterPanels.length < 3) issues.push("최소 세 컷은 장면 속 캐릭터가 직접 말하는 컷이어야 한다. 해설문을 학생이나 연구원 이름으로 바꾸기만 하지 않는다.");
+  const appearances = new Map<string, number>();
+  for (const panel of plan.panels) {
+    const speakers = new Set(panel.dialogue.filter(line => line.text.trim() && !isNarrator(line.speaker))
+      .map(line => line.speaker.replace(/\s+/gu, "").trim()).filter(Boolean));
+    for (const speaker of speakers) appearances.set(speaker, (appearances.get(speaker) || 0) + 1);
+  }
+  if (![...appearances.values()].some(count => count >= 2)) {
+    issues.push("주요 캐릭터가 최소 두 컷에서 이어서 등장하고 말해야 한다. 서로 무관한 네 설명 장면으로 나누지 않는다.");
+  }
+  if (plan.storyMode?.trim().toLowerCase() === "narrator driven") {
+    issues.push("narrator driven 전개는 사용하지 않는다. 캐릭터 중심의 사건 전개를 선택한다.");
+  }
+  return issues;
+}
+
 export async function POST(
   request: Request
 ) {
@@ -186,21 +215,28 @@ JSON만 반환: {"startWordIds":[12,340,721]}
               model: "gpt-5-mini",
         reasoning: { effort: attempt === 0 ? "low" : "medium" },
               max_output_tokens: 16000,
-              input: `너는 영어 독해가 어려운 고등학생도 만화로 원문의 뜻과 논리 흐름을 이해하게 돕는 편집자다.
+              input: `너는 영어 독해가 어려운 고등학생을 위해 원문의 핵심을 캐릭터가 겪는 짧은 이야기로 각색하는 만화 작가다. 설명문에 그림을 붙이는 대신 사건·행동·대화로 뜻과 논리 흐름을 전달한다.
 학교: ${schoolName || "미입력"} / 과정: ${gradeName} / 자료명: ${lessonName || "미입력"}
 서버가 구분한 독립 지문 하나만 입력한다. plans는 정확히 하나, id는 "${expectedId}"다.
 다음 페이지로 이어진 원문과 그 한국어 해석은 같은 지문이다. 해석·단어 목록·보기·문제 머리말은 별도 만화로 만들지 않는다.
 
-[내용과 4컷]
+[캐릭터가 겪는 이야기 — 최우선 전개 원칙]
 원문의 핵심 주장, 원인과 결과, 비교·대조, 중요한 사례와 결론을 정확히 유지한다.
 원문에 없는 사실·수치·결론을 만들지 않는다. 가능성·조건·부정·범위를 확정적인 주장으로 바꾸지 않는다.
-정확히 4컷으로 문제/상황 → 사건/설명 → 변화/비교 → 핵심 결론이 드러나게 구성한다. 글의 논리에 맞춰 순서는 조절할 수 있다.
-각 컷에 cut, scene, characters, dialogue가 필요하다. cut은 순서대로 1컷, 2컷, 3컷, 4컷이다.
-4컷 모두 사람들이 서서 강의하는 모습은 금지한다. 최소 2컷에는 인물이 등장하고, 최소 1컷은 행동·상황 재현·비교·시각적 비유로 보여준다. 순수 사물/풍경 컷은 최대 1컷이다.
-장소·표정·행동·구도 중 하나 이상을 컷마다 바꾼다. 본문 밖 비유는 개념을 보여주는 장치로만 사용하고 실제 사실처럼 제시하지 않는다.
+각색용 캐릭터와 일상 상황은 개념을 재현하는 가상 장치로 만들 수 있다. 이를 실제 연구 결과·역사적 사실·원문 사례인 것처럼 주장하지 않는다. 실제 인물/사건/조건이 핵심인 지문은 그것을 우선 재현한다.
+출력 전에 이 지문의 중심 캐릭터, 원하는 것/문제, 행동이나 선택, 그에 따른 변화/발견을 정한다. 이 작업 메모는 출력하지 않는다.
+정확히 4컷의 연결된 이야기로 만든다. 상황/문제 → 시도/선택 → 변화/비교 → 결과/깨달음을 기본으로 하되 원문 논리에 맞게 조절한다. 인물과 상황이 이어지고 앞 컷의 행동이 다음 컷에 영향을 주게 한다.
+캐릭터는 직접 해 보고, 망설이고, 선택하고, 관찰하고, 상대에게 반응한다. 질문→전문가 강의만 네 번 반복하지 않는다. 억지 갈등이나 원문에 없는 실패·성공을 넣어 주장 강도를 바꾸지 않는다.
+추상 개념도 그 개념이 드러나는 구체적 행동과 반응으로 보여준다. 비교 지문은 같은 인물의 두 선택이나 두 인물의 다른 행동을 보여줄 수 있다. 과정 지문은 인물이 과정을 따라가며 변화를 발견하게 한다.
+무조건 학생 A/B와 연구원으로 만들지 않는다. 원문에 맞는 친구, 작가/독자, 손님/상인, 선수, 가족, 연구팀, 실제 사례 속 인물 등으로 구성한다. 한 인물의 행동과 혼잣말로도 전달할 수 있다.
+최소 세 컷에 캐릭터의 직접 대사가 있어야 하고, 주요 캐릭터 최소 한 명이 두 컷 이상에서 이어서 말한다. 말풍선마다 자기 눈앞의 상황·행동·느낌·선택에 연결한다.
+최소 두 컷은 캐릭터가 실제로 행동하거나 선택하는 장면이다. 장면 설명에는 누가 무엇을 하는지와 눈에 보이는 변화를 쓴다. 배경만 바꾸거나 실루엣/상징만 두고 추상 설명을 읽히지 않는다.
+해설자/내레이션은 없애는 것을 기본으로 한다. 꼭 필요한 시간·장소·장면 연결에만 전체 4컷에서 최대 한 발화, 영어 괄호 제외 60자 이내로 허용한다. 해설자가 핵심 개념과 결론을 대신 설명하지 않는다.
+해설자 대사를 학생·연구원 이름으로 바꾸는 우회는 금지한다. 연구원도 자기 실험·관찰·문제에 참여하고 상대의 행동에 반응한다. 네 컷 내내 일반론을 강의하면 다시 각색한다.
+각 컷에 cut, scene, characters, dialogue가 필요하다. cut은 순서대로 1컷, 2컷, 3컷, 4컷이다. 장소·표정·행동·구도 중 하나 이상을 컷마다 바꾼다.
 
 [쉽고 자연스러운 한국어 — 핵심 목표]
-영어 문장 순서대로 직역하거나 PDF의 한국어 해석을 그대로 옮기지 않는다. 뜻을 이해한 후 실제 사람이 입으로 설명할 한국어로 다시 쓴다.
+영어 문장 순서대로 직역하거나 PDF의 한국어 해석을 그대로 옮기지 않는다. 뜻을 이해한 후 캐릭터가 자기 상황에서 실제로 말할 한국어로 다시 쓴다.
 고등 수준의 내용은 유지하되 문장 자체는 짧고 쉽게 쓴다. 어려운 개념은 상황이나 쉬운 풀이로 먼저 이해시키고 필요한 용어를 붙인다.
 문장 하나에는 주된 내용 하나만 담는다. 한 말풍선은 보통 짧은 1~2문장, 한 컷은 보통 말풍선 1~3개로 구성하되 핵심 논리를 빠뜨리지 않는다.
 명사를 길게 연결하는 표현, 불필요한 수동태, '이러한/그것/이는'만으로 대상을 가리키는 표현을 줄이고 누가 무엇을 하는지 드러낸다.
@@ -246,7 +282,7 @@ keyWords에는 사전형 뜻을 써도 되지만 대사에서는 한국어 문�
 [최종 대사 편집 순서 — 어휘 삽입보다 한국어 이해가 먼저]
 아래 세 단계를 한 응답 안에서 순서대로 수행한다. 중간 초안과 검수 내용은 출력하지 않는다.
 1. 뜻 파악: 영어 원문에서 누가 무엇을 하는지, 원인·결과·조건·대조·부정과 핵심 개념을 확인한다.
-2. 한국어 초안: 영어 괄호와 단어장 뜻을 잠시 빼고, 영어 독해에 어려움을 겪는 학생에게 입으로 설명할 짧은 한국어 대사를 먼저 쓴다. 번역문의 문장 구조를 따라가지 않는다.
+2. 한국어 초안: 영어 괄호와 단어장 뜻을 잠시 빼고, 장면 속 인물이 자기 행동·느낌·발견을 상대에게 말할 짧은 한국어 대사를 먼저 쓴다. 독자에게 설명하는 일반론 대신 눈앞의 상황에 반응하게 한다. 번역문의 문장 구조를 따라가지 않는다.
 3. 어휘 연결: 완성한 한국어에서 해당 영어와 의미가 맞는 표현 뒤에 괄호를 붙인다. 고등 어휘는 유지하되 그 한국어 풀이를 반드시 사전의 한 단어 명사로 제한하지 않는다. 문맥에 맞는 짧은 풀이도 허용한다. 어휘를 붙인 뒤 다시 읽고 부자연스러워졌다면 대사를 다시 쓴다.
 
 [캡처에서 확인된 실패 사례 — 이런 문장 구조를 반복하지 말 것]
@@ -275,7 +311,7 @@ speaker에는 '해설자', '연구원', '학생 A'처럼 화자 이름/역할만
 
 [그림과 전개]
 visualStyle은 서버 지정값 "${selectedVisualStyle}"로 쓴다.
-storyMode는 character dialogue, narrator driven, visual metaphor, comparison, process sequence, cause and effect, symbolic scene, real world example, documentary style, inner monologue 중 원문의 논리에 맞게 고른다.
+storyMode는 character dialogue, real world example, inner monologue, comparison, process sequence, cause and effect, documentary style 중 원문에 맞게 고른다. 어떤 방식도 캐릭터의 연결된 행동과 직접 대사가 중심이다. narrator driven은 사용하지 않는다.
 sourceRange는 입력에서 확인한 출처만 쓰고 추측하지 않는다.
 
 [출력]
@@ -300,10 +336,10 @@ ${passageText}
             plan.sourceRange = passageLabels[index] || plan.sourceRange;
             plan.sourceText = passageText;
             const normalizedPlan = deduplicateHighVocabulary(plan);
-            const dialogueIssues = findVocabularyDialogueIssues(plan);
+            const dialogueIssues = [...findVocabularyDialogueIssues(plan), ...findCharacterStoryIssues(normalizedPlan)];
             if (dialogueIssues.length) {
-              verbFeedback = "직전 작성 검수에서 문제가 발견됐다. 아래 항목을 수정한다. 동사는 의미·부정·시제를 유지해 자연스럽게 활용한다. 기초 단어는 한국어 내용은 유지하고 영어 병기/keyWords에서 제외한다. 대체 고등 어휘는 이 원문에 실제 있을 때만 선택하며 개수를 채우지 않는다. 인칭/말투는 인물 관계에 맞춘다. 수정 설명 없이 같은 ID의 전체 4컷 JSON을 반환한다: " + JSON.stringify(dialogueIssues);
-              throw new Error("대사 동사 활용·어휘·말투 검증에 실패했습니다.");
+              verbFeedback = "직전 작성 검수에서 문제가 발견됐다. 아래 항목을 수정한다. 동사는 의미·부정·시제를 유지해 자연스럽게 활용한다. 기초 단어는 한국어 내용은 유지하고 영어 병기/keyWords에서 제외한다. 대체 고등 어휘는 이 원문에 실제 있을 때만 선택하며 개수를 채우지 않는다. 인칭/말투는 인물 관계에 맞춘다. 이야기 구조 오류는 화자 이름만 바꾸지 말고 원문 핵심이 드러나는 연결된 사건·행동·캐릭터 대사로 재구성한다. 수정 설명 없이 같은 ID의 전체 4컷 JSON을 반환한다: " + JSON.stringify(dialogueIssues);
+              throw new Error("대사·어휘·캐릭터 이야기 구조 검증에 실패했습니다.");
             }
             result.plans = [normalizedPlan];
             return result;
@@ -391,7 +427,7 @@ ${passageText}
               "visual metaphor",
               "real world example",
               "comparison",
-              "narrator driven",
+              "character dialogue",
               "cause and effect",
               "symbolic scene",
               "process sequence",
