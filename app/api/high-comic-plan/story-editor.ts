@@ -21,7 +21,9 @@ const englishGloss = /[（(][^()（）]*[A-Za-z][^()（）]*[)）]/u;
 const basic = new Set(["pencil", "pen", "book", "school", "student", "teacher", "people", "good", "bad", "food", "water", "day", "time", "happy"]);
 const narration = /^(?:해설자|해설|내레이터|내레이션|나레이터|나레이션|내래이터|내래이션|narrator|narration)(?:\s*[A-Z0-9]+)?$/iu;
 const professional = /해설|내레|나레|연구|과학자|전문가|선생|교사|교수|상인|점원/u;
-const politeEnd = /(?:요|습니다|습니까|시오|죠)[.!?…]*$/u;
+// Unknown endings are left to the language editor; absence from a list is not an error.
+const politeEnd = /(?:요|니다|니까|시오|죠)[.!?…]*$/u;
+const clearCasualEnd = /(?:했어|됐어|있어|없어|할게|할래|하자|해보자|했지|했잖아|했네|했구나|한다|했다|된다|됐다|이다)[.!?…]*$/u;
 
 export function assertPlainStory(value: unknown, expectedId: string): asserts value is StoryPlan {
   const p = value as StoryPlan;
@@ -73,7 +75,7 @@ function checkRegister(plan: StoryPlan, cast: StoryReview["cast"]): void {
       if (!/[.!?…]$/u.test(sentence)) continue;
       const polite = politeEnd.test(sentence);
       if (voice.register === "casual" && polite) throw new Error(`친구/가족의 반말 대사에 존댓말이 섞였습니다: ${line.text}`);
-      if (voice.register === "polite" && !polite) throw new Error(`존댓말 대사의 문장 끝을 확인하세요: ${line.text}`);
+      if (voice.register === "polite" && !polite && clearCasualEnd.test(sentence)) throw new Error(`존댓말 대사의 문장 끝을 확인하세요: ${line.text}`);
     }
   }
 }
