@@ -125,8 +125,16 @@ export function attachReviewedVocabulary(review: StoryReview, sourceText: string
     if (start < 0 || line.text.indexOf(phrase, start + 1) >= 0 || /[()（）.!?]/u.test(phrase)) {
       throw new Error(`영어를 붙일 한국어 표현은 해당 대사에 정확히 한 번 있어야 합니다: ${phrase}`);
     }
-    if (link.partOfSpeech === "verb" && (!/(?:요|다|어|아|해|지|고|며|면|는|은|던|게|기|길|킬|을|려|서|야|로|러|듯)$/u.test(phrase) || /(?:하다|시키다|누르다|받아들이다|피하다)$/u.test(phrase))) {
-      throw new Error(`동사는 명사나 사전형 대신 활용된 한국어 표현에 연결하세요: ${phrase}`);
+    if (link.partOfSpeech === "verb") {
+      // Do not guess Korean conjugation from a suffix allowlist: 해보자/하렴/했네 etc. are valid.
+      // Reject only a copied dictionary form, or the bare noun from an explicit 하다 gloss.
+      const dictionaryForms = link.meaning.match(/[가-힣]+다(?=$|[\s,/·;])/gu) || [];
+      const copiedDictionary = dictionaryForms.some(form => phrase.endsWith(form));
+      const bareActionNoun = dictionaryForms.some(form => form.endsWith("하다") &&
+        form.length > 2 && phrase.endsWith(form.slice(0, -2)));
+      if (copiedDictionary || bareActionNoun) {
+        throw new Error(`동사는 명사나 사전형 대신 활용된 한국어 표현에 연결하세요: ${phrase}`);
+      }
     }
     const key = `${link.cut}:${link.line}`;
     const parts = spans.get(key) || [];
