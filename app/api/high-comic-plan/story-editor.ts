@@ -1,7 +1,7 @@
 export type StoryPlan = {
   id: string; englishTitle: string; koreanSubtitle: string; blockSummary: string;
   sourceRange: string; sourceText?: string; visualStyle?: string; storyMode?: string;
-  keyWords: string[];
+  keyWords: string[]; vocabularyNotice?: string;
   panels: Array<{ cut: string; scene: string; characters: string;
     dialogue: Array<{ speaker: string; text: string }> }>;
 };
@@ -48,6 +48,10 @@ export function assertPlainStory(value: unknown, expectedId: string): asserts va
       if (/[가-힣]+다\s+(?:수\s|않|못|는\s*중|해야|해요)/u.test(line.text)) {
         throw new Error(`사전형 동사가 문장에 잘못 이어졌습니다: ${line.text}`);
       }
+      if (/[가-힣]+하다(?:가|를)?\s+(?:힘들|어렵|쉽)/u.test(line.text)) {
+        throw new Error(`사전형을 문장에 끼우지 말고 먼저 자연스러운 한국어 문장으로 쓰세요: ${line.text}`);
+      }
+      if (line.text.length > 110) throw new Error("말풍선 한 개가 너무 깁니다. 짧은 생활 한국어로 나누세요.");
       if (/[()（）]/u.test(line.speaker)) throw new Error("화자 이름에 말투 메모를 넣지 마세요.");
     }
   }
@@ -99,13 +103,15 @@ export function attachReviewedVocabulary(review: StoryReview, sourceText: string
     evidence.add(normalized(check.sourceQuote));
   }
   if (evidence.size < 2) throw new Error("같은 원문 근거를 중복하지 마세요.");
-  if (!Array.isArray(review.vocabularyLinks) || review.vocabularyLinks.length > 8) throw new Error("어휘 연결은 0~8개여야 합니다.");
+  const links = Array.isArray(review.vocabularyLinks) ? review.vocabularyLinks.slice(0, 8) : [];
   const plan: StoryPlan = { ...original, keyWords: [], panels: original.panels.map(panel => ({
     ...panel, dialogue: panel.dialogue.map(line => ({ ...line })),
   })) };
   const used = new Set<string>();
   const spans = new Map<string, Array<{ start: number; end: number; english: string }>>();
-  for (const link of review.vocabularyLinks) {
+  for (const link of links) {
+    // Optional annotation must never force regeneration of a valid Korean story.
+    try {
     if (!link || !Number.isInteger(link.cut) || link.cut < 1 || link.cut > 4 ||
         !Number.isInteger(link.line) || link.line < 1 || typeof link.koreanPhrase !== "string" || !link.koreanPhrase.trim() ||
         typeof link.english !== "string" || !/^[A-Za-z][A-Za-z ’‘'‐‑–—-]*$/u.test(link.english) ||
@@ -138,12 +144,17 @@ export function attachReviewedVocabulary(review: StoryReview, sourceText: string
         throw new Error(`동사는 명사나 사전형 대신 활용된 한국어 표현에 연결하세요: ${phrase}`);
       }
     }
+    const following = line.text.slice(start + phrase.length);
+    if (/[가-힣]+하다$/u.test(phrase) && /^(?:가|를|는|고|면|해야|해요|\s+(?:힘들|어렵|쉽))/u.test(following)) {
+      throw new Error("사전형 연결 어휘는 제외합니다.");
+    }
     const key = `${link.cut}:${link.line}`;
     const parts = spans.get(key) || [];
     const end = start + phrase.length;
     if (parts.some(part => start < part.end && end > part.start)) throw new Error("서로 겹치는 표현에 영어를 붙일 수 없습니다.");
     parts.push({ start, end, english: link.english.trim() }); spans.set(key, parts);
     used.add(english); plan.keyWords.push(`${link.meaning.trim()}(${link.english.trim()})`);
+    } catch { continue; }
   }
   for (const [key, parts] of spans) {
     const [cut, index] = key.split(":").map(Number);
@@ -152,6 +163,9 @@ export function attachReviewedVocabulary(review: StoryReview, sourceText: string
     for (const part of parts.sort((a, b) => b.end - a.end)) {
       line.text = line.text.slice(0, part.end) + `(${part.english})` + line.text.slice(part.end);
     }
+  }
+  if (plan.keyWords.length < links.length) {
+    plan.vocabularyNotice = "대사와 정확히 연결되지 않는 영어 표기는 제외했습니다. 한국어 대사는 유지했습니다.";
   }
   return plan;
 }

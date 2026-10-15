@@ -433,7 +433,7 @@ Possible techniques:
 - comedic pause
 - playful contrast
 - dry humor
-- short reaction text
+- visual reaction without added text
 - trendy visual joke
 
 But comedy must never distort the actual meaning of the source content.
@@ -441,53 +441,19 @@ But comedy must never distort the actual meaning of the source content.
 The tone can feel MZ-style,
 but avoid forced or excessive slang.
 
-[필수 말투 규칙 — 모든 컷에 일관되게 적용]
-대사 작성 전에 화자의 역할과 듣는 상대를 확인한다.
-- 해설자·내레이터·연구원·연구자·과학자·전문가·교사는 항상 자연스러운 존댓말을 사용한다.
-- 학생이 연구원·상인·교사·부모 등 성인에게 말할 때는 질문·감탄·짧은 응답도 존댓말로 쓴다.
-- 상인은 학생이나 손님에게 존댓말을 사용한다.
-- 학생끼리 명확한 친구 관계일 때만 자연스러운 반말을 사용한다.
-- 관계가 불명확하면 존댓말을 기본으로 한다. 한 인물이 같은 상대에게 반말과 존댓말을 섞지 않는다.
-- 학생이 친구에게는 반말, 성인에게는 존댓말을 쓰는 것은 올바른 관계 구분이다.
-- 해설자의 내레이션도 "~해요", "~입니다", "~죠" 등 존댓말로 쓴다. "~한다", "~이야", "~하지"로 끝내지 않는다.
-잘못된 예: 학생이 연구원에게 "그게 왜 그래?", "알려줘!", "진짜?"
-올바른 예: "그게 왜 그런 거예요?", "알려주세요!", "정말요?"
-잘못된 예: 연구원이 "이게 핵심이야. 알겠지?"
-올바른 예: "이게 핵심이에요. 이해됐나요?"
-모든 컷의 최종 대사를 화자와 상대별로 다시 확인하고 위반하는 어미만 자연스럽게 고친다.
-대사의 의미, 인물, 순서, 한글(영어)의 활용형, 어휘 중복 금지 규칙은 유지한다.
-이 필수 규칙은 다른 스타일 지시나 반말 예시보다 우선한다.
-
-이미지에 실제로 쓰는 대사에도 이 규칙을 적용한다. 저장된 설계안에 반말 오류가 있으면 의미는 유지하고 존댓말 어미로 최소한만 교정한다.
-
 ==================================================
-DIALOGUE STYLE
+LOCKED DIALOGUE — HIGHEST PRIORITY
 ==================================================
 
-Use the supplied Korean dialogue as faithfully as possible.
-The supplied dialogue is edited for students who struggle with English reading. Preserve its short, clear Korean sentences, concrete subjects and natural word order exactly. Do not replace easy expressions with abstract nouns, literal English translations, formal textbook language or longer explanations. Do not add new dialogue. Keep the existing polite speech, meaning, vocabulary parentheses and blue emphasis rules.
-
-Do NOT rewrite the meaning.
-
-Minor natural adjustments are allowed only when needed for:
-- speech-bubble readability
-- natural spoken Korean
-- comic timing
-
-Dialogue should feel:
-- conversational
-- witty
-- current
-- natural
-- energetic
-- high-school appropriate
-
-Avoid:
-- textbook translation tone
-- teacher lecture tone
-- stiff explanatory language
-- childish baby talk
-
+The supplied bubbleText is approved, final text. Render it verbatim.
+Do not translate, paraphrase, simplify, conjugate, change speech register, add an explanation,
+or fix a perceived grammar error. Language editing has already finished before this request.
+Keep every Korean character, English vocabulary parenthesis, punctuation and bubble order.
+Use speakerMetadata only to identify who speaks and point the tail; never print it.
+Use scene/characters only to draw the story; never print those descriptions.
+Do not turn blockSummary, keyWords, style instructions or source position into captions or bubbles.
+Only the supplied dialogue is printable text. Do not add reaction words, labels or sound-effect text.
+If text is long, adjust the bubble layout instead of rewriting it.
 
 ==================================================
 MANDATORY VOCABULARY TEXT COLOR
@@ -524,7 +490,7 @@ Examples:
 The finished page should visibly contain approximately 5–8 useful English vocabulary expressions
 distributed naturally through the four panels whenever they are supplied in the plan.
 
-Do not omit the supplied keyWords. These were selected from the source for high-school exam study.
+The keyWords list is hidden reference metadata; print only vocabulary already present in bubbleText.
 Do not substitute elementary words or invent new vocabulary to reach a count.
 Use each supplied English learning expression EXACTLY ONCE across this entire comic page.
 If the concept recurs, render only its Korean meaning, without English parentheses.
@@ -539,11 +505,6 @@ Use 기억하기(remember) 힘들어, 적응하는(adapt) 중이야, 해결해�
 Never print 기억하다(remember)가 힘들어, 적응하다(adapt)는 중, 해결하다(solve)해야.
 When parentheses are removed, each Korean sentence must still be grammatical.
 Keep meaningful high-school verbs and phrases; do not evade this rule by selecting only nouns.
-
-If the supplied plan accidentally contains an English-only dialogue sentence,
-do NOT reproduce it as English.
-Render the meaning naturally in Korean instead,
-while retaining useful English vocabulary only in parentheses.
 
 ==================================================
 SPEECH BUBBLES
@@ -584,9 +545,9 @@ Do not create a separate word list.
 
 Do not dump vocabulary at the bottom of a panel.
 
-Vocabulary should naturally appear within dialogue or scene context.
+Vocabulary appears only at its exact supplied position inside bubbleText. Never print it again in scenes.
 
-Suggested key vocabulary for this page:
+Hidden vocabulary reference only — never add these words separately:
 ${keyWords || "Use only the vocabulary already present in the supplied dialogue."}
 
 
@@ -639,7 +600,7 @@ TEXT ACCURACY
 
 Korean text accuracy is extremely important.
 
-Preserve supplied dialogue closely.
+Copy supplied bubbleText exactly.
 
 Do not invent unrelated Korean text.
 
@@ -693,11 +654,11 @@ Verify all of the following:
 6. visually engaging assigned visual style is clearly visible
 7. at least 3 clearly different camera framings
 8. supplied story order preserved
-9. dialogue meaning preserved
+9. every supplied bubbleText copied verbatim, without language editing
 10. every full dialogue sentence is Korean; English appears only as Korean(English) vocabulary
 11. speech-bubble font bold and thick
 12. no separate vocabulary box
-13. approximately 5–8 supplied English learning words appear naturally in Korean(English) format
+13. only the English expressions already present in bubbleText are printed, exactly once
 14. no duplicate/cloned characters inside a panel
 15. no unnecessary random people
 16. recurring characters remain visually consistent

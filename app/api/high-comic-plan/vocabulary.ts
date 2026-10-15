@@ -95,7 +95,7 @@ export function deduplicateHighVocabulary<T extends VocabularyPlan>(plan: T): T 
   });
   const panels = (plan.panels || []).map(panel => ({
     ...panel,
-    dialogue: (panel.dialogue || []).map(line => ({ ...line, speaker: cleanVocabularySpeaker(line.speaker), text: stripRepeated(normalizeVocabularyDialogue(line.text)) })),
+    dialogue: (panel.dialogue || []).map(line => ({ ...line, speaker: cleanVocabularySpeaker(line.speaker), text: stripRepeated(line.text) })),
   }));
   // Dialogue gets priority; scene notes cannot reintroduce printed duplicates.
   for (const panel of panels) {
