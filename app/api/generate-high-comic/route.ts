@@ -93,7 +93,7 @@ export async function POST(request: Request) {
           ? panel.dialogue
               .map(
                 (line) =>
-                  JSON.stringify({ speakerMetadata: line.speaker, bubbleText: line.text })
+                  `${line.speaker}: ${line.text}`
               )
               .join("\n")
           : "";
@@ -112,7 +112,7 @@ ${panel.scene || ""}
 CHARACTERS:
 ${panel.characters || ""}
 
-DIALOGUE (speakerMetadata is hidden attribution; render ONLY bubbleText):
+DIALOGUE:
 ${dialogueText}
 `;
       })
@@ -433,7 +433,7 @@ Possible techniques:
 - comedic pause
 - playful contrast
 - dry humor
-- visual reaction without added text
+- short reaction text
 - trendy visual joke
 
 But comedy must never distort the actual meaning of the source content.
@@ -442,18 +442,32 @@ The tone can feel MZ-style,
 but avoid forced or excessive slang.
 
 ==================================================
-LOCKED DIALOGUE — HIGHEST PRIORITY
+DIALOGUE STYLE
 ==================================================
 
-The supplied bubbleText is approved, final text. Render it verbatim.
-Do not translate, paraphrase, simplify, conjugate, change speech register, add an explanation,
-or fix a perceived grammar error. Language editing has already finished before this request.
-Keep every Korean character, English vocabulary parenthesis, punctuation and bubble order.
-Use speakerMetadata only to identify who speaks and point the tail; never print it.
-Use scene/characters only to draw the story; never print those descriptions.
-Do not turn blockSummary, keyWords, style instructions or source position into captions or bubbles.
-Only the supplied dialogue is printable text. Do not add reaction words, labels or sound-effect text.
-If text is long, adjust the bubble layout instead of rewriting it.
+Use the supplied Korean dialogue as faithfully as possible.
+
+Do NOT rewrite the meaning.
+
+Minor natural adjustments are allowed only when needed for:
+- speech-bubble readability
+- natural spoken Korean
+- comic timing
+
+Dialogue should feel:
+- conversational
+- witty
+- current
+- natural
+- energetic
+- high-school appropriate
+
+Avoid:
+- textbook translation tone
+- teacher lecture tone
+- stiff explanatory language
+- childish baby talk
+
 
 ==================================================
 MANDATORY VOCABULARY TEXT COLOR
@@ -490,7 +504,7 @@ Examples:
 The finished page should visibly contain approximately 5–8 useful English vocabulary expressions
 distributed naturally through the four panels whenever they are supplied in the plan.
 
-The keyWords list is hidden reference metadata; print only vocabulary already present in bubbleText.
+Do not omit the supplied keyWords. These were selected from the source for high-school exam study.
 Do not substitute elementary words or invent new vocabulary to reach a count.
 Use each supplied English learning expression EXACTLY ONCE across this entire comic page.
 If the concept recurs, render only its Korean meaning, without English parentheses.
@@ -499,12 +513,12 @@ Treat capitalization, plural and tense variants as the same vocabulary item.
 The 5–8 target is a number of DISTINCT expressions, never repeated occurrences.
 If fewer useful expressions are supplied, preserve that smaller set instead of padding with easy words.
 
-Preserve the Korean(English) format exactly, including natural Korean conjugation.
-The Korean before parentheses must fit its sentence, not be a dictionary headword.
-Use 기억하기(remember) 힘들어, 적응하는(adapt) 중이야, 해결해야(solve) 해.
-Never print 기억하다(remember)가 힘들어, 적응하다(adapt)는 중, 해결하다(solve)해야.
-When parentheses are removed, each Korean sentence must still be grammatical.
-Keep meaningful high-school verbs and phrases; do not evade this rule by selecting only nouns.
+Preserve the Korean(English) format exactly.
+
+If the supplied plan accidentally contains an English-only dialogue sentence,
+do NOT reproduce it as English.
+Render the meaning naturally in Korean instead,
+while retaining useful English vocabulary only in parentheses.
 
 ==================================================
 SPEECH BUBBLES
@@ -538,16 +552,16 @@ Important vocabulary may appear naturally in this format:
 
 Examples:
 원동력(driving force)
-적응하는(adapt)
+적응하다(adapt)
 회복력(resilience)
 
 Do not create a separate word list.
 
 Do not dump vocabulary at the bottom of a panel.
 
-Vocabulary appears only at its exact supplied position inside bubbleText. Never print it again in scenes.
+Vocabulary should naturally appear within dialogue or scene context.
 
-Hidden vocabulary reference only — never add these words separately:
+Suggested key vocabulary for this page:
 ${keyWords || "Use only the vocabulary already present in the supplied dialogue."}
 
 
@@ -600,20 +614,13 @@ TEXT ACCURACY
 
 Korean text accuracy is extremely important.
 
-Copy supplied bubbleText exactly.
+Preserve supplied dialogue closely.
 
 Do not invent unrelated Korean text.
 
 Do not replace meaningful Korean dialogue with gibberish.
 
 Do not add random English labels.
-
-SPEAKER METADATA IS NEVER VISIBLE ARTWORK.
-In each DIALOGUE entry, speakerMetadata identifies the speaker only for polite speech, staging and tail direction. It is not printed text. Render ONLY bubbleText as the actual dialogue.
-Do NOT draw speaker-name tags such as 해설자, 학생, 연구원 above, inside or beside speech bubbles.
-Do NOT add circular profile pictures, head silhouettes, avatar badges, speaker icons, role labels or numbered speaker markers attached to or floating near bubbles. No standalone avatar circles elsewhere in a panel.
-Keep normal characters in the scenes; use bubble tails and placement to identify who speaks. Narration may use a clean text box without a speaker-name header or avatar.
-Preserve all supplied dialogue words, Korean(English) blue emphasis, readable bubbles and role-based polite speech.
 
 If a speech bubble has a speaker,
 make its tail clearly point to the correct speaker.
@@ -654,11 +661,11 @@ Verify all of the following:
 6. visually engaging assigned visual style is clearly visible
 7. at least 3 clearly different camera framings
 8. supplied story order preserved
-9. every supplied bubbleText copied verbatim, without language editing
+9. dialogue meaning preserved
 10. every full dialogue sentence is Korean; English appears only as Korean(English) vocabulary
 11. speech-bubble font bold and thick
 12. no separate vocabulary box
-13. only the English expressions already present in bubbleText are printed, exactly once
+13. approximately 5–8 supplied English learning words appear naturally in Korean(English) format
 14. no duplicate/cloned characters inside a panel
 15. no unnecessary random people
 16. recurring characters remain visually consistent

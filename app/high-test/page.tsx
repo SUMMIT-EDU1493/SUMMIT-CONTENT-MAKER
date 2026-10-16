@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { completePlanning, readPlanningResponse, type PlanningSession, type PlanningPassage } from "../lib/high-comic-planning";
 import { runLimited } from "../lib/run-limited";
 import * as pdfjsLib from "pdfjs-dist";
 import { jsPDF } from "jspdf";
@@ -48,8 +47,6 @@ type HighComicResult = {
 export default function HighTestPage() {
   const imageActionRef = useRef(false);
   const planActionRef = useRef(false);
-  const planningSessionRef = useRef<PlanningSession<HighComicPlan> | null>(null);
-  const [planningProgress, setPlanningProgress] = useState("");
   const firstComicImageRef = useRef<HTMLDivElement | null>(null);
   const [schoolName, setSchoolName] = useState("");
   const [gradeName, setGradeName] = useState("");
@@ -255,8 +252,6 @@ export default function HighTestPage() {
 
   const readPdf = async (file: File) => {
     try {
-      planningSessionRef.current = null;
-      setPlanningProgress("");
       setLoadingPdf(true);
       setErrorMessage("");
       setResult(null);
@@ -336,49 +331,53 @@ ${pageText}
 
   const createPlans = async () => {
     if (planActionRef.current || imageActionRef.current || loadingPdf || generatingAll || generatingId || makingPdf) return;
-    if (!pdfText) { alert("먼저 PDF 파일을 업로드해 주세요."); return; }
+    if (!pdfText) {
+      alert("먼저 PDF 파일을 업로드해 주세요.");
+      return;
+    }
+
     planActionRef.current = true;
-    const settings = { schoolName, gradeName, lessonName };
-    const key = JSON.stringify({ ...settings, sourceText: pdfText });
-    const prior = planningSessionRef.current;
-    const resume = prior?.key === key && Boolean(prior.passages) &&
-      Object.keys(prior.completed).length < (prior.passages?.length || 0);
-    const session: PlanningSession<HighComicPlan> = resume ? prior! : { key, completed: {} };
-    planningSessionRef.current = session;
-    const post = async (payload: object) => {
-      const response = await fetch("/api/high-comic-plan", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...settings, ...payload }),
-      });
-      return await readPlanningResponse(response);
-    };
     try {
       setLoadingPlan(true);
       setErrorMessage("");
       setResult(null);
       setGeneratedImages({});
       setWorkItems([]);
-      setPlanningProgress(resume ? "미완료 지문 재시도 준비 중..." : "PDF 지문 구분 중...");
-      const plans = await completePlanning(session, async () => {
-        const data = await post({ phase: "split", sourceText: pdfText }) as { passages?: PlanningPassage[] };
-        if (!Array.isArray(data.passages) || !data.passages.length ||
-            data.passages.some(p => typeof p.text !== "string" || typeof p.label !== "string") ||
-            data.passages.map(p => p.text).join("") !== pdfText) {
-          throw new Error("지문 분리 결과의 원문 누락·중복 검증에 실패했습니다.");
+
+      const response = await fetch(
+        "/api/high-comic-plan",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            schoolName,
+            gradeName,
+            lessonName,
+            sourceText: pdfText,
+          }),
         }
-        return data.passages;
-      }, async (passage, index) => {
-        const data = await post({ phase: "plan", sourceText: passage.text, label: passage.label, index }) as { plan?: HighComicPlan };
-        if (!data.plan || data.plan.id !== `passage-${index + 1}` || data.plan.panels?.length !== 4 || data.plan.sourceText !== passage.text) {
-          throw new Error("지문 순서·원문·네 컷 응답이 올바르지 않습니다.");
-        }
-        return data.plan;
-      }, (done, total) => setPlanningProgress(`설계안 ${done}/${total}개 완료`));
-      setResult({ overallTitle: `${lessonName || "고등 영어"} 써밋네컷`,
-        overallSummary: `총 ${plans.length}개 지문의 써밋네컷 설계안`, blockCount: plans.length, plans });
-    } catch (error) {
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.detail ||
+            data?.error ||
+            "고등 써밋네컷 설계안 생성에 실패했습니다."
+        );
+      }
+
+      setResult(data);
+    } catch (error: any) {
       console.error("HIGH TEST PLAN ERROR:", error);
-      setErrorMessage(error instanceof Error ? error.message : "고등 써밋네컷 설계안 생성 중 오류가 발생했습니다.");
+
+      setErrorMessage(
+        error?.message ||
+          "고등 써밋네컷 설계안 생성 중 오류가 발생했습니다."
+      );
     } finally {
       planActionRef.current = false;
       setLoadingPlan(false);
@@ -1494,7 +1493,7 @@ ${pageText}
               className="mt-5 w-full rounded-xl bg-purple-600 px-6 py-4 text-lg font-black text-white disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
             >
               {loadingPlan
-                ? planningProgress || "고등 설계안 생성 중..."
+                ? "고등 설계안 생성 중..."
                 : "고등 써밋네컷 설계안 만들기"}
             </button>
           </section>
