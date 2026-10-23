@@ -1,3 +1,4 @@
+import { splitComicSourceBySubtitles } from "./subtitle-sections";
 import { deduplicateHighVocabulary } from "./vocabulary";
 import OpenAI from "openai";
 
@@ -118,6 +119,7 @@ export async function POST(
       text: match[0], offset: match.index!,
     }));
     const indexedSource = sourceWords.map((word, index) => `[${index + 1}]${word.text}`).join(" ");
+    let subtitleOffsets: number[] = [];
     const boundaries = await retry(async () => {
       const response = await openai.responses.create({
         model: "gpt-5-mini",
@@ -130,25 +132,55 @@ export async function POST(
 같은 지문의 다음 페이지·한국어 해석·해설·단어 목록·보기·선택지는 새 지문이 아니다.
 같은 첫 문장이라도 서로 다른 실제 지문이면 서로 다른 위치 번호로 구분한다.
 모든 독립 영어 지문을 입력 순서대로 빠짐없이 한 번씩 포함한다. 문장 복사나 제목·요약 생성은 금지한다.
-JSON만 반환: {"startWordIds":[12,340,721]}
+교과서에서는 본문 전체의 시작과 본문 내부 소제목의 시작을 구분한다.
+startWordIds에는 기존처럼 본문·추가 읽기·독립 시험 지문의 시작만 넣는다.
+sectionStartWordIds에는 각 본문 내부에서 새 주제를 시작하는 명시적인 소제목의 첫 단어 위치를 넣는다.
+Q: 질문 소제목, 번호가 있는 주제 소제목, 독립된 영문 소제목 등이 대상이다.
+Q형은 영어 답변 첫 문장이 아니라 Q:가 붙은 단어의 위치를 선택한다.
+도입부는 첫 소제목과 함께 처리하므로 각 본문의 첫 소제목은 sectionStartWordIds에서 제외한다.
+하나의 질문 아래 letters, words처럼 이어지는 설명, 문장 번호, 페이지 머리말, 한국어 번역 제목은 소제목으로 분리하지 않는다.
+소제목이 없는 일반 모의고사 지문은 임의로 쪼개지 않는다. sectionStartWordIds는 빈 배열이다.
+각 소제목의 답변이 다음 페이지로 이어지면 끝까지 같은 단위에 포함한다.
+JSON만 반환: {"startWordIds":[12,721],"sectionStartWordIds":[340,510]}
 위 숫자는 형식 예시다. 반드시 실제 입력에 붙어 있는 번호를 사용한다.
 입력 자료:\n${indexedSource}`,
       });
-      const data = parseCompleted(response) as ParsedResponse & { startWordIds?: number[] };
+      const data = parseCompleted(response) as ParsedResponse & { startWordIds?: number[]; sectionStartWordIds?: number[] };
       if (!Array.isArray(data.startWordIds) || !data.startWordIds.length) throw new Error("지문 시작 위치 번호를 찾지 못했습니다.");
+      const sectionIds = data.sectionStartWordIds ?? [];
+      if (!Array.isArray(sectionIds)) throw new Error("소제목 위치 배열 형식이 올바르지 않습니다.");
+      let previousSection = 0;
+      const checkedSubtitleOffsets = sectionIds.map((id) => {
+        if (!Number.isInteger(id) || id < 1 || id > sourceWords.length || id <= previousSection) {
+          throw new Error("소제목 위치 번호가 범위를 벗어나거나 중복·역순입니다.");
+        }
+        previousSection = id;
+        return sourceWords[id - 1].offset;
+      });
       let previous = 0;
-      return data.startWordIds.map((id) => {
+      const checkedBoundaries = data.startWordIds.map((id) => {
         if (!Number.isInteger(id) || id < 1 || id > sourceWords.length || id <= previous) {
           throw new Error("지문 시작 위치 번호가 범위를 벗어나거나 중복·역순입니다.");
         }
         previous = id;
         return sourceWords[id - 1].offset;
       });
+      subtitleOffsets = checkedSubtitleOffsets;
+      return checkedBoundaries;
     });
     // Contiguous slices cover every input character exactly once, including preamble.
-    const passages = boundaries.map((offset, index) => sourceText.slice(
-      index === 0 ? 0 : offset, boundaries[index + 1] ?? sourceText.length
-    ));
+    const sourceSections = boundaries.flatMap((offset, index) => {
+      const start = index === 0 ? 0 : offset;
+      const end = boundaries[index + 1] ?? sourceText.length;
+      return splitComicSourceBySubtitles(
+        sourceText.slice(start, end),
+        subtitleOffsets.filter(value => value > start && value < end).map(value => value - start),
+      );
+    });
+    if (sourceSections.map(section => section.text).join("") !== sourceText) {
+      throw new Error("전체 소제목 원문 누락·중복 검증에 실패했습니다.");
+    }
+    const passages = sourceSections.map(section => section.text);
     const batchResults: ParsedResponse[] = new Array(passages.length);
     let nextBatch = 0;
     let batchFailed = false;
@@ -282,10 +314,11 @@ plans 배열의 항목 1개
 
 즉,
 
-지문 하나를 다시 여러 장의 만화로 쪼개지 마라.
+서버는 교과서의 명시적인 소제목을 별도 제작 단위로 먼저 나누었다.
+이번 입력에 포함된 소제목의 원리, 과정, 원인과 결과, 주요 예시를 네 컷 전체에 충실하게 담아라.
 
-지문 1개당
-반드시 써밋네컷 1장만 만든다.
+이번 입력 단위 1개당 써밋네컷 1장을 만든다.
+다른 소제목의 내용을 추측하여 덧붙이거나, 도입부만 설명하고 핵심 내용을 생략하지 마라.
 
 
 ==================================================
@@ -714,7 +747,7 @@ keyWords 배열에 넣기만 하고 끝내지 마라.
 - 영어 지문 누락
 - 한국어 해석을 별도 지문으로 계산
 - 지문 수를 임의로 3~6개로 제한
-- 하나의 지문을 여러 plan으로 쪼개기
+- 서버가 나눈 소제목을 다른 소제목과 다시 합치기
 - 본문 순서 변경
 - 4컷보다 많거나 적게 만들기
 - 교과서 문장 그대로 직역
@@ -728,6 +761,7 @@ keyWords 배열에 넣기만 하고 끝내지 마라.
 
 ${passageText}
 
+이번 제작 단위의 소제목: ${sourceSections[index].label || "입력 원문 참조"}
 추가 필수 규칙: 이번 입력은 서버가 구분한 독립 지문 1개다. plans는 정확히 1개여야 한다.
 한국어 해석과 다음 문제의 머리말은 별도 지문으로 만들지 않는다.
 해당 plan의 id는 반드시 "${expectedId}"로 출력한다.`,
@@ -741,6 +775,9 @@ ${passageText}
                   typeof panel.characters !== "string" || !Array.isArray(panel.dialogue) ||
                   panel.dialogue.some(line => !line || typeof line.speaker !== "string" || typeof line.text !== "string"))) {
               throw new Error("지문별 설계안 개수·ID·4컷 검증에 실패했습니다.");
+            }
+            if (sourceSections[index].label) {
+              plan.sourceRange = [plan.sourceRange, sourceSections[index].label].filter(Boolean).join(" · ");
             }
             result.plans = [deduplicateHighVocabulary(plan)];
             return result;
@@ -788,6 +825,8 @@ ${passageText}
         ) => ({
           id:
             `passage-${index + 1}`,
+
+          sourceText: passages[index],
 
           englishTitle:
             plan.englishTitle ||
