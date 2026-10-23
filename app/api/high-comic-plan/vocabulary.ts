@@ -15,7 +15,7 @@ const isEnglish = (text: string) => /[a-z]/i.test(text) && !/[가-힣]/.test(tex
 // Apply only unambiguous nominal uses; do not conjugate arbitrary Korean sentences.
 export function normalizeVocabularyDialogue(text: string): string {
   // Fix explicit duplicated 하다 + inflection without guessing arbitrary verb stems.
-  const repaired = text.replace(/([가-힣]+)하다\(([A-Za-z][^()\n]*)\)(해요|해!|해\?|해야|해서|해도|했어요|했다|하는|하고|하면|하니까|하니|는|고|면)/gu,
+  const repaired = text.replace(/([가-힣]+)하다\(([A-Za-z][^()\n]*)\)(돼요|돼|되어|되면|되는|되고|됐다|됩니다|해요|해!|해\?|해야|해서|해도|했어요|했다|하는|하고|하면|하니까|하니|는|고|면)/gu,
     (_whole, root: string, english: string, ending: string) => {
       const form = ending === "는" ? "하는" : ending === "고" ? "하고" : ending === "면" ? "하면" : ending;
       // Punctuation belongs after the English gloss.
@@ -111,4 +111,50 @@ export function deduplicateHighVocabulary<T extends VocabularyPlan>(plan: T): T 
     return true;
   });
   return { ...plan, panels, keyWords } as T;
+}
+
+// Source-restricted gloss cleanup. Keep Korean wording when a gloss is too basic or absent.
+const excludedGlosses = new Set([
+  ...basicVocabulary, "dream", "dreams", "brain", "brains", "information", "travel", "travels",
+  "think", "learn", "make", "see", "move", "sleep", "read", "write", "like", "love", "want",
+  "go", "come", "get", "give", "take", "know", "say", "tell", "help", "use", "work",
+  "child", "children", "man", "woman", "boy", "girl", "friend", "family", "house", "home",
+  "dog", "cat", "cake", "hat", "foot", "feet", "hand", "eye", "ear", "mouth", "body",
+  "happy", "sad", "big", "small", "fast", "slow", "new", "old", "life", "world", "book", "books",
+]);
+const wordForms = (word: string): string[] => {
+  const result = [word];
+  if (/ies$/.test(word)) result.push(word.slice(0, -3) + "y");
+  if (/s$/.test(word) && !/ss$/.test(word)) result.push(word.slice(0, -1));
+  if (/es$/.test(word)) result.push(word.slice(0, -2));
+  if (/ing$/.test(word)) result.push(word.slice(0, -3), word.slice(0, -3) + "e");
+  if (/ed$/.test(word)) result.push(word.slice(0, -2), word.slice(0, -1));
+  return result;
+};
+export function cleanSourceVocabulary<T extends VocabularyPlan>(plan: T, source: string): T {
+  const tokens = Array.from(englishKey(source).matchAll(/[a-z]+(?:'[a-z]+)?/g), m => m[0]);
+  const allowed = new Set(tokens.flatMap(wordForms));
+  const allowedGloss = (english: string): boolean => {
+    const key = englishKey(english);
+    if (excludedGlosses.has(key)) return false;
+    const words = key.match(/[a-z]+(?:'[a-z]+)?/g) || [];
+    if (!words.length) return false;
+    if (words.length === 1) return wordForms(words[0]).some(form => allowed.has(form));
+    // A phrase must occur in source order; allow inflection of its component words.
+    return tokens.some((_token, i) => words.every((word, j) =>
+      tokens[i + j] !== undefined && wordForms(word).some(form => wordForms(tokens[i + j]).includes(form))));
+  };
+  const clean = (text: string) => text.replace(/\(([^()]*)\)/g, (whole, english: string) =>
+    isEnglish(english) && !allowedGloss(english) ? "" : whole);
+  const panels = (plan.panels || []).map(panel => ({
+    ...panel, scene: clean(panel.scene), characters: clean(panel.characters),
+    dialogue: (panel.dialogue || []).map(line => ({ ...line,
+      text: clean(normalizeVocabularyDialogue(line.text)),
+    })),
+  }));
+  const keyWords = (plan.keyWords || []).filter(word => {
+    const english = word.match(/\(([^()]*)\)/)?.[1] || word;
+    return allowedGloss(english);
+  });
+  return deduplicateHighVocabulary({ ...plan, panels, keyWords } as T);
 }

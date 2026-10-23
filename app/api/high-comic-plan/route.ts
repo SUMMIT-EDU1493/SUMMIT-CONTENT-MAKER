@@ -1,5 +1,6 @@
 import { splitComicSourceBySubtitles } from "./subtitle-sections";
-import { deduplicateHighVocabulary } from "./vocabulary";
+import { cleanSourceVocabulary, findUninflectedVocabularyDialogue } from "./vocabulary";
+import { reviewComicAgainstSource } from "./source-grounding";
 import OpenAI from "openai";
 
 import { createTrackedOpenAI } from "@/lib/tracked-openai";
@@ -196,6 +197,12 @@ JSON만 반환: {"startWordIds":[12,721],"sectionStartWordIds":[340,510]}
               max_output_tokens: 16000,
               input: `
 너는 고등 영어 지문을 각각 "써밋네컷"으로 바꾸는 전문 편집자다.
+원문에 있는 사실·과정·사례만 쉽게 재구성한다. 원문에 없는 전문지식·용어·수치·원인·경로를 추가하지 않는다.
+과학적으로 맞는 상식이라도 원문에 없으면 설명에 쓰지 않는다. 비유는 원문 사실의 의미를 바꾸지 않는다.
+짧은 소제목은 원문에 있는 상황의 시작→정보 전달→행동→의미를 나누며, 외부 지식으로 네 컷을 채우지 않는다.
+핵심 어휘는 개수보다 학습 가치를 우선한다. dream, brain, information, travel 같은 기초 단어는 한글로만 쓴다.
+동사 영어를 병기할 때 한국어는 문장에 맞게 활용한다. 강화해(strengthen), 기억하기(remember)처럼 쓴다.
+해설자·교사·전문가·연구자는 존댓말을 쓰고 학생도 이들에게 존댓말로 말한다.
 
 ==================================================
 프로젝트 정보
@@ -490,11 +497,11 @@ dialogue는 실제 사람이 입으로 말하는 문장이어야 한다.
 핵심어 삽입
 ==================================================
 
-각 지문마다 영어 원문에 실제로 등장하는 고등 내신·수능 수준 핵심 어휘와 숙어 5~8개를 우선 선택한다.
+각 지문마다 영어 원문에 실제로 등장하는 고등 내신·수능 수준 핵심 어휘와 숙어만 선택한다. 개수는 0~8개이며, 짧은 소제목에서는 0~4개도 정상이다. 기초 단어로 개수를 채우지 않는다.
 단순히 주제를 대표하는 쉬운 명사를 고르지 말고, 고등학생에게 학습 가치가 있는 추상어·학술어·다의어의 문맥상 의미·구동사·숙어를 우선한다.
 important, good, bad, people, student, school, time, make, think, learn, life 같은 기초 어휘로 개수를 채우지 않는다.
 난도가 높다는 이유만으로 원문에 없는 영어·전문용어를 새로 만들어 넣지 않는다.
-적절한 고등 수준 어휘가 5개 미만이면 쉬운 단어로 채우지 말고 실제로 있는 학습 가치 높은 어휘만 선택한다.
+적절한 고등 수준 어휘가 적으면 쉬운 단어로 채우지 말고 실제로 있는 학습 가치 높은 어휘만 선택한다.
 동일 단어의 대소문자·복수형·시제형은 같은 어휘로 보고 중복 선택하지 않는다. 원문의 형태 또는 기본형 한 가지로 통일한다.
 한 써밋네컷 4컷 전체에서 각 학습 영어는 한 번만 한글뜻(English)으로 표시한다.
 같은 어휘가 뒤의 대사에서 다시 필요하면 괄호 속 영어 없이 자연스러운 한글 뜻만 사용한다.
@@ -508,7 +515,7 @@ important, good, bad, people, student, school, time, make, think, learn, life �
 예:
 
 원동력(driving force)
-적응하다(adapt)
+적응해(adapt)
 회복력(resilience)
 
 핵심어는 만화 대사 속에 자연스럽게 포함한다.
@@ -779,9 +786,26 @@ ${passageText}
             if (sourceSections[index].label) {
               plan.sourceRange = [plan.sourceRange, sourceSections[index].label].filter(Boolean).join(" · ");
             }
-            result.plans = [deduplicateHighVocabulary(plan)];
+            result.plans = [cleanSourceVocabulary(plan, passageText)];
             return result;
           });
+          // Review only this completed draft. Audit retries never regenerate successful drafts.
+          const audited = await reviewComicAgainstSource(
+            passageText, batchResults[index].plans![0], async (prompt) => {
+              const response = await openai.responses.create({
+                model: "gpt-5-mini", max_output_tokens: 10000, input: prompt,
+              });
+              if (response.status !== "completed" || !response.output_text?.trim()) {
+                throw new Error("원문 대조 검수 응답이 완료되지 않았습니다.");
+              }
+              return response.output_text;
+            },
+          );
+          const checked = cleanSourceVocabulary(audited, passageText);
+          if (findUninflectedVocabularyDialogue(checked).length) {
+            throw new Error("원문 검수 후에도 동사 사전형이 남아 있습니다.");
+          }
+          batchResults[index].plans = [checked];
         } catch (error) {
           batchFailed = true;
           throw new Error(`${index + 1}번 지문 설계 실패: ${error instanceof Error ? error.message : String(error)}`);
