@@ -35,6 +35,10 @@ type RequestBody = {
   gradeName?: string;
   lessonName?: string;
   sourceText?: string;
+  operation?: "split" | "plan";
+  sectionIndex?: number;
+  sectionLabel?: string;
+  koreanReference?: string;
 };
 
 type ParsedResponse = {
@@ -92,6 +96,12 @@ export async function POST(
       );
     }
 
+    const sectionIndex = body.operation === "plan" ? body.sectionIndex : 0;
+    if (!Number.isInteger(sectionIndex) || sectionIndex! < 0) {
+      return Response.json({ error: "지문 순서가 올바르지 않습니다." }, { status: 400 });
+    }
+    const idOffset = sectionIndex!;
+
     const openai =
       createTrackedOpenAI({
         apiKey:
@@ -115,6 +125,11 @@ export async function POST(
       }
       throw last;
     };
+    let sourceSections: Array<{ text: string; label: string; koreanReference?: string }>;
+    if (body.operation === "plan") {
+      sourceSections = [{ text: sourceText, label: body.sectionLabel || "",
+        koreanReference: typeof body.koreanReference === "string" ? body.koreanReference.slice(0, 6000) : "" }];
+    } else {
     // Stable server-assigned word IDs avoid copying PDF whitespace/punctuation.
     const sourceWords = Array.from(sourceText.matchAll(/\S+/gu), match => ({
       text: match[0], offset: match.index!,
@@ -170,7 +185,7 @@ JSON만 반환: {"startWordIds":[12,721],"sectionStartWordIds":[340,510]}
       return checkedBoundaries;
     });
     // Contiguous slices cover every input character exactly once, including preamble.
-    const sourceSections = boundaries.flatMap((offset, index) => {
+    sourceSections = boundaries.flatMap((offset, index) => {
       const start = index === 0 ? 0 : offset;
       const end = boundaries[index + 1] ?? sourceText.length;
       return splitComicSourceBySubtitles(
@@ -181,15 +196,47 @@ JSON만 반환: {"startWordIds":[12,721],"sectionStartWordIds":[340,510]}
     if (sourceSections.map(section => section.text).join("") !== sourceText) {
       throw new Error("전체 소제목 원문 누락·중복 검증에 실패했습니다.");
     }
+    }
+    if (body.operation === "split") {
+      // Two-column PDFs print a page's Korean translation after all of its English.
+      // Give each section the Korean lines of the pages its English is on, as wording reference only.
+      const koreanLine = (line: string) => {
+        const hangul = (line.match(/[가-힣]/gu) || []).length;
+        return hangul >= 4 && hangul > (line.match(/[A-Za-z]/g) || []).length;
+      };
+      const englishLine = (line: string) => (line.match(/[A-Za-z]/g) || []).length >= 20;
+      const markers = Array.from(sourceText.matchAll(/---\s*\d+페이지\s*---/gu), match => match.index!);
+      const pageStarts = markers.length && markers[0] === 0 ? markers : [0, ...markers];
+      const pages = pageStarts.map((start, i) => ({ start, end: pageStarts[i + 1] ?? sourceText.length }));
+      let cursor = 0;
+      const withReference = sourceSections.map(section => {
+        const start = cursor; const end = cursor + section.text.length; cursor = end;
+        const korean = pages.filter(page => page.start < end && page.end > start &&
+          sourceText.slice(Math.max(page.start, start), Math.min(page.end, end)).split("\n").some(englishLine))
+          .flatMap(page => sourceText.slice(page.start, page.end).split("\n").filter(koreanLine));
+        return { ...section, koreanReference: korean.join("\n").slice(0, 6000) };
+      });
+      return Response.json({ sections: withReference });
+    }
     const passages = sourceSections.map(section => section.text);
+    // Two-column PDFs put a page's Korean translation after all of its English, so a
+    // translation can land in the next section. Plan and review from the English lines only.
+    const englishSourceOnly = (text: string): string => {
+      const kept = text.split("\n").filter(line => {
+        const hangul = (line.match(/[가-힣]/gu) || []).length;
+        const latin = (line.match(/[A-Za-z]/g) || []).length;
+        return hangul === 0 || latin > hangul;
+      }).join("\n");
+      return (kept.match(/[A-Za-z]/g) || []).length >= 40 ? kept : text;
+    };
     const batchResults: ParsedResponse[] = new Array(passages.length);
     let nextBatch = 0;
     let batchFailed = false;
     const worker = async () => {
       while (!batchFailed && nextBatch < passages.length) {
         const index = nextBatch++;
-        const passageText = passages[index];
-        const expectedId = `passage-${index + 1}`;
+        const passageText = englishSourceOnly(passages[index]);
+        const expectedId = `passage-${idOffset + index + 1}`;
         try {
           batchResults[index] = await retry(async () => {
             const response = await openai.responses.create({
@@ -322,7 +369,8 @@ plans 배열의 항목 1개
 즉,
 
 서버는 교과서의 명시적인 소제목을 별도 제작 단위로 먼저 나누었다.
-이번 입력에 포함된 소제목의 원리, 과정, 원인과 결과, 주요 예시를 네 컷 전체에 충실하게 담아라.
+이번 입력의 핵심 흐름(무엇에 관한 내용인지 → 중요한 내용 → 결론)을 네 컷에 나눠 담아라.
+학생이 꼭 알아야 할 핵심만 대사로 쓰고, 세부 과정·예시는 장면(scene) 그림으로 보여준다.
 
 이번 입력 단위 1개당 써밋네컷 1장을 만든다.
 다른 소제목의 내용을 추측하여 덧붙이거나, 도입부만 설명하고 핵심 내용을 생략하지 마라.
@@ -444,6 +492,8 @@ storyMode는 다음 방식을 골고루 섞는다.
 - 만화 속 실제 대사처럼 재구성한다.
 - 짧고 직관적으로 표현한다.
 - 한 컷에 지나치게 많은 정보를 넣지 않는다.
+- [대사 분량] 각 컷의 dialogue는 1~2줄만 쓴다. 한 줄은 한두 문장, 괄호 속 영어를 빼고 약 40자 이내로 쓴다.
+- [대사 분량] 한 컷의 대사를 모두 합쳐도 약 60자 이내로 쓴다. 원문 문장을 길게 풀어 옮기지 않는다.
 - 4컷을 모두 보면 원문의 전체 흐름이 이해되어야 한다.
 
 
@@ -497,7 +547,7 @@ dialogue는 실제 사람이 입으로 말하는 문장이어야 한다.
 핵심어 삽입
 ==================================================
 
-각 지문마다 영어 원문에 실제로 등장하는 고등 내신·수능 수준 핵심 어휘와 숙어만 선택한다. 개수는 0~8개이며, 짧은 소제목에서는 0~4개도 정상이다. 기초 단어로 개수를 채우지 않는다.
+각 지문마다 영어 원문에 실제로 등장하는 고등 내신·수능 수준 핵심 어휘와 숙어만 선택한다. 보통 4~6개를 고르고, 원문에 고등 수준 어휘가 거의 없을 때만 그보다 적게 고른다. 기초 단어로 개수를 채우지 않는다.
 단순히 주제를 대표하는 쉬운 명사를 고르지 말고, 고등학생에게 학습 가치가 있는 추상어·학술어·다의어의 문맥상 의미·구동사·숙어를 우선한다.
 important, good, bad, people, student, school, time, make, think, learn, life 같은 기초 어휘로 개수를 채우지 않는다.
 난도가 높다는 이유만으로 원문에 없는 영어·전문용어를 새로 만들어 넣지 않는다.
@@ -769,7 +819,9 @@ keyWords 배열에 넣기만 하고 끝내지 마라.
 ${passageText}
 
 이번 제작 단위의 소제목: ${sourceSections[index].label || "입력 원문 참조"}
-추가 필수 규칙: 이번 입력은 서버가 구분한 독립 지문 1개다. plans는 정확히 1개여야 한다.
+${sourceSections[index].koreanReference ? `참고용 한글 해석 (같은 페이지에 있는 다른 지문의 해석이 섞여 있을 수 있다. 위 영어 원문에 해당하는 부분의 자연스러운 우리말 낱말·표현만 참고한다. 해석 문장을 대사로 길게 옮기지 말고 대사 분량 기준을 지킨다. 사실·사건·대상은 위 영어 원문에 있는 것만 쓴다):
+${sourceSections[index].koreanReference}
+` : ""}추가 필수 규칙: 이번 입력은 서버가 구분한 독립 지문 1개다. plans는 정확히 1개여야 한다.
 한국어 해석과 다음 문제의 머리말은 별도 지문으로 만들지 않는다.
 해당 plan의 id는 반드시 "${expectedId}"로 출력한다.`,
             });
@@ -808,7 +860,7 @@ ${passageText}
           batchResults[index].plans = [checked];
         } catch (error) {
           batchFailed = true;
-          throw new Error(`${index + 1}번 지문 설계 실패: ${error instanceof Error ? error.message : String(error)}`);
+          throw new Error(`${idOffset + index + 1}번 지문 설계 실패: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
     };
@@ -848,7 +900,7 @@ ${passageText}
           index
         ) => ({
           id:
-            `passage-${index + 1}`,
+            `passage-${idOffset + index + 1}`,
 
           sourceText: passages[index],
 
@@ -880,7 +932,7 @@ ${passageText}
               "retro comic book",
               "minimal conceptual illustration",
               "infographic comic",
-            ][index % 10],
+            ][(idOffset + index) % 10],
 
           storyMode:
             plan.storyMode ||
@@ -895,7 +947,7 @@ ${passageText}
               "documentary style",
               "inner monologue",
               "character dialogue",
-            ][index % 10],
+            ][(idOffset + index) % 10],
 
           keyWords:
             Array.isArray(

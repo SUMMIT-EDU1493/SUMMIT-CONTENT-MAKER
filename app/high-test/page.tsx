@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { readApiJson } from "@/lib/read-api-json";
 import { runLimited } from "../lib/run-limited";
 import * as pdfjsLib from "pdfjs-dist";
 import { jsPDF } from "jspdf";
@@ -45,6 +46,11 @@ type HighComicResult = {
 };
 
 export default function HighTestPage() {
+  const planCacheRef = useRef<{
+    key: string; sections: Array<{ text: string; label: string; koreanReference?: string }>;
+    plans: Array<HighComicPlan | undefined>;
+  } | null>(null);
+  const [planProgress, setPlanProgress] = useState("");
   const imageActionRef = useRef(false);
   const planActionRef = useRef(false);
   const firstComicImageRef = useRef<HTMLDivElement | null>(null);
@@ -344,39 +350,55 @@ ${pageText}
       setGeneratedImages({});
       setWorkItems([]);
 
-      const response = await fetch(
-        "/api/high-comic-plan",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            schoolName,
-            gradeName,
-            lessonName,
-            sourceText: pdfText,
-          }),
+      const key = JSON.stringify({ schoolName, gradeName, lessonName, pdfText });
+      const postPlan = async (payload: Record<string, unknown>) => {
+        const response = await fetch("/api/high-comic-plan", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ schoolName, gradeName, lessonName, ...payload }),
+        });
+        return readApiJson(response, "고등 써밋네컷 설계안");
+      };
+      let cache = planCacheRef.current;
+      if (!cache || cache.key !== key || cache.plans.filter(Boolean).length === cache.sections.length) {
+        setPlanProgress("원문과 소제목을 구분하는 중...");
+        const data = await postPlan({ operation: "split", sourceText: pdfText });
+        const sections = data.sections as Array<{ text: string; label: string; koreanReference?: string }>;
+        if (!Array.isArray(sections) || !sections.length ||
+            sections.some(section => !section || typeof section.text !== "string" || typeof section.label !== "string") ||
+            sections.map(section => section.text).join("") !== pdfText.trim()) {
+          throw new Error("원문 분리 결과의 누락·중복 검증에 실패했습니다.");
         }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data?.detail ||
-            data?.error ||
-            "고등 써밋네컷 설계안 생성에 실패했습니다."
-        );
+        cache = { key, sections, plans: new Array(sections.length) };
+        planCacheRef.current = cache;
       }
-
-      setResult(data);
+      const active = cache;
+      const updateProgress = () => setPlanProgress(
+        `설계·원문 검수 ${active.plans.filter(Boolean).length} / ${active.sections.length} 완료`
+      );
+      updateProgress();
+      const pending = active.sections.map((section, index) => ({ section, index }))
+        .filter(({ index }) => !active.plans[index]);
+      await runLimited(pending, 3, async ({ section, index }) => {
+        const data = await postPlan({ operation: "plan", sourceText: section.text,
+          sectionLabel: section.label, sectionIndex: index, koreanReference: section.koreanReference || "" });
+        const plan = data.plans?.[0] as HighComicPlan | undefined;
+        if (data.plans?.length !== 1 || !plan || plan.id !== `passage-${index + 1}` ||
+            !Array.isArray(plan.panels) || plan.panels.length !== 4) {
+          throw new Error(`${index + 1}번 지문 설계 응답이 올바르지 않습니다.`);
+        }
+        active.plans[index] = plan;
+        updateProgress();
+      });
+      const plans = active.plans.filter((plan): plan is HighComicPlan => Boolean(plan));
+      if (plans.length !== active.sections.length) throw new Error("전체 설계안 수 검증에 실패했습니다.");
+      setResult({ overallTitle: `${lessonName || "고등 영어"} 써밋네컷`,
+        overallSummary: `총 ${plans.length}개 지문의 써밋네컷 설계안`, blockCount: plans.length, plans });
     } catch (error: any) {
       console.error("HIGH TEST PLAN ERROR:", error);
 
       setErrorMessage(
-        error?.message ||
-          "고등 써밋네컷 설계안 생성 중 오류가 발생했습니다."
+        (error?.message || "고등 써밋네컷 설계안 생성 중 오류가 발생했습니다.") +
+          " 완료한 설계안은 현재 화면에 보관됩니다. 같은 조건으로 설계안 만들기를 다시 누르면 남은 지문부터 진행합니다. 새로고침하면 보관 내용이 사라집니다."
       );
     } finally {
       planActionRef.current = false;
@@ -1493,7 +1515,7 @@ ${pageText}
               className="mt-5 w-full rounded-xl bg-purple-600 px-6 py-4 text-lg font-black text-white disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
             >
               {loadingPlan
-                ? "고등 설계안 생성 중..."
+                ? planProgress || "고등 설계안 생성 중..."
                 : "고등 써밋네컷 설계안 만들기"}
             </button>
           </section>
