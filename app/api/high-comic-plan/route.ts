@@ -1,6 +1,7 @@
 import { splitComicSourceBySubtitles } from "./subtitle-sections";
-import { cleanSourceVocabulary, findUninflectedVocabularyDialogue } from "./vocabulary";
-import { reviewComicAgainstSource } from "./source-grounding";
+import { cleanSourceVocabulary } from "./vocabulary";
+import { reviewComicAgainstSource, type GroundedComic } from "./source-grounding";
+import { ensureNoContradiction } from "./fact-check";
 import OpenAI from "openai";
 
 import { createTrackedOpenAI } from "@/lib/tracked-openai";
@@ -35,7 +36,8 @@ type RequestBody = {
   gradeName?: string;
   lessonName?: string;
   sourceText?: string;
-  operation?: "split" | "plan";
+  operation?: "split" | "plan" | "factcheck";
+  plan?: unknown;
   sectionIndex?: number;
   sectionLabel?: string;
   koreanReference?: string;
@@ -125,6 +127,20 @@ export async function POST(
       }
       throw last;
     };
+    const askFactCheck = async (prompt: string) => {
+      const response = await openai.responses.create({ model: "gpt-5-mini", max_output_tokens: 6000, input: prompt });
+      if (response.status !== "completed" || !response.output_text?.trim()) {
+        throw new Error("의미 검증 응답이 완료되지 않았습니다.");
+      }
+      return response.output_text;
+    };
+    // Local testing only: run the meaning check on a given English source and plan.
+    if (body.operation === "factcheck") {
+      if (process.env.NODE_ENV === "production") {
+        return Response.json({ error: "지원하지 않는 요청입니다." }, { status: 404 });
+      }
+      return Response.json({ plan: await ensureNoContradiction(sourceText, body.plan as GroundedComic, askFactCheck) });
+    }
     let sourceSections: Array<{ text: string; label: string; koreanReference?: string }>;
     if (body.operation === "plan") {
       sourceSections = [{ text: sourceText, label: body.sectionLabel || "",
@@ -139,6 +155,8 @@ export async function POST(
     const boundaries = await retry(async () => {
       const response = await openai.responses.create({
         model: "gpt-5-mini",
+        // Only picks word positions; the server re-checks order, range and full coverage below.
+        reasoning: { effort: "low" },
         max_output_tokens: 8000,
         input: `입력은 PDF에서 추출한 고등 영어 자료다. 설계안은 만들지 말고 독립 영어 지문의 시작 위치만 찾는다.
 서버가 각 단어 앞에 [1], [2]처럼 위치 번호를 붙였다. 이 번호는 문제 번호가 아니라 원문 내 단어 위치다.
@@ -237,8 +255,10 @@ JSON만 반환: {"startWordIds":[12,721],"sectionStartWordIds":[340,510]}
         const index = nextBatch++;
         const passageText = englishSourceOnly(passages[index]);
         const expectedId = `passage-${idOffset + index + 1}`;
+        const timing = { start: Date.now(), draft: 0, draftCalls: 0, review: 0, reviewCalls: 0, factCalls: 0 };
         try {
           batchResults[index] = await retry(async () => {
+            timing.draftCalls++;
             const response = await openai.responses.create({
               model: "gpt-5-mini",
               max_output_tokens: 16000,
@@ -494,6 +514,8 @@ storyMode는 다음 방식을 골고루 섞는다.
 - 한 컷에 지나치게 많은 정보를 넣지 않는다.
 - [대사 분량] 각 컷의 dialogue는 1~2줄만 쓴다. 한 줄은 한두 문장, 괄호 속 영어를 빼고 약 40자 이내로 쓴다.
 - [대사 분량] 한 컷의 대사를 모두 합쳐도 약 60자 이내로 쓴다. 원문 문장을 길게 풀어 옮기지 않는다.
+- [대사 분량] 모든 컷에 대사 1줄 이상을 넣는다. 인물 없는 상징 장면이면 해설자 내레이션 1줄을 넣는다.
+- [영어 병기] 영어 단어만 문장 끝에 따로 붙이지 않는다. 예: '…보여요. 진화(evolution).' (X) → '환경이 그대로면 진화(evolution)가 멈춘 것처럼 보여요.' (O)
 - 4컷을 모두 보면 원문의 전체 흐름이 이해되어야 한다.
 
 
@@ -549,7 +571,7 @@ dialogue는 실제 사람이 입으로 말하는 문장이어야 한다.
 
 각 지문마다 영어 원문에 실제로 등장하는 고등 내신·수능 수준 핵심 어휘와 숙어만 선택한다. 보통 4~6개를 고르고, 원문에 고등 수준 어휘가 거의 없을 때만 그보다 적게 고른다. 기초 단어로 개수를 채우지 않는다.
 단순히 주제를 대표하는 쉬운 명사를 고르지 말고, 고등학생에게 학습 가치가 있는 추상어·학술어·다의어의 문맥상 의미·구동사·숙어를 우선한다.
-important, good, bad, people, student, school, time, make, think, learn, life 같은 기초 어휘로 개수를 채우지 않는다.
+important, good, bad, people, student, school, time, make, think, learn, life, light, history, culture, star, music, game 같은 기초 어휘와 사람·별·지명 같은 고유명사로 개수를 채우지 않는다.
 난도가 높다는 이유만으로 원문에 없는 영어·전문용어를 새로 만들어 넣지 않는다.
 적절한 고등 수준 어휘가 적으면 쉬운 단어로 채우지 말고 실제로 있는 학습 가치 높은 어휘만 선택한다.
 동일 단어의 대소문자·복수형·시제형은 같은 어휘로 보고 중복 선택하지 않는다. 원문의 형태 또는 기본형 한 가지로 통일한다.
@@ -777,19 +799,34 @@ keyWords 배열에 넣기만 하고 끝내지 마라.
           "cut": "2컷",
           "scene": "장면 설명",
           "characters": "등장인물 설명",
-          "dialogue": []
+          "dialogue": [
+            {
+              "speaker": "화자 또는 해설자",
+              "text": "짧은 대사 또는 내레이션"
+            }
+          ]
         },
         {
           "cut": "3컷",
           "scene": "장면 설명",
           "characters": "등장인물 설명",
-          "dialogue": []
+          "dialogue": [
+            {
+              "speaker": "화자 또는 해설자",
+              "text": "짧은 대사 또는 내레이션"
+            }
+          ]
         },
         {
           "cut": "4컷",
           "scene": "장면 설명",
           "characters": "등장인물 설명",
-          "dialogue": []
+          "dialogue": [
+            {
+              "speaker": "화자 또는 해설자",
+              "text": "짧은 대사 또는 내레이션"
+            }
+          ]
         }
       ]
     }
@@ -842,10 +879,13 @@ ${sourceSections[index].koreanReference}
             return result;
           });
           // Review only this completed draft. Audit retries never regenerate successful drafts.
+          timing.draft = Date.now() - timing.start;
           const audited = await reviewComicAgainstSource(
             passageText, batchResults[index].plans![0], async (prompt) => {
+              timing.reviewCalls++;
               const response = await openai.responses.create({
-                model: "gpt-5-mini", max_output_tokens: 10000, input: prompt,
+                // Editing pass: facts are re-checked afterwards by the separate meaning check.
+                model: "gpt-5-mini", reasoning: { effort: "low" }, max_output_tokens: 10000, input: prompt,
               });
               if (response.status !== "completed" || !response.output_text?.trim()) {
                 throw new Error("원문 대조 검수 응답이 완료되지 않았습니다.");
@@ -853,10 +893,17 @@ ${sourceSections[index].koreanReference}
               return response.output_text;
             },
           );
-          const checked = cleanSourceVocabulary(audited, passageText);
-          if (findUninflectedVocabularyDialogue(checked).length) {
-            throw new Error("원문 검수 후에도 동사 사전형이 남아 있습니다.");
-          }
+          // Separate meaning check: lines that reverse or contradict the English source are fixed or fail.
+          timing.review = Date.now() - timing.start - timing.draft;
+          const verified = await ensureNoContradiction(passageText, audited, async (prompt) => {
+            timing.factCalls++;
+            return askFactCheck(prompt);
+          });
+          const seconds = (ms: number) => (ms / 1000).toFixed(0);
+          console.log(`[high-comic-plan timing] ${expectedId} draft ${seconds(timing.draft)}s x${timing.draftCalls}, review ${seconds(timing.review)}s x${timing.reviewCalls}, meaning ${seconds(Date.now() - timing.start - timing.draft - timing.review)}s x${timing.factCalls}, total ${seconds(Date.now() - timing.start)}s`);
+          const checked = cleanSourceVocabulary(verified, passageText);
+          // cleanSourceVocabulary already rewrites any leftover "~하다(English)" deterministically,
+          // so wording never fails a whole passage here.
           batchResults[index].plans = [checked];
         } catch (error) {
           batchFailed = true;

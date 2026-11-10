@@ -378,7 +378,8 @@ ${pageText}
       updateProgress();
       const pending = active.sections.map((section, index) => ({ section, index }))
         .filter(({ index }) => !active.plans[index]);
-      await runLimited(pending, 3, async ({ section, index }) => {
+      // Each passage is its own short request, so ten in flight keeps long PDFs moving without one huge call.
+      await runLimited(pending, 10, async ({ section, index }) => {
         const data = await postPlan({ operation: "plan", sourceText: section.text,
           sectionLabel: section.label, sectionIndex: index, koreanReference: section.koreanReference || "" });
         const plan = data.plans?.[0] as HighComicPlan | undefined;

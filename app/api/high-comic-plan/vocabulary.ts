@@ -12,10 +12,44 @@ const englishKey = (text: string) => text.normalize("NFKC").toLowerCase()
 const isEnglish = (text: string) => /[a-z]/i.test(text) && !/[가-힣]/.test(text);
 
 
+// A particle after "한글(English)" must agree with the Korean word, not the English gloss.
+const hasFinalConsonant = (char: string): number => {
+  const code = char.charCodeAt(0) - 0xac00;
+  return code >= 0 && code <= 11171 ? code % 28 : 0;
+};
+export function fixGlossParticles(text: string): string {
+  return text.replace(/([가-힣])(\([A-Za-z][^()\n]*\))(을|를|이|가|은|는|과|와|으로|로)(?=\s|[,.!?~]|$)/gu,
+    (_whole, last: string, gloss: string, particle: string) => {
+      const final = hasFinalConsonant(last);
+      const pick = (withFinal: string, without: string) => (final ? withFinal : without);
+      const fixed = particle === "을" || particle === "를" ? pick("을", "를")
+        : particle === "이" || particle === "가" ? pick("이", "가")
+        : particle === "은" || particle === "는" ? pick("은", "는")
+        : particle === "과" || particle === "와" ? pick("과", "와")
+        : final && final !== 8 ? "으로" : "로";
+      return `${last}${gloss}${fixed}`;
+    });
+}
+
+// Last-resort repair when the model keeps a dictionary form: "(상상하다(imagine))" → "상상(imagine)".
+export function fallbackVerbGloss(text: string): string {
+  return text
+    .replace(/\(([가-힣]{1,12})\(([A-Za-z][^()\n]*)\)\)/gu, "")
+    .replace(/([가-힣]{2,})하다\(([A-Za-z][^()\n]*)\)\s*(않|못)/gu, "$1하지($2) $3")
+    .replace(/([가-힣]{2,})하다\(([A-Za-z][^()\n]*)\)/gu, "$1($2)");
+}
+
+// Put a gloss right after a Sino-Korean stem: 분류하세요(categorize) → 분류(categorize)하세요.
+const VERB_SYLLABLES = "하해했할한합되돼됐된될됩";
+export function moveVerbGloss(text: string): string {
+  return text.replace(new RegExp(`(?<![가-힣])([가-힣]{2,}?)([${VERB_SYLLABLES}][가-힣]*(?: (?:해|해요|돼|돼요|봐|봐요|보세요|있어|있어요|주세요|줘))?)\\(([A-Za-z][^()\\n]*)\\)`, "gu"),
+    (_whole, stem: string, rest: string, english: string) => `${stem}(${english})${rest}`);
+}
+
 // Apply only unambiguous nominal uses; do not conjugate arbitrary Korean sentences.
 export function normalizeVocabularyDialogue(text: string): string {
   // Fix explicit duplicated 하다 + inflection without guessing arbitrary verb stems.
-  const repaired = text.replace(/([가-힣]+)하다\(([A-Za-z][^()\n]*)\)(돼요|돼|되어|되면|되는|되고|됐다|됩니다|해요|해!|해\?|해야|해서|해도|했어요|했다|하는|하고|하면|하니까|하니|는|고|면)/gu,
+  const repaired = fixGlossParticles(text).replace(/([가-힣]+)하다\(([A-Za-z][^()\n]*)\)(돼요|돼|되어|되면|되는|되고|됐다|됩니다|해요|해!|해\?|해야|해서|해도|했어요|했다|하는|하고|하면|하니까|하니|는|고|면)/gu,
     (_whole, root: string, english: string, ending: string) => {
       const form = ending === "는" ? "하는" : ending === "고" ? "하고" : ending === "면" ? "하면" : ending;
       // Punctuation belongs after the English gloss.
@@ -121,6 +155,10 @@ const excludedGlosses = new Set([
   "child", "children", "man", "woman", "boy", "girl", "friend", "family", "house", "home",
   "dog", "cat", "cake", "hat", "foot", "feet", "hand", "eye", "ear", "mouth", "body",
   "happy", "sad", "big", "small", "fast", "slow", "new", "old", "life", "world", "book", "books",
+  "light", "history", "culture", "music", "star", "stars", "sky", "sun", "moon", "picture", "pictures",
+  "game", "games", "money", "city", "country", "animal", "animals", "story", "idea", "question",
+  "answer", "problem", "place", "way", "thing", "things", "number", "photo", "photos", "camera",
+  "past", "language", "decision",
 ]);
 const wordForms = (word: string): string[] => {
   const result = [word];
@@ -135,6 +173,8 @@ export function cleanSourceVocabulary<T extends VocabularyPlan>(plan: T, source:
   const tokens = Array.from(englishKey(source).matchAll(/[a-z]+(?:'[a-z]+)?/g), m => m[0]);
   const allowed = new Set(tokens.flatMap(wordForms));
   const allowedGloss = (english: string): boolean => {
+    // Names (Betelgeuse, Henry) are not vocabulary; acronyms such as DNA stay allowed.
+    if (/^[A-Z][a-z]/.test(english.trim())) return false;
     const key = englishKey(english);
     if (excludedGlosses.has(key)) return false;
     const words = key.match(/[a-z]+(?:'[a-z]+)?/g) || [];
@@ -144,12 +184,15 @@ export function cleanSourceVocabulary<T extends VocabularyPlan>(plan: T, source:
     return tokens.some((_token, i) => words.every((word, j) =>
       tokens[i + j] !== undefined && wordForms(word).some(form => wordForms(tokens[i + j]).includes(form))));
   };
-  const clean = (text: string) => text.replace(/\(([^()]*)\)/g, (whole, english: string) =>
+  // "지능 intelligence" → "지능(intelligence)" when the English word is a real source word.
+  const wrapLooseEnglish = (text: string) => text.replace(/([가-힣]+) ([a-z][a-z-]{2,})(?=[\s,.!?]|$)/g,
+    (whole, korean: string, english: string) => (allowedGloss(english) ? `${korean}(${english})` : whole));
+  const clean = (text: string) => wrapLooseEnglish(text).replace(/\(([^()]*)\)/g, (whole, english: string) =>
     isEnglish(english) && !allowedGloss(english) ? "" : whole);
   const panels = (plan.panels || []).map(panel => ({
     ...panel, scene: clean(panel.scene), characters: clean(panel.characters),
     dialogue: (panel.dialogue || []).map(line => ({ ...line,
-      text: clean(normalizeVocabularyDialogue(line.text)),
+      text: clean(fixGlossParticles(moveVerbGloss(fallbackVerbGloss(normalizeVocabularyDialogue(line.text))))),
     })),
   }));
   const keyWords = (plan.keyWords || []).filter(word => {
