@@ -379,21 +379,36 @@ ${pageText}
       const pending = active.sections.map((section, index) => ({ section, index }))
         .filter(({ index }) => !active.plans[index]);
       // Each passage is its own short request, so ten in flight keeps long PDFs moving without one huge call.
+      // A failed passage is redrafted automatically; one bad passage never stops the others.
+      const failures: string[] = [];
       await runLimited(pending, 10, async ({ section, index }) => {
-        const data = await postPlan({ operation: "plan", sourceText: section.text,
-          sectionLabel: section.label, sectionIndex: index, koreanReference: section.koreanReference || "" });
-        const plan = data.plans?.[0] as HighComicPlan | undefined;
-        if (data.plans?.length !== 1 || !plan || plan.id !== `passage-${index + 1}` ||
-            !Array.isArray(plan.panels) || plan.panels.length !== 4) {
-          throw new Error(`${index + 1}번 지문 설계 응답이 올바르지 않습니다.`);
+        let lastError = "";
+        for (let attempt = 0; attempt < 3 && !active.plans[index]; attempt++) {
+          try {
+            const data = await postPlan({ operation: "plan", sourceText: section.text,
+              sectionLabel: section.label, sectionIndex: index, koreanReference: section.koreanReference || "" });
+            const plan = data.plans?.[0] as HighComicPlan | undefined;
+            if (data.plans?.length !== 1 || !plan || plan.id !== `passage-${index + 1}` ||
+                !Array.isArray(plan.panels) || plan.panels.length !== 4) {
+              throw new Error("설계 응답이 올바르지 않습니다.");
+            }
+            active.plans[index] = plan;
+            updateProgress();
+          } catch (error: any) {
+            lastError = error?.message || "알 수 없는 오류";
+            console.error(`HIGH TEST PLAN passage ${index + 1} attempt ${attempt + 1}:`, error);
+          }
         }
-        active.plans[index] = plan;
-        updateProgress();
+        if (!active.plans[index]) failures.push(`${index + 1}번 지문: ${lastError}`);
       });
       const plans = active.plans.filter((plan): plan is HighComicPlan => Boolean(plan));
-      if (plans.length !== active.sections.length) throw new Error("전체 설계안 수 검증에 실패했습니다.");
-      setResult({ overallTitle: `${lessonName || "고등 영어"} 써밋네컷`,
-        overallSummary: `총 ${plans.length}개 지문의 써밋네컷 설계안`, blockCount: plans.length, plans });
+      if (plans.length) {
+        setResult({ overallTitle: `${lessonName || "고등 영어"} 써밋네컷`,
+          overallSummary: `총 ${plans.length}개 지문의 써밋네컷 설계안`, blockCount: plans.length, plans });
+      }
+      if (failures.length) {
+        setErrorMessage(`${failures.length}개 지문은 세 번 시도해도 만들지 못했습니다. 설계안 만들기를 다시 누르면 이 지문만 다시 만듭니다. (${failures.join(" / ")})`);
+      }
     } catch (error: any) {
       console.error("HIGH TEST PLAN ERROR:", error);
 

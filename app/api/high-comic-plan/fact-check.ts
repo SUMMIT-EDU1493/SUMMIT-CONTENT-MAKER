@@ -1,7 +1,7 @@
 /** Meaning check for finished comic dialogue: catches lines that say the opposite of the English source. */
 import { sourceEvidenceUnits, type GroundedComic } from "./source-grounding";
 
-type Problem = { id: string; reason: string; fixed: string };
+type Problem = { id: string; reason: string; fixed: string; type: "meaning" | "gloss" };
 
 const lineIds = (plan: GroundedComic) => plan.panels.flatMap((panel, p) =>
   panel.dialogue.map((line, l) => ({ id: `${p + 1}컷-${l + 1}`, p, l, speaker: line.speaker, text: line.text })));
@@ -14,7 +14,8 @@ function parseProblems(raw: string, valid: Set<string>): Problem[] {
     if (!problem || !valid.has(problem.id) || typeof problem.fixed !== "string" || !problem.fixed.trim()) {
       throw new Error("의미 검증 응답의 대사 번호나 수정문이 올바르지 않습니다.");
     }
-    return { id: problem.id, reason: String(problem.reason || ""), fixed: problem.fixed.trim() };
+    return { id: problem.id, reason: String(problem.reason || ""), fixed: problem.fixed.trim(),
+      type: (item as { type?: unknown }).type === "gloss" ? "gloss" : "meaning" };
   });
 }
 
@@ -30,12 +31,13 @@ function buildPrompt(source: string, plan: GroundedComic): string {
 - 조건·예외·한정(only, until, unless, not all 등)을 빼거나 반대로 바꿈
 - 수치·비율·대상 이름이 원문과 다름
 - 원문에 없는 주장이나 결론을 사실처럼 말함
-- 괄호 영어가 바로 앞 한글 낱말과 뜻이 다름 (생리적(arousal) → 생리적 각성(arousal)처럼 한글을 영어 뜻에 맞춘다)
+- (type "gloss") 괄호 영어가 바로 앞 한글 낱말과 뜻이 전혀 다름 (생리적(arousal) → 생리적 각성(arousal)처럼 한글을 영어 뜻에 맞춘다). 품사나 형태 차이(폭력(violent), 동정(sympathize))는 문제가 아니다.
 원문과 같은 뜻을 쉽게 바꿔 말한 대사, 원문 사실을 바탕으로 한 질문·감탄·연출 대사는 문제가 아니다.
 문제가 있는 대사만 problems에 넣고, fixed에는 같은 화자가 말하는 원문과 같은 뜻의 고친 대사를 쓴다.
 fixed는 원래 대사의 말투와 '한글(영어)' 병기를 유지하고, 괄호 영어를 빼고 약 40자 이내로 쓴다.
 문제가 없으면 {"problems":[]}를 반환한다.
-JSON만 반환: {"problems":[{"id":"1컷-1","reason":"원문과 어긋난 점","fixed":"고친 대사"}]}
+괄호 영어 뜻 문제는 type "gloss", 나머지는 모두 type "meaning"이다.
+JSON만 반환: {"problems":[{"id":"1컷-1","type":"meaning","reason":"원문과 어긋난 점","fixed":"고친 대사"}]}
 영어 원문 구간:
 ${units.map(unit => `[S${unit.id}] ${JSON.stringify(unit.text)}`).join("\n")}
 대사 목록:
@@ -43,13 +45,15 @@ ${lines.map(line => `${line.id} (${line.speaker}): ${JSON.stringify(line.text)}`
 }
 
 /** Keep the original "한글(English)" glosses when a corrected line drops them. */
+const PARTICLE_END = "(?:은|는|이|가|을|를|과|와|의|에|에서|으로|로|도|만|이에요|예요|이죠|죠|이다|입니다)?(?=[\\s,.!?~…]|$)";
 export function restoreGlosses(original: string, fixed: string): string {
   let result = fixed;
   for (const match of original.matchAll(/([가-힣]+)\(([A-Za-z][^()]*)\)/gu)) {
     const [, korean, english] = match;
     if (result.includes(`(${english})`)) continue;
-    const at = result.indexOf(korean);
-    if (at >= 0) result = `${result.slice(0, at + korean.length)}(${english})${result.slice(at + korean.length)}`;
+    // Only re-attach to the same whole word: never turn "폭력적인" into "폭력(violent)적인".
+    const word = new RegExp(`(?<![가-힣])${korean}(?=${PARTICLE_END})`, "u").exec(result);
+    if (word) result = `${result.slice(0, word.index + korean.length)}(${english})${result.slice(word.index + korean.length)}`;
   }
   return result;
 }
@@ -73,16 +77,19 @@ export async function ensureNoContradiction(
       catch (error) { if (attempt === 1) throw error; }
     }
     if (!problems.length) return current;
-    if (round === 2) {
+    if (round === 2 && problems.some(problem => problem.type === "meaning")) {
       throw new Error(`원문과 뜻이 어긋난 대사를 자동으로 고치지 못했습니다: ${problems.map(p => `${p.id} ${p.reason}`).join(" / ")}`);
     }
     const fixes = new Map(problems.map(problem => [problem.id, problem.fixed]));
+    const last = round === 2;
     current = { ...current, panels: current.panels.map((panel, p) => ({
       ...panel, dialogue: panel.dialogue.map((line, l) => {
         const fixed = fixes.get(`${p + 1}컷-${l + 1}`);
         return fixed ? { ...line, text: restoreGlosses(line.text, fixed) } : line;
       }),
     })) };
+    // Only gloss-wording problems remain after the last round: apply the fixes and stop.
+    if (last) return current;
   }
   return current;
 }
