@@ -1,4 +1,5 @@
 "use client";
+import { pdfDropHandlers } from "../components/pdfDrop";
 
 import { useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
@@ -2302,7 +2303,7 @@ ${pageText}
           </div>
         </section>
 
-        <section className="mt-6 rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200 md:p-8">
+        <section {...pdfDropHandlers} className="mt-6 rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200 md:p-8">
           <p className="text-xs font-black tracking-[0.18em] text-emerald-700">
             STEP 1
           </p>
@@ -2332,6 +2333,12 @@ ${pageText}
               <p className="mt-2 text-sm text-slate-500">
                 교과서 또는 부교재 PDF
               </p>
+
+              {!busy && (
+                <p className="mt-1 text-sm text-slate-500">
+                  PDF 파일을 이곳에 드래그하거나, 클릭해서 선택하세요.
+                </p>
+              )}
 
               {fileName && (
                 <p className="mt-3 text-sm font-bold text-emerald-700">

@@ -1,4 +1,5 @@
 "use client";
+import { pdfDropHandlers } from "../components/pdfDrop";
 
 import { useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
@@ -656,7 +657,7 @@ ${pageText}
           )}
         </div>
 
-        <section className="mt-8 rounded-3xl bg-white p-7 shadow-sm ring-1 ring-slate-200">
+        <section {...pdfDropHandlers} className="mt-8 rounded-3xl bg-white p-7 shadow-sm ring-1 ring-slate-200">
           <p className="text-sm font-black text-blue-600">
             STEP 1
           </p>
@@ -672,6 +673,10 @@ ${pageText}
               </p>
 
               <p className="mt-2 text-sm text-slate-500">
+                PDF 파일을 이곳에 드래그하거나, 클릭해서 선택하세요.
+              </p>
+
+              <p className="mt-1 text-sm text-slate-500">
                 시험지를 올리면 비문학
                 지문을 자동으로 찾습니다.
               </p>

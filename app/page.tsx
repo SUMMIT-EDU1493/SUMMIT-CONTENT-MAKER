@@ -1,4 +1,5 @@
 "use client";
+import { pdfDropHandlers } from "./components/pdfDrop";
 
 import { useEffect, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
@@ -2339,32 +2340,42 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+        <section {...pdfDropHandlers} className="mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <h2 className="text-xl font-bold">
             1. 교재 PDF 업로드
           </h2>
 
-          <label className="mt-5 inline-block cursor-pointer rounded-xl bg-slate-900 px-6 py-3 font-semibold text-white">
-            PDF 선택
+          <div className="mt-5 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
+            <p className="text-lg font-black text-slate-800">
+              PDF 파일을 이곳에 드래그하세요
+            </p>
 
-            <input
-              type="file"
-              accept=".pdf,application/pdf"
-              className="hidden"
-              onChange={(e) => {
-                const file =
-                  e.target.files?.[0];
+            <p className="mt-2 text-sm text-slate-500">
+              또는 아래 버튼을 눌러 PDF를 선택하세요.
+            </p>
 
-                if (!file) return;
+            <label className="mt-5 inline-block cursor-pointer rounded-xl bg-slate-900 px-6 py-3 font-semibold text-white">
+              PDF 선택
 
-                setFileName(
-                  file.name
-                );
+              <input
+                type="file"
+                accept=".pdf,application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const file =
+                    e.target.files?.[0];
 
-                readPdf(file);
-              }}
-            />
-          </label>
+                  if (!file) return;
+
+                  setFileName(
+                    file.name
+                  );
+
+                  readPdf(file);
+                }}
+              />
+            </label>
+          </div>
 
           {fileName && (
             <div className="mt-5 rounded-xl bg-slate-100 p-4">

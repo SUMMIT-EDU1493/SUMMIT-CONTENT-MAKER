@@ -1,4 +1,5 @@
 "use client";
+import { pdfDropHandlers } from "../components/pdfDrop";
 
 import { useEffect, useMemo, useState } from "react";
 import HomeButton from "../components/HomeButton";
@@ -1584,7 +1585,7 @@ export default function EnglishTestMakerPage() {
         </section>
 
         {/* 2 */}
-        <section className="mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+        <section {...pdfDropHandlers} className="mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h2 className="text-xl font-black text-slate-900">
@@ -1595,9 +1596,19 @@ export default function EnglishTestMakerPage() {
                 한 번 저장한 지문은 다음 제작에서도 다시 사용할 수 있습니다.
               </p>
             </div>
+          </div>
+
+          <div className="mt-5 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
+            <p className="text-lg font-black text-slate-800">
+              PDF 파일을 이곳에 드래그하세요
+            </p>
+
+            <p className="mt-2 text-sm text-slate-500">
+              또는 아래 버튼을 눌러 PDF를 선택하세요.
+            </p>
 
             <label
-              className={`inline-flex cursor-pointer rounded-2xl px-5 py-3 font-black text-white shadow-sm transition ${
+              className={`mt-5 inline-flex cursor-pointer rounded-2xl px-5 py-3 font-black text-white shadow-sm transition ${
                 readingPdf || analyzingPdf
                   ? "bg-slate-400"
                   : "bg-sky-600 hover:bg-sky-700"

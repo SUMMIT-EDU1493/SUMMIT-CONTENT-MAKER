@@ -1,4 +1,5 @@
 "use client";
+import { pdfDropHandlers } from "../components/pdfDrop";
 
 import { useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
@@ -851,7 +852,7 @@ export default function HighSummaryTestPage() {
         </div>
       </div>
 
-<section className="mb-8 rounded-3xl bg-white p-6 shadow-sm">
+<section {...pdfDropHandlers} className="mb-8 rounded-3xl bg-white p-6 shadow-sm">
           <div className="mt-5 grid gap-4 md:grid-cols-3">
             <label className="block">
               <span className="text-sm font-bold text-slate-700">
@@ -904,25 +905,35 @@ export default function HighSummaryTestPage() {
               PDF 업로드
             </div>
 
-            <label className="inline-flex cursor-pointer rounded-2xl bg-emerald-600 px-5 py-3 font-black text-white shadow-sm hover:bg-emerald-700">
-              PDF 업로드
+            <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
+              <p className="text-lg font-black text-slate-800">
+                PDF 파일을 이곳에 드래그하세요
+              </p>
 
-              <input
-                type="file"
-                accept="application/pdf"
-                className="hidden"
-                onChange={(e) => {
-                  const file =
-                    e.target.files?.[0];
+              <p className="mt-2 text-sm text-slate-500">
+                또는 아래 버튼을 눌러 PDF를 선택하세요.
+              </p>
 
-                  if (file) {
-                    extractPdfText(
-                      file
-                    );
-                  }
-                }}
-              />
-            </label>
+              <label className="mt-5 inline-flex cursor-pointer rounded-2xl bg-emerald-600 px-5 py-3 font-black text-white shadow-sm hover:bg-emerald-700">
+                PDF 업로드
+
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file =
+                      e.target.files?.[0];
+
+                    if (file) {
+                      extractPdfText(
+                        file
+                      );
+                    }
+                  }}
+                />
+              </label>
+            </div>
 
             {loadingPdf && (
               <div className="mt-3 text-sm font-bold text-emerald-600">

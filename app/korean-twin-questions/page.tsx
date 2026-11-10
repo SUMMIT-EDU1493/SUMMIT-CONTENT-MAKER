@@ -1,4 +1,5 @@
 "use client";
+import { pdfDropHandlers } from "../components/pdfDrop";
 
 import {
   ChangeEvent,
@@ -1151,7 +1152,7 @@ export default function KoreanQuestionMakerPage() {
           </div>
         </section>
 
-        <section className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200 no-print md:p-8">
+        <section {...pdfDropHandlers} className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200 no-print md:p-8">
           <p className="text-sm font-black text-violet-600">
             STEP 1
           </p>
@@ -1232,6 +1233,10 @@ export default function KoreanQuestionMakerPage() {
             <div>
               <p className="font-black text-violet-800">
                 국어 PDF 선택
+              </p>
+
+              <p className="mt-1 text-sm text-violet-600">
+                PDF 파일을 이곳에 드래그하거나, PDF 선택 버튼을 눌러 주세요.
               </p>
 
               <p className="mt-1 text-sm text-violet-600">
