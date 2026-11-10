@@ -672,6 +672,7 @@ Verify all of the following:
 17. speech-bubble tails point to correct speakers
 18. comic can contain humor and MZ tone without becoming childish
 19. page does not look like a school textbook illustration
+20. English words and acronyms in speech bubbles (EI, AI, DNA, glosses in parentheses) are copied letter for letter in Latin letters, never turned into Korean letters
 `;
 
     const imageResponse =
