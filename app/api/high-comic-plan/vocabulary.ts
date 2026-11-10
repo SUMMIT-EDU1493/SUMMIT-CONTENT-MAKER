@@ -39,6 +39,13 @@ export function fallbackVerbGloss(text: string): string {
     .replace(/([가-힣]{2,})하다\(([A-Za-z][^()\n]*)\)/gu, "$1($2)");
 }
 
+// Repair broken glosses: "진화(evolve해)" → "진화(evolve)해", "공간(commercial space) commercial space" → "공간(commercial space)".
+export function tidyGloss(text: string): string {
+  return text
+    .replace(/\(([A-Za-z][A-Za-z' -]*?)\s*([가-힣]+)\)/gu, "($1)$2")
+    .replace(/\(([A-Za-z][^()\n]*)\)\s*\1(?![A-Za-z])/gu, "($1)");
+}
+
 // Put a gloss right after a Sino-Korean stem: 분류하세요(categorize) → 분류(categorize)하세요.
 const VERB_SYLLABLES = "하해했할한합되돼됐된될됩";
 export function moveVerbGloss(text: string): string {
@@ -185,14 +192,24 @@ export function cleanSourceVocabulary<T extends VocabularyPlan>(plan: T, source:
       tokens[i + j] !== undefined && wordForms(word).some(form => wordForms(tokens[i + j]).includes(form))));
   };
   // "지능 intelligence" → "지능(intelligence)" when the English word is a real source word.
-  const wrapLooseEnglish = (text: string) => text.replace(/([가-힣]+) ([a-z][a-z-]{2,})(?=[\s,.!?]|$)/g,
-    (whole, korean: string, english: string) => (allowedGloss(english) ? `${korean}(${english})` : whole));
+  const wrapLooseEnglish = (text: string) => text.replace(/([가-힣]+) ([a-z][a-z-]{2,}(?: [a-z][a-z-]+){0,2})(?=[\s,.!?가-힣]|$)/g,
+    (whole, korean: string, phrase: string) => {
+      const words = phrase.split(" ");
+      for (let n = words.length; n > 0; n--) {
+        const english = words.slice(0, n).join(" ");
+        if (allowedGloss(english)) {
+          const rest = words.slice(n).join(" ");
+          return `${korean}(${english})${rest ? ` ${rest}` : ""}`;
+        }
+      }
+      return whole;
+    });
   const clean = (text: string) => wrapLooseEnglish(text).replace(/\(([^()]*)\)/g, (whole, english: string) =>
     isEnglish(english) && !allowedGloss(english) ? "" : whole);
   const panels = (plan.panels || []).map(panel => ({
     ...panel, scene: clean(panel.scene), characters: clean(panel.characters),
     dialogue: (panel.dialogue || []).map(line => ({ ...line,
-      text: clean(fixGlossParticles(moveVerbGloss(fallbackVerbGloss(normalizeVocabularyDialogue(line.text))))),
+      text: fixGlossParticles(clean(fixGlossParticles(moveVerbGloss(fallbackVerbGloss(normalizeVocabularyDialogue(tidyGloss(line.text))))))),
     })),
   }));
   const keyWords = (plan.keyWords || []).filter(word => {
