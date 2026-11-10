@@ -378,10 +378,10 @@ ${pageText}
       updateProgress();
       const pending = active.sections.map((section, index) => ({ section, index }))
         .filter(({ index }) => !active.plans[index]);
-      // Each passage is its own short request, so ten in flight keeps long PDFs moving without one huge call.
+      // Each passage is its own short request; twenty in flight finishes a whole mock-exam PDF in one wave.
       // A failed passage is redrafted automatically; one bad passage never stops the others.
       const failures: string[] = [];
-      await runLimited(pending, 10, async ({ section, index }) => {
+      await runLimited(pending, 20, async ({ section, index }) => {
         let lastError = "";
         for (let attempt = 0; attempt < 3 && !active.plans[index]; attempt++) {
           try {
@@ -1302,7 +1302,7 @@ ${pageText}
     }
 
     const confirmed = window.confirm(
-      `아직 생성되지 않은 이미지 ${remainingPlans.length}장을 최대 3장씩 동시에 생성합니다. 이미지 생성 시 크레딧이 차감됩니다. 계속하시겠습니까?`
+      `아직 생성되지 않은 이미지 ${remainingPlans.length}장을 최대 6장씩 동시에 생성합니다. 이미지 생성 시 크레딧이 차감됩니다. 계속하시겠습니까?`
     );
 
     if (!confirmed) {
@@ -1319,16 +1319,32 @@ ${pageText}
       let completed = 0;
       const startedAt = performance.now();
       setBatchProgress(`전체 이미지 생성 중 · 0 / ${total}`);
-      await runLimited(remainingPlans, 3, async (plan) => {
-        const image = await generateImageRequest(plan);
-        setGeneratedImages((prev) => ({ ...prev, [plan.id]: image }));
-        completed += 1;
-        setBatchProgress(`전체 이미지 생성 중 · ${completed} / ${total}`);
+      // Six at a time; a failed image (often a rate limit) waits and retries instead of stopping the batch.
+      const failedImages: string[] = [];
+      await runLimited(remainingPlans, 6, async (plan) => {
+        let lastError = "";
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            if (attempt) await new Promise((resolve) => setTimeout(resolve, attempt * 15000));
+            const image = await generateImageRequest(plan);
+            setGeneratedImages((prev) => ({ ...prev, [plan.id]: image }));
+            completed += 1;
+            setBatchProgress(`전체 이미지 생성 중 · ${completed} / ${total}`);
+            return;
+          } catch (error: any) {
+            lastError = error?.message || "알 수 없는 오류";
+            console.error(`HIGH BATCH IMAGE ${plan.id} attempt ${attempt + 1}:`, error);
+          }
+        }
+        failedImages.push(`${plan.id.replace("passage-", "")}번: ${lastError}`);
       });
       console.info("[high-images]", { count: total, elapsedMs: Math.round(performance.now() - startedAt) });
 
+      if (failedImages.length) {
+        setErrorMessage(`${failedImages.length}장은 세 번 시도해도 만들지 못했습니다. 전체 이미지 생성을 다시 누르면 이 장만 다시 만듭니다. (${failedImages.join(" / ")})`);
+      }
       setBatchProgress(
-        `완료 · ${total}장 생성되었습니다.`
+        failedImages.length ? `완료 · ${completed}장 생성, ${failedImages.length}장 실패` : `완료 · ${total}장 생성되었습니다.`
       );
       requestAnimationFrame(() => requestAnimationFrame(() => {
         firstComicImageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
