@@ -36,6 +36,8 @@ export function fallbackVerbGloss(text: string): string {
   return text
     .replace(/\(([가-힣]{1,12})\(([A-Za-z][^()\n]*)\)\)/gu, "")
     .replace(/([가-힣]{2,})하다\(([A-Za-z][^()\n]*)\)\s*(않|못)/gu, "$1하지($2) $3")
+    // "일자리를 잃다(displace)던" → "일자리를 잃던(displace)"
+    .replace(/([가-힣])다\(([A-Za-z][^()\n]*)\)(던|는|은|ㄴ)(?=\s)/gu, "$1$3($2)")
     .replace(/([가-힣]{2,})하다\(([A-Za-z][^()\n]*)\)/gu, "$1($2)");
 }
 
