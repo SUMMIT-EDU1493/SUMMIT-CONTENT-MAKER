@@ -212,7 +212,8 @@ export function cleanSourceVocabulary<T extends VocabularyPlan>(plan: T, source:
       text: fixGlossParticles(clean(fixGlossParticles(moveVerbGloss(fallbackVerbGloss(normalizeVocabularyDialogue(tidyGloss(line.text))))))),
     })),
   }));
-  const keyWords = (plan.keyWords || []).filter(word => {
+  // Key words are nouns on the card: "인식하다(recognize)" → "인식(recognize)".
+  const keyWords = (plan.keyWords || []).map(word => word.replace(/^([가-힣]{2,})(?:하다|되다|시키다)(?=\()/u, "$1")).filter(word => {
     const english = word.match(/\(([^()]*)\)/)?.[1] || word;
     return allowedGloss(english);
   });
