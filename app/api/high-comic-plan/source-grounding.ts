@@ -73,7 +73,7 @@ export function validateGroundedReview(value: unknown, source: string, expectedI
 export function dialogueStyleIssues(plan: GroundedComic): string[] {
   const issues: string[] = [];
   const bare = (text: string) => text.replace(/\([^()]*\)/gu, "").replace(/\s+/gu, " ").trim();
-  if (plan.keyWords.length > 6) issues.push(`핵심어휘가 ${plan.keyWords.length}개임. 학습 가치가 높은 6개 이하로 줄일 것`);
+  if (plan.keyWords.length > 5) issues.push(`핵심어휘가 ${plan.keyWords.length}개임. 학습 가치가 높은 5개 이하로 줄일 것`);
   for (const panel of plan.panels) {
     if (!panel.dialogue.length) issues.push(`${panel.cut} 대사가 없음. 짧은 대사나 해설자 내레이션 1줄을 넣을 것`);
     for (const line of panel.dialogue) {
@@ -112,6 +112,8 @@ export async function reviewComicAgainstSource(
   source: string,
   draft: GroundedComic,
   review: (prompt: string) => Promise<string>,
+  // Wording retries cost a full extra call; skip them when a later pass rewrites the dialogue anyway.
+  wordingRetries = 2,
 ): Promise<GroundedComic> {
   const units = sourceEvidenceUnits(source);
   if (!units.length) throw new Error("검수할 원문이 없습니다.");
@@ -123,12 +125,12 @@ export async function reviewComicAgainstSource(
 초안의 scene, dialogue, blockSummary에 있는 모든 설명을 원문과 대조하라.
 1. 원문에 없는 원리·전문지식·용어·수치·인과관계는 삭제하거나 원문 내용으로 교정한다. 일반 상식으로 맞아도 추가 금지.
 2. 원문 사례의 사건·대상·순서·정보 전달 경로를 보존한다. 상황을 재미있게 표현해도 사건이나 학습 사실을 바꾸지 않는다.
-3. 원문의 핵심 주장·결론이 빠졌으면 짧게 보충한다. 세부 과정·예시를 대사에 덧붙이지 않는다. 외부 지식으로 빈 컷을 채우지 않는다.
+3. 원문의 핵심 주장·결론이 빠졌으면 짧게 보충한다. 세부 과정·예시를 대사에 덧붙이지 않는다. 외부 지식으로 빈 컷을 채우지 않는다. 단, '~같은 거예요'처럼 비유임이 드러나는 짧은 일상 비유 1개는 원문 뜻을 바꾸지 않으면 유지한다.
 4. 현재 원문에서 확인되는 사실을 캐릭터 행동과 자연스러운 대화로 전달한다. 원문에 없는 과학 설명은 그림에도 넣지 않는다.
 5. 단어 사전형을 문장에 붙이지 않는다. '기억이 강화하다(strengthen)돼'는 '기억이 강화돼(strengthen)'처럼 문법에 맞게 고친다.
-6. 기본 단어 dream, brain, information, travel, light, history, culture, star, music, game 등과 사람·별·지명 같은 고유명사는 한글만 남긴다. 괄호 영어는 바로 앞 한국어 낱말과 뜻이 같아야 한다(생리적 각성(physiological arousal) O, 생리적(arousal) X). 동사는 어간 바로 뒤에 병기한다(분류(categorize)하세요, 과대평가(overestimate)되는). 핵심 영어는 현재 영어 원문에 있는 고등 학습 가치 어휘·숙어만 사용한다. 원문에 학습 가치 어휘가 있으면 지문당 4~6개를 유지한다. 원문에 고등 어휘가 거의 없을 때만 더 적게 쓰고, 개수를 채우려고 새 영어를 만들지 않는다.
+6. 기본 단어 dream, brain, information, travel, light, history, culture, star, music, game 등과 사람·별·지명 같은 고유명사는 한글만 남긴다. 괄호 영어는 바로 앞 한국어 낱말과 뜻이 같아야 한다(생리적 각성(physiological arousal) O, 생리적(arousal) X). 동사는 어간 바로 뒤에 병기한다(분류(categorize)하세요, 과대평가(overestimate)되는). 핵심 영어는 현재 영어 원문에 있는 고등 학습 가치 어휘·숙어만 사용한다. 원문에 학습 가치 어휘가 있으면 지문당 3~5개를 유지한다. 원문에 고등 어휘가 거의 없을 때만 더 적게 쓰고, 개수를 채우려고 새 영어를 만들지 않는다.
 7. 해설자·교사·연구자·전문가는 존댓말을 쓴다. 학생이 이들에게 말할 때도 존댓말을 쓴다.
-8. 이미 정확하고 자연스러운 부분은 유지한다. 사실 오류가 없는 대사는 다시 쓰지 않는다. 고칠 때는 고등학생이 실제로 말하는 자연스러운 우리말로 쓰고, 괄호 병기 외에는 영어 단어를 문장에 그대로 두지 않는다(음식·지명 등은 한글로 표기). 원문 속 대상(예: 동상)을 다른 대상으로 바꾸지 않는다. 교정 후 id와 정확히 4컷을 유지한다.
+8. 이미 정확하고 자연스러운 부분은 유지한다. 쉬운 말 풀이와 컷 사이 연결 흐름은 살리고, 해석문 말투로 되돌리지 않는다. 사실 오류가 없는 대사는 다시 쓰지 않는다. 고칠 때는 고등학생이 실제로 말하는 자연스러운 우리말로 쓰고, 괄호 병기 외에는 영어 단어를 문장에 그대로 두지 않는다(음식·지명 등은 한글로 표기). 원문 속 대상(예: 동상)을 다른 대상으로 바꾸지 않는다. 교정 후 id와 정확히 4컷을 유지한다.
 9. 대사 분량을 늘리지 않는다. 각 컷 dialogue는 1~2줄, 한 줄은 괄호 속 영어를 빼고 약 40자 이내, 한 컷 합계 약 60자 이내로 유지하거나 줄인다. 모든 컷에 대사 1줄 이상을 두고, 인물 없는 장면이면 해설자 내레이션 1줄을 넣는다.
 10. 대사를 줄이거나 고칠 때도 초안의 '한글(영어)' 병기는 지우지 않는다. keyWords는 모두 '한글뜻(English)' 형식으로 쓴다. 각 영어 어휘는 대사 중 한 곳에 정확히 한 번 병기하되, 한국어는 말하는 문장에 맞게 활용한다(예: keyWords '배정되다(assign)' → 대사 '기린 조사 그룹에 배정됐어요(assign).').
 서버가 원문을 순서대로 나눈 구간에 [S1], [S2]처럼 번호를 붙였다. 번호는 사실 근거를 선택하기 위한 식별자다.
@@ -145,11 +147,11 @@ ${lastError ? `직전 검수 응답 오류: ${lastError}. 원문을 다시 확�
       const uninflected = findUninflectedVocabularyDialogue({ ...reviewed, panels: reviewed.panels.map(panel => ({
         ...panel, dialogue: panel.dialogue.map(line => ({ ...line, text: normalizeVocabularyDialogue(line.text) })),
       })) });
-      if (uninflected.length && attempt < 2) {
+      if (uninflected.length && attempt < wordingRetries) {
         throw new Error(`영어 병기 앞 한국어가 사전형(~하다)이다. 문장에 맞게 활용해 고칠 것: ${uninflected.join(" / ")}`);
       }
       // Style is retried at most twice; the last answer is accepted so wording never fails a passage.
-      if (attempt < 2) {
+      if (attempt < wordingRetries) {
         const style = dialogueStyleIssues(reviewed);
         if (style.length) throw new Error(`대사 다듬기 필요: ${style.join(" / ")}`);
       }

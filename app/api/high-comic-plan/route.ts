@@ -2,6 +2,7 @@ import { splitComicSourceBySubtitles } from "./subtitle-sections";
 import { cleanSourceVocabulary } from "./vocabulary";
 import { reviewComicAgainstSource, type GroundedComic } from "./source-grounding";
 import { ensureNoContradiction } from "./fact-check";
+import { rewriteForEasyReading } from "./easy-dialogue";
 import OpenAI from "openai";
 
 import { createTrackedOpenAI } from "@/lib/tracked-openai";
@@ -266,6 +267,18 @@ JSON만 반환: {"startWordIds":[12,721],"sectionStartWordIds":[340,510]}
 너는 고등 영어 지문을 각각 "써밋네컷"으로 바꾸는 전문 편집자다.
 원문에 있는 사실·과정·사례만 쉽게 재구성한다. 원문에 없는 전문지식·용어·수치·원인·경로를 추가하지 않는다.
 과학적으로 맞는 상식이라도 원문에 없으면 설명에 쓰지 않는다. 비유는 원문 사실의 의미를 바꾸지 않는다.
+
+[이해 우선 — 가장 중요]
+써밋네컷의 목표는 지문을 읽지 않은 고등학생도 네 컷만 보고 주제·흐름·핵심을 바로 이해하는 것이다.
+- 한글 해석 문장을 대사로 옮기지 않는다. 해석문식 한자어 표현(콘텐츠를 섭취하다, 의지의 힘이 분산된다, 배제 상태를 간과한다 등)은 고1이 바로 알아듣는 말로 풀어 쓴다.
+- 네 컷은 하나의 이야기로 이어진다: 1컷 궁금증·상황으로 주제 던지기 → 2컷 핵심 주장을 쉬운 말로 → 3컷 그 이유나 지문 속 예시 → 4컷 결론 한 줄 정리.
+- 컷 사이는 '그래서, 왜냐하면, 예를 들어, 그런데, 결국' 같은 흐름으로 잇는다. 앞 컷과 연결되지 않는 새 주장을 갑자기 꺼내지 않는다(비약 금지).
+- 학생이 묻고 해설자가 '쉽게 말해 ~'로 답하는 짧은 대화로 어려운 개념을 풀어 준다.
+- 학생이 공감할 짧은 일상 비유는 지문당 1개까지 쓸 수 있다. '~같은 거예요', '~처럼'으로 비유임이 드러나게 쓰고, 원문의 사실·주장을 바꾸거나 새 사실을 더하지 않는다.
+나쁜 예: '의지의 힘이 가상(virtual) 콘텐츠를 소화하느라 음식에서 분산됩니다.'
+좋은 예: '폰 속 가상(virtual) 세상에 신경 쓰느라 정작 음식에는 집중을 못 해요.'
+나쁜 예: '조직 심리학자들이 배제(exclusion) 상태를 간과해요.'
+좋은 예: '단톡방에서 나만 빠진 느낌 같은 거예요. 이런 배제(exclusion)를 연구자들이 잘 안 봤대요.'
 짧은 소제목은 원문에 있는 상황의 시작→정보 전달→행동→의미를 나누며, 외부 지식으로 네 컷을 채우지 않는다.
 핵심 어휘는 개수보다 학습 가치를 우선한다. dream, brain, information, travel 같은 기초 단어는 한글로만 쓴다.
 동사 영어를 병기할 때 한국어는 문장에 맞게 활용한다. 강화해(strengthen), 기억하기(remember)처럼 쓴다.
@@ -389,7 +402,7 @@ plans 배열의 항목 1개
 즉,
 
 서버는 교과서의 명시적인 소제목을 별도 제작 단위로 먼저 나누었다.
-이번 입력의 핵심 흐름(무엇에 관한 내용인지 → 중요한 내용 → 결론)을 네 컷에 나눠 담아라.
+이번 입력의 핵심 흐름을 [이해 우선]의 네 컷 구조(주제 던지기 → 핵심 주장 → 이유·예시 → 결론)로 이어지게 담아라.
 학생이 꼭 알아야 할 핵심만 대사로 쓰고, 세부 과정·예시는 장면(scene) 그림으로 보여준다.
 
 이번 입력 단위 1개당 써밋네컷 1장을 만든다.
@@ -569,7 +582,7 @@ dialogue는 실제 사람이 입으로 말하는 문장이어야 한다.
 핵심어 삽입
 ==================================================
 
-각 지문마다 영어 원문에 실제로 등장하는 고등 내신·수능 수준 핵심 어휘와 숙어만 선택한다. 보통 4~6개를 고르고, 원문에 고등 수준 어휘가 거의 없을 때만 그보다 적게 고른다. 기초 단어로 개수를 채우지 않는다.
+각 지문마다 영어 원문에 실제로 등장하는 고등 내신·수능 수준 핵심 어휘와 숙어만 선택한다. 보통 3~5개를 고르고, 원문에 고등 수준 어휘가 거의 없을 때만 그보다 적게 고른다. 어휘 때문에 대사가 어려워지면 어휘 수를 줄인다. 기초 단어로 개수를 채우지 않는다.
 단순히 주제를 대표하는 쉬운 명사를 고르지 말고, 고등학생에게 학습 가치가 있는 추상어·학술어·다의어의 문맥상 의미·구동사·숙어를 우선한다.
 important, good, bad, people, student, school, time, make, think, learn, life, light, history, culture, star, music, game 같은 기초 어휘와 사람·별·지명 같은 고유명사로 개수를 채우지 않는다.
 난도가 높다는 이유만으로 원문에 없는 영어·전문용어를 새로 만들어 넣지 않는다.
@@ -856,7 +869,7 @@ keyWords 배열에 넣기만 하고 끝내지 마라.
 ${passageText}
 
 이번 제작 단위의 소제목: ${sourceSections[index].label || "입력 원문 참조"}
-${sourceSections[index].koreanReference ? `참고용 한글 해석 (같은 페이지에 있는 다른 지문의 해석이 섞여 있을 수 있다. 위 영어 원문에 해당하는 부분의 자연스러운 우리말 낱말·표현만 참고한다. 해석 문장을 대사로 길게 옮기지 말고 대사 분량 기준을 지킨다. 사실·사건·대상은 위 영어 원문에 있는 것만 쓴다):
+${sourceSections[index].koreanReference ? `참고용 한글 해석 (같은 페이지에 있는 다른 지문의 해석이 섞여 있을 수 있다. 위 영어 원문에 해당하는 부분의 자연스러운 우리말 낱말·표현만 참고한다. 해석 문장·표현을 대사로 옮기지 말고 뜻만 파악해 쉬운 말로 다시 쓴다. 대사 분량 기준을 지킨다. 사실·사건·대상은 위 영어 원문에 있는 것만 쓴다):
 ${sourceSections[index].koreanReference}
 ` : ""}추가 필수 규칙: 이번 입력은 서버가 구분한 독립 지문 1개다. plans는 정확히 1개여야 한다.
 한국어 해석과 다음 문제의 머리말은 별도 지문으로 만들지 않는다.
@@ -892,15 +905,25 @@ ${sourceSections[index].koreanReference}
               }
               return response.output_text;
             },
+            0,
           );
-          // Separate meaning check: lines that reverse or contradict the English source are fixed or fail.
           timing.review = Date.now() - timing.start - timing.draft;
-          const verified = await ensureNoContradiction(passageText, audited, async (prompt) => {
+          // Easy-reading pass: one story flow in plain Korean. The meaning check below still guards facts.
+          const easy = cleanSourceVocabulary(await rewriteForEasyReading(passageText, audited, async (prompt) => {
+            const response = await openai.responses.create({ model: "gpt-5-mini", max_output_tokens: 8000, input: prompt });
+            if (response.status !== "completed" || !response.output_text?.trim()) {
+              throw new Error("쉬운 대사 다듬기 응답이 완료되지 않았습니다.");
+            }
+            return response.output_text;
+          }), passageText);
+          const easyMs = Date.now() - timing.start - timing.draft - timing.review;
+          // Separate meaning check: lines that reverse or contradict the English source are fixed or fail.
+          const verified = await ensureNoContradiction(passageText, easy, async (prompt) => {
             timing.factCalls++;
             return askFactCheck(prompt);
           });
           const seconds = (ms: number) => (ms / 1000).toFixed(0);
-          console.log(`[high-comic-plan timing] ${expectedId} draft ${seconds(timing.draft)}s x${timing.draftCalls}, review ${seconds(timing.review)}s x${timing.reviewCalls}, meaning ${seconds(Date.now() - timing.start - timing.draft - timing.review)}s x${timing.factCalls}, total ${seconds(Date.now() - timing.start)}s`);
+          console.log(`[high-comic-plan timing] ${expectedId} draft ${seconds(timing.draft)}s x${timing.draftCalls}, review ${seconds(timing.review)}s x${timing.reviewCalls}, easy ${seconds(easyMs)}s, meaning ${seconds(Date.now() - timing.start - timing.draft - timing.review - easyMs)}s x${timing.factCalls}, total ${seconds(Date.now() - timing.start)}s`);
           const checked = cleanSourceVocabulary(verified, passageText);
           // cleanSourceVocabulary already rewrites any leftover "~하다(English)" deterministically,
           // so wording never fails a whole passage here.
