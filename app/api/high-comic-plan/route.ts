@@ -3,6 +3,19 @@ import { cleanSourceVocabulary } from "./vocabulary";
 import { reviewComicAgainstSource, type GroundedComic } from "./source-grounding";
 import { ensureNoContradiction } from "./fact-check";
 import { rewriteForEasyReading } from "./easy-dialogue";
+
+// Old comics varied a lot; rotating the story mode by passage number keeps a batch from looking identical.
+const STORY_MODES = [
+  "주인공 드라마: 지문 속 상황을 직접 겪는 인물이 주인공이다. 혼잣말, 친구·가족과의 대화로 문제를 겪고 깨닫는다.",
+  "현장 체험: 학생이나 인물들이 현장(미술관, 실험실, 자연, 거리 등)에서 직접 보고 느끼며 서로 반응한다.",
+  "전문가 인터뷰: 연구자·의사·전문가가 한 인물에게 자료나 물건을 직접 보여주며 1:1로 설명한다.",
+  "회의·토론: 동료나 친구들이 의견을 주고받다가 하나의 결론에 이른다.",
+  "대비 장면: 그때와 지금, 두 생각, 두 집단을 한 컷 안에서 나란히 대비해 보여준다.",
+  "인물 등장: 원문에 나오는 인물·학자나 그 시대 사람이 직접 말한다. 원문에 인물이 없으면 다른 방식을 고른다.",
+  "시각 은유: 핵심 개념을 상징적인 사물·장면(안경, 다리, 퍼즐 등)으로 보여주고 대사는 짧게 쓴다.",
+  "다큐 내레이션: 인물 대사 없이 해설 자막과 장면으로 진행한다.",
+];
+
 import OpenAI from "openai";
 
 import { createTrackedOpenAI } from "@/lib/tracked-openai";
@@ -271,9 +284,11 @@ JSON만 반환: {"startWordIds":[12,721],"sectionStartWordIds":[340,510]}
 [이해 우선 — 가장 중요]
 써밋네컷의 목표는 지문을 읽지 않은 고등학생도 네 컷만 보고 주제·흐름·핵심을 바로 이해하는 것이다.
 - 한글 해석 문장을 대사로 옮기지 않는다. 해석문식 한자어 표현(콘텐츠를 섭취하다, 의지의 힘이 분산된다, 배제 상태를 간과한다 등)은 고1이 바로 알아듣는 말로 풀어 쓴다.
-- 네 컷은 하나의 이야기로 이어진다: 1컷 궁금증·상황으로 주제 던지기 → 2컷 핵심 주장을 쉬운 말로 → 3컷 그 이유나 지문 속 예시 → 4컷 결론 한 줄 정리.
+- 네 컷은 하나의 이야기로 이어진다: 상황·문제 제시 → 핵심 → 이유나 지문 속 예시 → 정리. 이 흐름을 어떤 장면과 인물로 보여줄지는 지정된 이야기 방식을 따른다.
 - 컷 사이는 '그래서, 왜냐하면, 예를 들어, 그런데, 결국' 같은 흐름으로 잇는다. 앞 컷과 연결되지 않는 새 주장을 갑자기 꺼내지 않는다(비약 금지).
-- 학생이 묻고 해설자가 '쉽게 말해 ~'로 답하는 짧은 대화로 어려운 개념을 풀어 준다.
+- 매번 '학생이 묻고 해설자가 설명하는' 틀로 만들지 않는다. 지문 속 상황을 겪는 인물들이 직접 말하고 반응하게 한다.
+- 말투는 화자에 맞춘다: 학생·친구끼리는 반말 구어체, 학생이 선생님·어른에게는 존댓말. 설명문 말투('~합니다', '결론:', '결국 ~입니다')는 학생 대사에 쓰지 않는다. 학생은 질문·반응·감정·깨달음을 자기 말로 한다.
+- 해설자는 자막 상자로 한 지문에 1~2줄만 쓴다(다큐 내레이션 방식은 예외). 결론은 되도록 인물의 깨달음이나 행동으로 보여준다.
 - 학생이 공감할 짧은 일상 비유는 지문당 1개까지 쓸 수 있다. '~같은 거예요', '~처럼'으로 비유임이 드러나게 쓰고, 원문의 사실·주장을 바꾸거나 새 사실을 더하지 않는다.
 나쁜 예: '의지의 힘이 가상(virtual) 콘텐츠를 소화하느라 음식에서 분산됩니다.'
 좋은 예: '폰 속 가상(virtual) 세상에 신경 쓰느라 정작 음식에는 집중을 못 해요.'
@@ -282,7 +297,7 @@ JSON만 반환: {"startWordIds":[12,721],"sectionStartWordIds":[340,510]}
 짧은 소제목은 원문에 있는 상황의 시작→정보 전달→행동→의미를 나누며, 외부 지식으로 네 컷을 채우지 않는다.
 핵심 어휘는 개수보다 학습 가치를 우선한다. dream, brain, information, travel 같은 기초 단어는 한글로만 쓴다.
 동사 영어를 병기할 때 한국어는 문장에 맞게 활용한다. 강화해(strengthen), 기억하기(remember)처럼 쓴다.
-해설자·교사·전문가·연구자는 존댓말을 쓰고 학생도 이들에게 존댓말로 말한다.
+해설자·교사·전문가·연구자는 존댓말을 쓰고 학생도 이들에게 존댓말로 말한다. 학생·친구끼리는 반말로 말한다.
 
 ==================================================
 프로젝트 정보
@@ -871,7 +886,7 @@ ${passageText}
 이번 제작 단위의 소제목: ${sourceSections[index].label || "입력 원문 참조"}
 ${sourceSections[index].koreanReference ? `참고용 한글 해석 (같은 페이지에 있는 다른 지문의 해석이 섞여 있을 수 있다. 위 영어 원문에 해당하는 부분의 자연스러운 우리말 낱말·표현만 참고한다. 해석 문장·표현을 대사로 옮기지 말고 뜻만 파악해 쉬운 말로 다시 쓴다. 대사 분량 기준을 지킨다. 사실·사건·대상은 위 영어 원문에 있는 것만 쓴다):
 ${sourceSections[index].koreanReference}
-` : ""}추가 필수 규칙: 이번 입력은 서버가 구분한 독립 지문 1개다. plans는 정확히 1개여야 한다.
+` : ""}이번 지문의 이야기 방식(storyMode): ${STORY_MODES[(idOffset + index) % STORY_MODES.length]}\n이 방식이 지문 내용과 맞지 않을 때만 다른 방식을 고르고, 고른 방식을 storyMode에 쓴다.\n추가 필수 규칙: 이번 입력은 서버가 구분한 독립 지문 1개다. plans는 정확히 1개여야 한다.
 한국어 해석과 다음 문제의 머리말은 별도 지문으로 만들지 않는다.
 해당 plan의 id는 반드시 "${expectedId}"로 출력한다.`,
             });
@@ -915,7 +930,8 @@ ${sourceSections[index].koreanReference}
               throw new Error("쉬운 대사 다듬기 응답이 완료되지 않았습니다.");
             }
             return response.output_text;
-          }), passageText);
+            // Keep the whole passage well under the 300-second function limit.
+          }, timing.start + 150_000), passageText);
           const easyMs = Date.now() - timing.start - timing.draft - timing.review;
           // Separate meaning check: lines that reverse or contradict the English source are fixed or fail.
           const verified = await ensureNoContradiction(passageText, easy, async (prompt) => {

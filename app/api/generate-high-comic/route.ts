@@ -625,6 +625,9 @@ Do not add random English labels.
 If a speech bubble has a speaker,
 make its tail clearly point to the correct speaker.
 
+Lines whose speaker is 해설자 (narrator) go in a rectangular caption box with no tail.
+Never put a narrator line in a character's speech bubble, and never make a student say the narrator's line.
+
 ==================================================
 CURRENT PAGE
 ==================================================
