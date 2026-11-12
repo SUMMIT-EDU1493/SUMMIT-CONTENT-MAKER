@@ -1,9 +1,10 @@
 "use client";
 import { pdfDropHandlers } from "../components/pdfDrop";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { readApiJson } from "@/lib/read-api-json";
 import { runLimited } from "../lib/run-limited";
+import { deleteDraft, deleteDraftsByPrefix, getDraft, getDraftsByPrefix, putDraft } from "../lib/autosave";
 import * as pdfjsLib from "pdfjs-dist";
 import { jsPDF } from "jspdf";
 import HomeButton from "../components/HomeButton";
@@ -46,12 +47,28 @@ type HighComicResult = {
   plans: HighComicPlan[];
 };
 
+type WorkItem = { id: string; title: string; subtitle: string; image: string };
+type PlanCache = {
+  key: string; sections: Array<{ text: string; label: string; koreanReference?: string }>;
+  plans: Array<HighComicPlan | undefined>;
+};
+// Autosave keys: meta (texts, plans), one record per image, and the work box.
+const AUTOSAVE = "high-comic";
+type HighDraft = {
+  savedAt: number; schoolName: string; gradeName: string; lessonName: string;
+  fileName: string; pdfText: string; result: HighComicResult | null; planCache: PlanCache | null;
+};
+
 export default function HighTestPage() {
-  const planCacheRef = useRef<{
-    key: string; sections: Array<{ text: string; label: string; koreanReference?: string }>;
-    plans: Array<HighComicPlan | undefined>;
-  } | null>(null);
+  const planCacheRef = useRef<PlanCache | null>(null);
   const [planProgress, setPlanProgress] = useState("");
+  // Autosave: nothing is written until the saved-draft question is answered, so a fresh page
+  // never overwrites a draft the user may still want.
+  const [savedDraft, setSavedDraft] = useState<HighDraft | null>(null);
+  const [savedImageCount, setSavedImageCount] = useState(0);
+  const [autosaveOn, setAutosaveOn] = useState(false);
+  const [planTick, setPlanTick] = useState(0);
+  const savedImagesRef = useRef<Map<string, string>>(new Map());
   const imageActionRef = useRef(false);
   const planActionRef = useRef(false);
   const firstComicImageRef = useRef<HTMLDivElement | null>(null);
@@ -245,19 +262,14 @@ export default function HighTestPage() {
     useState("");
 
   const [workItems, setWorkItems] =
-    useState<
-      {
-        id: string;
-        title: string;
-        subtitle: string;
-        image: string;
-      }[]
-    >([]);
+    useState<WorkItem[]>([]);
 
   const [makingPdf, setMakingPdf] =
     useState(false);
 
   const readPdf = async (file: File) => {
+    // Choosing a new PDF while the saved-work question is open starts fresh work.
+    if (savedDraft) await discardDraft();
     try {
       setLoadingPdf(true);
       setErrorMessage("");
@@ -373,9 +385,10 @@ ${pageText}
         planCacheRef.current = cache;
       }
       const active = cache;
-      const updateProgress = () => setPlanProgress(
-        `설계·원문 검수 ${active.plans.filter(Boolean).length} / ${active.sections.length} 완료`
-      );
+      const updateProgress = () => {
+        setPlanProgress(`설계·원문 검수 ${active.plans.filter(Boolean).length} / ${active.sections.length} 완료`);
+        setPlanTick(tick => tick + 1);
+      };
       updateProgress();
       const pending = active.sections.map((section, index) => ({ section, index }))
         .filter(({ index }) => !active.plans[index]);
@@ -1373,6 +1386,86 @@ ${pageText}
 
   const isBusy = loadingPdf || loadingPlan || generatingAll || Boolean(generatingId) || makingPdf;
 
+  // Offer the last autosaved work when the page opens.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const draft = await getDraft<HighDraft>(`${AUTOSAVE}:meta`);
+      const images = await getDraftsByPrefix<string>(`${AUTOSAVE}:img:`);
+      if (cancelled) return;
+      if (draft && (draft.result || draft.planCache?.plans.some(Boolean))) {
+        setSavedDraft(draft);
+        setSavedImageCount(images.length);
+      } else {
+        setAutosaveOn(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Texts and plans: saved a moment after they change (also after each finished passage).
+  useEffect(() => {
+    if (!autosaveOn) return;
+    const timer = window.setTimeout(() => {
+      if (!result && !planCacheRef.current && !pdfText) return;
+      const draft: HighDraft = { savedAt: Date.now(), schoolName, gradeName, lessonName, fileName, pdfText,
+        result, planCache: planCacheRef.current };
+      void putDraft(`${AUTOSAVE}:meta`, draft);
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [autosaveOn, schoolName, gradeName, lessonName, fileName, pdfText, result, planTick]);
+
+  // Images: each one is stored once as soon as it exists; removed images are removed here too.
+  useEffect(() => {
+    if (!autosaveOn) return;
+    const saved = savedImagesRef.current;
+    for (const [id, image] of Object.entries(generatedImages)) {
+      if (saved.get(id) !== image) { saved.set(id, image); void putDraft(`${AUTOSAVE}:img:${id}`, image); }
+    }
+    for (const id of Array.from(saved.keys())) {
+      if (!(id in generatedImages)) { saved.delete(id); void deleteDraft(`${AUTOSAVE}:img:${id}`); }
+    }
+  }, [autosaveOn, generatedImages]);
+
+  useEffect(() => {
+    if (autosaveOn) void putDraft(`${AUTOSAVE}:work`, workItems);
+  }, [autosaveOn, workItems]);
+
+  // Warn before closing the tab while something is still being generated.
+  useEffect(() => {
+    if (!isBusy) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [isBusy]);
+
+  const restoreDraft = async () => {
+    const draft = savedDraft;
+    if (!draft) return;
+    const images = Object.fromEntries(
+      (await getDraftsByPrefix<string>(`${AUTOSAVE}:img:`)).map(([key, image]) => [key.slice(`${AUTOSAVE}:img:`.length), image]));
+    const work = (await getDraft<WorkItem[]>(`${AUTOSAVE}:work`)) || [];
+    setSchoolName(draft.schoolName); setGradeName(draft.gradeName); setLessonName(draft.lessonName);
+    setFileName(draft.fileName); setPdfText(draft.pdfText);
+    planCacheRef.current = draft.planCache;
+    setResult(draft.result);
+    savedImagesRef.current = new Map(Object.entries(images));
+    setGeneratedImages(images);
+    setWorkItems(work);
+    if (!draft.result && draft.planCache) {
+      setErrorMessage(`설계안 ${draft.planCache.plans.filter(Boolean).length} / ${draft.planCache.sections.length}개가 저장되어 있습니다. 설계안 만들기를 누르면 남은 지문부터 이어서 만듭니다.`);
+    }
+    setSavedDraft(null);
+    setAutosaveOn(true);
+  };
+
+  const discardDraft = async () => {
+    await deleteDraftsByPrefix(`${AUTOSAVE}:`);
+    savedImagesRef.current = new Map();
+    setSavedDraft(null);
+    setAutosaveOn(true);
+  };
+
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-10">
       <fieldset disabled={isBusy} className="min-w-0 border-0 p-0">
@@ -1397,6 +1490,26 @@ ${pageText}
       </div>
 
 <div className="mb-6">
+        {savedDraft && (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+            <p className="font-black text-emerald-800">이전에 작업하던 내용이 자동 저장되어 있어요.</p>
+            <p className="mt-1 text-xs text-emerald-700">새 PDF를 고르면 저장된 작업은 지워지고 새 작업으로 저장됩니다.</p>
+            <p className="mt-1 text-sm text-emerald-700">
+              {new Date(savedDraft.savedAt).toLocaleString("ko-KR")} 저장 · {savedDraft.fileName || "PDF"} ·
+              설계안 {savedDraft.result?.plans.length ?? savedDraft.planCache?.plans.filter(Boolean).length ?? 0}개 · 이미지 {savedImageCount}장
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" onClick={() => void restoreDraft()}
+                className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-black text-white hover:bg-emerald-700">
+                이어서 하기
+              </button>
+              <button type="button" onClick={() => { if (window.confirm("저장된 작업을 지우고 새로 시작할까요? 지운 작업은 되돌릴 수 없습니다.")) void discardDraft(); }}
+                className="rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-black text-emerald-800 hover:bg-emerald-100">
+                새로 시작
+              </button>
+            </div>
+          </div>
+        )}
 </div>
         <div>
           <p className="text-sm font-bold text-purple-600">
