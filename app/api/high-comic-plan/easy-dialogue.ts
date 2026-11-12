@@ -1,5 +1,6 @@
 /** Focused rewrite pass: turn source-faithful but translation-like lines into an easy four-cut story. */
 import type { GroundedComic } from "./source-grounding";
+import { hasBrokenDictionaryGloss } from "./vocabulary";
 
 type EasyPanel = { cut: string; scene?: string; dialogue: Array<{ speaker: string; text: string }> };
 
@@ -22,7 +23,13 @@ function buildPrompt(source: string, plan: GroundedComic, feedback: string): str
    - 학생이 선생님·연구자·어른에게: 존댓말. 선생님·전문가·해설자: 존댓말.
    - 설명문 말투('~합니다', '~됩니다', '결론:', '결국 ~입니다')는 학생 대사에 쓰지 않는다. 학생은 질문·반응·감정·깨달음을 자기 말로 한다('아, 그래서 ~구나').
    - 해설자는 자막 상자로 한 지문에 1~2줄만 쓴다. 다큐 내레이션 방식일 때만 더 쓸 수 있다.
-9. 아래 핵심 어휘의 '한글(English)'을 대사 어딘가에 각각 정확히 한 번씩 그대로 넣는다. 괄호 영어는 바로 앞 한글 낱말 뒤에 붙인다: ${plan.keyWords.join(", ") || "없음"}
+   - 해설자는 항상 부드러운 존댓말('~요')로 끝맺는다. 반말('~돼', '~야')이나 '예:', '결론:' 같은 머리표를 쓰지 않는다.
+   - 학생이 어른에게 말할 때도 '~습니다', '~겠습니다' 같은 딱딱한 말 대신 '~요'로 말한다.
+   - 한자어 딱딱한 말('결부되다', '유발되다', '기인하다')은 쉬운 말로 바꾼다('연결돼요', '생겨요', '때문이에요').
+9. 아래 핵심 어휘의 괄호 영어를 대사 어딘가에 각각 정확히 한 번씩 넣는다: ${plan.keyWords.join(", ") || "없음"}
+   - 앞의 한글은 사전형을 그대로 붙여 넣지 말고 문장에 맞게 활용하고, 괄호 영어는 활용한 한글 낱말 바로 뒤에 붙인다.
+   - '~다(English)' 뒤에 다른 말을 이어 붙이지 않는다. 나쁜 예: '나타내다(manifest)보자', '억누르다(suppress)기만은', '해석(interpretation)하면'. 좋은 예: '진짜로 나타내(manifest) 보자', '억누르기(suppress)만 하진 않을래', '어떻게 해석하느냐(interpret)에 달렸어'.
+   - 한글 뜻은 이 지문에서 쓰인 뜻으로 고친다(affirm: '확인' X → '다짐' O).
 10. 새 대사와 그림이 어긋나면 scene을 짧게 고친다. 맞으면 scene은 그대로 둔다.
 나쁜 예: '의지의 힘이 가상(virtual) 콘텐츠를 소화하느라 음식에서 분산됩니다.' (해석문 그대로)
 좋은 예: '폰 속 가상(virtual) 세상에 신경 쓰느라 정작 음식 맛은 못 느껴요.'
@@ -61,7 +68,13 @@ function validate(panels: unknown, plan: GroundedComic): { panels?: EasyPanel[];
     const lecturing = clean.flatMap(panel => panel.dialogue)
       .find(line => /학생|친구/u.test(line.speaker) && /(?:결론\s*:|니다[.!]?$)/u.test(line.text.trim()));
     if (!soft && lecturing) soft = `학생이 해설자처럼 말함. 학생 말투(친구끼리 반말, 반응·깨달음)로 바꿀 것: ${lecturing.text}`;
+    const narratorOff = clean.flatMap(panel => panel.dialogue)
+      .find(line => /해설|내레이/u.test(line.speaker) && (/^(?:예|결론)\s*:/u.test(line.text.trim()) ||
+        !/(?:요|니다)[.!?~]*$/u.test(line.text.replace(/\([^()]*\)/gu, "").trim())));
+    if (!soft && narratorOff) soft = `해설자는 머리표 없이 '~요' 존댓말로 끝맺을 것: ${narratorOff.text}`;
   }
+  const brokenGloss = clean.flatMap(panel => panel.dialogue).find(line => hasBrokenDictionaryGloss(line.text));
+  if (!soft && brokenGloss) soft = `사전형 '~다(English)' 뒤에 말을 이어 붙임. 문장에 맞게 활용할 것: ${brokenGloss.text}`;
   return { panels: clean, soft: soft || undefined };
 }
 

@@ -31,6 +31,41 @@ export function fixGlossParticles(text: string): string {
     });
 }
 
+// Conjugate a verb stem to its -아/어 form (나타내 → 나타내, 바꾸 → 바꿔, 억누르 → 억눌러, 잡 → 잡아).
+// Returns "" when the stem is irregular or unclear, so callers leave the text for the model to fix.
+const jamo = (char: string) => {
+  const code = char.charCodeAt(0) - 0xac00;
+  return code >= 0 && code <= 11171 ? { initial: Math.floor(code / 588), vowel: Math.floor((code % 588) / 28), final: code % 28 } : null;
+};
+const syllable = (initial: number, vowel: number, final = 0) => String.fromCharCode(0xac00 + initial * 588 + vowel * 28 + final);
+export function conjugateAeo(stem: string): string {
+  const last = stem.slice(-1), head = stem.slice(0, -1), j = jamo(last);
+  if (!j) return "";
+  if (last === "하") return head + "해";
+  if (last === "르" && head) {
+    const p = jamo(head.slice(-1));
+    if (!p || p.final) return "";
+    const bright = p.vowel === 0 || p.vowel === 8; // ㅏ, ㅗ
+    return head.slice(0, -1) + syllable(p.initial, p.vowel, 8) + (bright ? "라" : "러");
+  }
+  if (j.final) {
+    // ㄷ, ㅂ, ㅅ, ㅎ stems are often irregular (듣다, 돕다, 낫다, 그렇다).
+    if ([7, 17, 19, 27].includes(j.final)) return "";
+    return stem + (j.vowel === 0 || j.vowel === 8 ? "아" : "어");
+  }
+  // ㅏ ㅐ ㅓ ㅔ ㅕ ㅖ ㅙ ㅚ stay; ㅗ→ㅘ, ㅜ→ㅝ, ㅡ→ㅓ, ㅣ→ㅕ.
+  if ([0, 1, 4, 5, 6, 7, 10, 11].includes(j.vowel)) return stem;
+  const merged: Record<number, number> = { 8: 9, 13: 14, 18: 4, 20: 6 };
+  return merged[j.vowel] !== undefined ? head + syllable(j.initial, merged[j.vowel]) : "";
+}
+
+// "나타내다(manifest)보자", "억누르다(suppress)기만" — a dictionary form glued to more Korean.
+// Nouns ending in 다 with a particle (바다(ocean)는) and quotations (~다(attract)라니) are fine.
+const BROKEN_DICTIONARY_GLOSS = /[가-힣]다\s*\([A-Za-z][^()\n]*\)(?!(?:은|는|이|가|을|를|도|만|에|에서|로|으로|와|과|랑|의|처럼|보다|라니|라고|라는|라면|고\s|며|지만|니까|면|\s*[.,!?~]|\s|$))[가-힣]/u;
+export function hasBrokenDictionaryGloss(text: string): boolean {
+  return BROKEN_DICTIONARY_GLOSS.test(text);
+}
+
 // Last-resort repair when the model keeps a dictionary form: "(상상하다(imagine))" → "상상(imagine)".
 export function fallbackVerbGloss(text: string): string {
   return text
@@ -38,7 +73,17 @@ export function fallbackVerbGloss(text: string): string {
     .replace(/([가-힣]{2,})하다\(([A-Za-z][^()\n]*)\)\s*(않|못)/gu, "$1하지($2) $3")
     // "일자리를 잃다(displace)던" → "일자리를 잃던(displace)"
     .replace(/([가-힣])다\(([A-Za-z][^()\n]*)\)(던|는|은|ㄴ)(?=\s)/gu, "$1$3($2)")
-    .replace(/([가-힣]{2,})하다\(([A-Za-z][^()\n]*)\)/gu, "$1($2)");
+    .replace(/([가-힣]{2,})하다\(([A-Za-z][^()\n]*)\)/gu, "$1($2)")
+    // "억누르다(suppress)기만" → "억누르기(suppress)만"
+    .replace(/([가-힣])다\(([A-Za-z][^()\n]*)\)기/gu, "$1기($2)")
+    // "나타내다(manifest)보자" → "나타내(manifest) 보자", "바꾸다(change)야 해" → "바꿔(change)야 해"
+    .replace(/([가-힣]+)다\(([A-Za-z][^()\n]*)\)\s?(보|봐|볼|줘|주|줄|야|서|도)/gu,
+      (whole, stem: string, english: string, next: string) => {
+        const form = conjugateAeo(stem);
+        if (!form) return whole;
+        const spaced = /^[보봐볼줘주줄]/u.test(next) ? " " : "";
+        return `${form}(${english})${spaced}${next}`;
+      });
 }
 
 // Repair broken glosses: "진화(evolve해)" → "진화(evolve)해", "공간(commercial space) commercial space" → "공간(commercial space)".
@@ -84,7 +129,8 @@ export function findUninflectedVocabularyDialogue(plan: VocabularyPlan): string[
     .filter(text => /[가-힣]+하다\s*\([A-Za-z][^()\n]*\)/u.test(text) ||
       // Reject dictionary forms before negation or duplicated endings, not every 다-ending.
       // Natural completed forms and nouns such as 바다(ocean)는 must remain valid.
-      /[가-힣]+다\s*\([A-Za-z][^()\n]*\)\s*(?:않|못|해야|해요|하는|하고|하면|는\s*중)/u.test(text)));
+      /[가-힣]+다\s*\([A-Za-z][^()\n]*\)\s*(?:않|못|해야|해요|하는|하고|하면|는\s*중)/u.test(text) ||
+      hasBrokenDictionaryGloss(fallbackVerbGloss(text))));
 }
 
 // A small explicit exclusion list, not a CEFR classifier. Contextual idioms stay allowed.
@@ -219,5 +265,24 @@ export function cleanSourceVocabulary<T extends VocabularyPlan>(plan: T, source:
     const english = word.match(/\(([^()]*)\)/)?.[1] || word;
     return allowedGloss(english);
   });
-  return deduplicateHighVocabulary({ ...plan, panels, keyWords } as T);
+  return deduplicateHighVocabulary(capKeyWords({ ...plan, panels, keyWords } as T));
+}
+
+// Five key words at most. Words actually glossed in the dialogue are kept first; the glosses of
+// dropped words are removed from the dialogue so the cards and the speech bubbles agree.
+const MAX_KEY_WORDS = 5;
+export function capKeyWords<T extends VocabularyPlan>(plan: T): T {
+  const words = plan.keyWords || [];
+  if (words.length <= MAX_KEY_WORDS) return plan;
+  const english = (word: string) => englishKey(word.match(/\(([^()]*)\)/u)?.[1] || word);
+  const spoken = new Set((plan.panels || []).flatMap(panel => (panel.dialogue || [])
+    .flatMap(line => Array.from(line.text.matchAll(/\(([^()]*)\)/gu), m => englishKey(m[1])))));
+  const ranked = [...words.filter(w => spoken.has(english(w))), ...words.filter(w => !spoken.has(english(w)))];
+  const kept = ranked.slice(0, MAX_KEY_WORDS);
+  const dropped = new Set(ranked.slice(MAX_KEY_WORDS).map(english));
+  const strip = (text: string) => text.replace(/\(([^()]*)\)/gu, (whole, inner: string) =>
+    isEnglish(inner) && dropped.has(englishKey(inner)) ? "" : whole);
+  const panels = (plan.panels || []).map(panel => ({ ...panel,
+    dialogue: (panel.dialogue || []).map(line => ({ ...line, text: fixGlossParticles(strip(line.text)) })) }));
+  return { ...plan, panels, keyWords: words.filter(w => kept.includes(w)) } as T;
 }
