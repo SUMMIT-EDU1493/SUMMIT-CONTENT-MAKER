@@ -82,8 +82,9 @@ function readMockInfo(before: string, section: string, sourceRange: string, grad
   const scope = `${sourceRange}\n${header}`;
   const last = (pattern: RegExp) => Array.from(scope.matchAll(pattern)).pop()?.[1];
   const year = last(/(20\d{2})\s*년/gu);
-  const month = last(/(\d{1,2})\s*월\s*(?:모의고사|학력평가|학평|전국연합)/gu);
-  const grade = last(/고\s*([123])\s*(?:모의고사|학년|>)/gu) || gradeName.match(/([123])/)?.[1];
+  // PDF text often arrives split into pieces ("09 월 모의 고사"), so allow spaces inside the words.
+  const month = last(/(\d{1,2})\s*월\s*(?:모\s*의\s*고\s*사|학\s*력\s*평\s*가|학\s*평|전\s*국\s*연\s*합)/gu);
+  const grade = last(/고\s*([123])\s*(?:모\s*의\s*고\s*사|학\s*년|>)/gu) || gradeName.match(/([123])/)?.[1];
   return { year: year ? Number(year) : undefined, month: month ? Number(month) : undefined,
     number: number || undefined, grade: grade ? `고${grade}` : undefined };
 }
