@@ -314,6 +314,45 @@ export default function HighTestPage() {
   const completeMock = (info: Partial<MockInfo>): MockInfo | null =>
     info.grade && info.year && info.month && info.number ? (info as MockInfo) : null;
 
+  // Passages already in the library: "hit" = image brought back instead of being made again,
+  // "mismatch" = same question number but a different passage, so it is made new.
+  const [libraryHits, setLibraryHits] = useState<Record<string, "hit" | "mismatch">>({});
+  // Passages whose question slot already holds a different passage: never overwrite that page.
+  const libraryMismatchRef = useRef(new Set<string>());
+  const markLibrary = (id: string, status: LibraryLookup["status"] | undefined) => {
+    if (status === "mismatch") libraryMismatchRef.current.add(id); else libraryMismatchRef.current.delete(id);
+    setLibraryHits(prev => {
+      const next = { ...prev };
+      if (status === "hit" || status === "mismatch") next[id] = status; else delete next[id];
+      return next;
+    });
+  };
+  type LibraryLookup = { status: "hit"; id: string; title: string; plan: HighComicPlan }
+    | { status: "mismatch"; title: string } | { status: "none" };
+  const lookupLibrary = async (entries: Array<{ mock: MockInfo; text: string }>): Promise<LibraryLookup[]> => {
+    if (!entries.length) return [];
+    try {
+      const response = await fetch("/api/library/mock-lookup", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ entries }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !Array.isArray(data?.results)) {
+        setLibraryNote(`보관함을 확인하지 못해 모든 지문을 새로 만들어요. (${data?.error || `HTTP ${response.status}`})`);
+        return [];
+      }
+      return data.results as LibraryLookup[];
+    } catch (error) {
+      console.error("LIBRARY LOOKUP ERROR:", error);
+      return [];
+    }
+  };
+  const loadLibraryImage = async (id: string): Promise<string> => {
+    const response = await fetch(`/api/library/image?id=${encodeURIComponent(id)}`, { cache: "no-store" });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || typeof data?.image !== "string") throw new Error(data?.error || `HTTP ${response.status}`);
+    return data.image;
+  };
+
   const readPdf = async (file: File) => {
     // Choosing a new PDF while the saved-work question is open starts fresh work.
     if (savedDraft) await discardDraft();
@@ -409,6 +448,8 @@ ${pageText}
       setResult(null);
       setGeneratedImages({});
       setWorkItems([]);
+      setLibraryHits({});
+      libraryMismatchRef.current.clear();
 
       const key = JSON.stringify({ schoolName, gradeName, lessonName, pdfText });
       const postPlan = async (payload: Record<string, unknown>) => {
@@ -437,6 +478,38 @@ ${pageText}
         setPlanTick(tick => tick + 1);
       };
       updateProgress();
+      // Mock exams: passages already in the library come back with their saved plan and image,
+      // so only the new passages are planned and drawn.
+      if (libraryFolderId === AUTO_MOCK) {
+        const candidates = active.sections.flatMap((section, index) => {
+          if (active.plans[index]) return [];
+          const mock = completeMock(readMockInfo(active.sections.slice(0, index).map(s => s.text).join(""),
+            section.text, "", gradeName));
+          return mock ? [{ index, mock, text: section.text }] : [];
+        });
+        if (candidates.length) {
+          setPlanProgress("보관함에서 이미 만든 지문을 찾는 중...");
+          const found = await lookupLibrary(candidates.map(({ mock, text }) => ({ mock, text })));
+          let reused = 0;
+          await runLimited(candidates.map((candidate, i) => ({ candidate, hit: found[i] })), 6, async ({ candidate, hit }) => {
+            const id = `passage-${candidate.index + 1}`;
+            if (hit?.status === "mismatch") markLibrary(id, "mismatch");
+            if (hit?.status !== "hit" || !Array.isArray(hit.plan?.panels) || hit.plan.panels.length !== 4) return;
+            try {
+              const image = await loadLibraryImage(hit.id);
+              active.plans[candidate.index] = { ...hit.plan, id };
+              setGeneratedImages(prev => ({ ...prev, [id]: image }));
+              markLibrary(id, "hit");
+              reused += 1;
+              updateProgress();
+            } catch (error) {
+              console.error(`LIBRARY IMAGE ${id}:`, error);
+            }
+          });
+          if (reused) setLibraryNote(`보관함에 이미 있는 ${reused}개 지문은 새로 만들지 않고 가져왔어요.`);
+          updateProgress();
+        }
+      }
       const pending = active.sections.map((section, index) => ({ section, index }))
         .filter(({ index }) => !active.plans[index]);
       // Each passage is its own short request; twenty in flight finishes a whole mock-exam PDF in one wave.
@@ -502,7 +575,7 @@ ${pageText}
         body: JSON.stringify({
           plan,
           library: libraryFolderId === AUTO_MOCK
-            ? (completeMock(mockFor(plan))
+            ? (completeMock(mockFor(plan)) && !libraryMismatchRef.current.has(plan.id)
                 ? { mock: completeMock(mockFor(plan)), title: plan.englishTitle, subtitle: plan.koreanSubtitle }
                 : undefined)
             : libraryFolderId
@@ -520,7 +593,9 @@ ${pageText}
 
     const data = await response.json();
 
-    if (response.ok && libraryFolderId === AUTO_MOCK && !completeMock(mockFor(plan))) {
+    if (response.ok && libraryFolderId === AUTO_MOCK && libraryMismatchRef.current.has(plan.id)) {
+      setLibraryNote(`보관함 저장 안 함 (${plan.englishTitle}): 같은 번호 자리에 다른 지문이 이미 있어요. 표에서 연도·월·번호를 확인해 주세요.`);
+    } else if (response.ok && libraryFolderId === AUTO_MOCK && !completeMock(mockFor(plan))) {
       setLibraryNote(`보관함 저장 안 됨 (${plan.englishTitle}): 연도·월·번호를 읽지 못했어요. 아래 표에서 채운 뒤 다시 만들어 주세요.`);
     } else if (response.ok && libraryFolderId) {
       setLibraryNote(
@@ -558,6 +633,15 @@ ${pageText}
       imageActionRef.current = true;
       setGeneratingId(plan.id);
       setErrorMessage("");
+
+      // The single button always draws a new image; it only re-checks that it will not
+      // overwrite a different passage saved under the same question number.
+      const mock = libraryFolderId === AUTO_MOCK ? completeMock(mockFor(plan)) : null;
+      const text = plan.sourceText || planCacheRef.current?.sections[Number(plan.id.replace("passage-", "")) - 1]?.text || "";
+      if (mock && text) {
+        const [hit] = await lookupLibrary([{ mock, text }]);
+        markLibrary(plan.id, hit?.status === "mismatch" ? "mismatch" : undefined);
+      }
 
       const image =
         await generateImageRequest(plan);
@@ -1380,19 +1464,55 @@ ${pageText}
       return;
     }
 
-    const remainingPlans =
+    let remainingPlans =
       result.plans.filter(
         (plan) =>
           !generatedImages[plan.id]
       );
 
+    // Mock exams: check the library once more (the sorting table may have been corrected),
+    // and bring back pages that already exist instead of paying for them again.
+    let reusedCount = 0;
+    if (libraryFolderId === AUTO_MOCK && remainingPlans.length) {
+      imageActionRef.current = true;
+      try {
+        setBatchProgress("보관함에서 이미 만든 지문을 찾는 중...");
+        const sections = planCacheRef.current?.sections || [];
+        const candidates = remainingPlans.flatMap(plan => {
+          const mock = completeMock(mockFor(plan));
+          const text = plan.sourceText || sections[Number(plan.id.replace("passage-", "")) - 1]?.text || "";
+          return mock && text ? [{ plan, mock, text }] : [];
+        });
+        const found = await lookupLibrary(candidates.map(({ mock, text }) => ({ mock, text })));
+        const reused = new Set<string>();
+        await runLimited(candidates.map((candidate, i) => ({ candidate, hit: found[i] })), 6, async ({ candidate, hit }) => {
+          const id = candidate.plan.id;
+          markLibrary(id, hit?.status === "hit" ? undefined : hit?.status);
+          if (hit?.status !== "hit") return;
+          try {
+            const image = await loadLibraryImage(hit.id);
+            setGeneratedImages(prev => ({ ...prev, [id]: image }));
+            markLibrary(id, "hit");
+            reused.add(id);
+          } catch (error) {
+            console.error(`LIBRARY IMAGE ${id}:`, error);
+          }
+        });
+        reusedCount = reused.size;
+        remainingPlans = remainingPlans.filter(plan => !reused.has(plan.id));
+        setBatchProgress(reusedCount ? `보관함에서 ${reusedCount}장을 가져왔어요.` : "");
+      } finally {
+        imageActionRef.current = false;
+      }
+    }
+
     if (remainingPlans.length === 0) {
-      alert("이미 모든 이미지가 생성되어 있습니다.");
+      alert(reusedCount ? `남은 ${reusedCount}장은 모두 보관함에 있어서 가져왔어요. 새로 만들 이미지는 없어요.` : "이미 모든 이미지가 생성되어 있습니다.");
       return;
     }
 
     const confirmed = window.confirm(
-      `아직 생성되지 않은 이미지 ${remainingPlans.length}장을 최대 6장씩 동시에 생성합니다. 이미지 생성 시 크레딧이 차감됩니다. 계속하시겠습니까?`
+      `${reusedCount ? `보관함에 있던 ${reusedCount}장은 가져왔어요. ` : ""}아직 생성되지 않은 이미지 ${remainingPlans.length}장을 최대 6장씩 동시에 생성합니다. 이미지 생성 시 크레딧이 차감됩니다. 계속하시겠습니까?`
     );
 
     if (!confirmed) {
@@ -1673,7 +1793,14 @@ ${pageText}
             <h3 className="font-black text-slate-900">자동 분류 확인</h3>
             <p className="mt-1 text-xs text-slate-500">
               PDF에서 읽은 값이에요. 틀리거나 빈 칸이 있으면 고친 뒤 이미지를 만드세요. 작업함·PDF 순서는 원래 PDF 순서 그대로예요.
+              보관함에 같은 지문이 있으면 새로 만들지 않고 가져와요(전체 이미지 생성 때 한 번 더 확인). 개별 &apos;이미지 생성&apos; 버튼은 항상 새로 만들어요.
             </p>
+            {Object.values(libraryHits).some(v => v === "hit") && (
+              <p className="mt-2 text-sm font-black text-emerald-700">
+                보관함에서 가져옴 {Object.values(libraryHits).filter(v => v === "hit").length}개 ·
+                새로 만들 지문 {result.plans.filter(plan => !generatedImages[plan.id]).length}개
+              </p>
+            )}
             <div className="mt-3 grid gap-2">
               {result.plans.map((plan, i) => {
                 const info = mockFor(plan);
@@ -1691,6 +1818,8 @@ ${pageText}
                     <input value={info.number ?? ""} onChange={e => set("number", e.target.value)} placeholder="번호" className="w-12 rounded-lg border px-2 py-1" />번
                     <span className="truncate text-slate-600">{plan.englishTitle}</span>
                     {!ok && <span className="font-black text-rose-600">← 채워 주세요</span>}
+                    {libraryHits[plan.id] === "hit" && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-black text-emerald-700">보관함에서 가져옴</span>}
+                    {libraryHits[plan.id] === "mismatch" && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-700">같은 번호에 다른 지문이 있어 새로 만듦</span>}
                   </div>
                 );
               })}

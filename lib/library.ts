@@ -200,6 +200,56 @@ export async function resolveMockFolder(info: MockInfo): Promise<string> {
   return parentId!;
 }
 
+/** Find 모의고사 / 고N / YYYY년 M월 without creating it; null when it does not exist yet. */
+async function findMockFolder(info: MockInfo): Promise<string | null> {
+  const sql = db();
+  let parentId: string | null = null;
+  for (const name of ["모의고사", info.grade, `${info.year}년 ${info.month}월`]) {
+    const found: Record<string, unknown>[] = await sql`SELECT id FROM library_folders
+      WHERE parent_id IS NOT DISTINCT FROM ${parentId}::uuid AND name = ${name} LIMIT 1`;
+    if (!found[0]) return null;
+    parentId = String(found[0].id);
+  }
+  return parentId;
+}
+
+// English words of a passage, for checking that a saved page really is the same passage.
+const passageWords = (text: string) => new Set(Array.from(text.toLowerCase().matchAll(/[a-z]{3,}/g), m => m[0]));
+
+export type MockLookup =
+  | { status: "hit"; id: string; title: string; plan: Record<string, unknown> }
+  | { status: "mismatch"; title: string }
+  | { status: "none" };
+
+/**
+ * For each passage, look for the page already saved under 모의고사 / 고N / YYYY년 M월 / N번.
+ * A saved page counts only when its passage text matches the new one, so a misread month or number
+ * never brings back a different passage.
+ */
+export async function findMockItems(entries: Array<{ mock: MockInfo; text: string }>): Promise<MockLookup[]> {
+  await ensureLibrary();
+  const sql = db();
+  const folders = new Map<string, Promise<string | null>>();
+  return Promise.all(entries.map(async ({ mock, text }): Promise<MockLookup> => {
+    const folderKey = `${mock.grade}|${mock.year}|${mock.month}`;
+    if (!folders.has(folderKey)) folders.set(folderKey, findMockFolder(mock));
+    const folderId = await folders.get(folderKey)!;
+    if (!folderId) return { status: "none" };
+    const [row] = await sql`SELECT id, title, plan FROM library_items
+      WHERE folder_id = ${folderId}::uuid AND kind = 'comic' AND item_key = ${`${mock.number}번`}`;
+    if (!row) return { status: "none" };
+    const plan = (row.plan && typeof row.plan === "object" ? row.plan : null) as Record<string, unknown> | null;
+    const saved = passageWords(typeof plan?.sourceText === "string" ? plan.sourceText : "");
+    const fresh = passageWords(text);
+    const shared = Array.from(saved).filter(word => fresh.has(word)).length;
+    // Most of the saved passage must appear in the new text, and it must cover a good part of it.
+    const same = saved.size >= 10 && shared / saved.size >= 0.7 && shared / Math.max(1, fresh.size) >= 0.5;
+    return same && plan
+      ? { status: "hit", id: String(row.id), title: String(row.title), plan }
+      : { status: "mismatch", title: String(row.title) };
+  }));
+}
+
 // "2026년 09월 모의고사 · 22번" → 22, so mock-exam pages list in question order.
 const questionNumber = (text: string) => Number(text.match(/(\d+)\s*번(?!.*\d+\s*번)/u)?.[1] || 0);
 
