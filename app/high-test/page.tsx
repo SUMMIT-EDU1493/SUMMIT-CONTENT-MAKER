@@ -71,8 +71,12 @@ function readMockInfo(before: string, section: string, sourceRange: string, grad
   // so look at the start of this passage first and then at the end of the text before it.
   const NUMBER = /(?:^|\s)(\d{1,2})\s*번(?=\s)/gu;
   const inHead = Array.from(section.slice(0, 250).matchAll(NUMBER))[0];
-  const tail = before.slice(-400);
-  const inTail = inHead ? undefined : Array.from(tail.matchAll(NUMBER)).pop();
+  // Some PDFs put the Korean translation between "31번" and the English text, so the number can sit
+  // far back. Take the last number before the passage, unless a whole English passage lies between
+  // (then that number belongs to the previous passage).
+  const tail = before.slice(-3000);
+  let inTail = inHead ? undefined : Array.from(tail.matchAll(NUMBER)).pop();
+  if (inTail && (tail.slice(inTail.index).match(/[A-Za-z]{2,}/g) || []).length > 40) inTail = undefined;
   const number = Number(inHead?.[1] || inTail?.[1] || sourceRange.match(/(\d{1,2})\s*번/u)?.[1]) || undefined;
   // Year and month are read only from the text before the number, never from the passage itself.
   const header = inHead ? `${before.slice(-600)}\n${section.slice(0, inHead.index)}`
