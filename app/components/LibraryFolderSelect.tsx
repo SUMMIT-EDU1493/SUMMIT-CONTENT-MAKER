@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 
+/** Special value: sort each mock-exam passage into 모의고사 / 고N / YYYY년 M월 by itself. */
+export const AUTO_MOCK = "auto-mock";
+
 type Folder = { id: string; parentId: string | null; name: string; sort: number; itemCount: number };
 
 /** Full "모의고사 / 고2 / 2026년 9월" paths in tree order. */
@@ -48,7 +51,7 @@ export default function LibraryFolderSelect({ storageKey, value, onChange, note 
         setState("ready");
         let saved = "";
         try { saved = window.localStorage.getItem(storageKey) || ""; } catch { /* storage unavailable */ }
-        if (saved && paths.some(p => p.id === saved)) onChange(saved);
+        if (saved && (saved === AUTO_MOCK || paths.some(p => p.id === saved))) onChange(saved);
       } catch {
         if (!cancelled) setState("error");
       }
@@ -84,6 +87,7 @@ export default function LibraryFolderSelect({ storageKey, value, onChange, note 
           <select value={value} onChange={e => choose(e.target.value)}
             className="mt-4 w-full rounded-xl border border-slate-300 px-4 py-3 font-bold text-slate-800">
             <option value="">저장 안 함</option>
+            <option value={AUTO_MOCK}>★ 모의고사 자동 분류 (지문마다 연도·월·번호를 읽어 해당 폴더에 저장)</option>
             {options.map(option => (
               <option key={option.id} value={option.id}>{option.path}</option>
             ))}

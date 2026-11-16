@@ -8,7 +8,7 @@ import { deleteDraft, deleteDraftsByPrefix, getDraft, getDraftsByPrefix, putDraf
 import * as pdfjsLib from "pdfjs-dist";
 import { jsPDF } from "jspdf";
 import HomeButton from "../components/HomeButton";
-import LibraryFolderSelect from "../components/LibraryFolderSelect";
+import LibraryFolderSelect, { AUTO_MOCK } from "../components/LibraryFolderSelect";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -59,6 +59,25 @@ type HighDraft = {
   savedAt: number; schoolName: string; gradeName: string; lessonName: string;
   fileName: string; pdfText: string; result: HighComicResult | null; planCache: PlanCache | null;
 };
+
+type MockInfo = { grade: string; year: number; month: number; number: number };
+
+/**
+ * Read "2023년 고2 모의고사 / 06월 모의고사 / 22번" around one passage. The year and month sit in the page
+ * header just before the passage, so the end of the previous text is searched too.
+ */
+function readMockInfo(before: string, section: string, sourceRange: string, gradeName: string): Partial<MockInfo> {
+  const head = section.slice(0, 600);
+  const numberAt = head.search(/(?:^|\n|\s)\d{1,2}\s*번/u);
+  const number = numberAt >= 0 ? Number(head.slice(numberAt).match(/(\d{1,2})\s*번/u)?.[1]) : undefined;
+  const scope = `${before.slice(-600)}\n${numberAt >= 0 ? head.slice(0, numberAt) : head}\n${sourceRange}`;
+  const last = (pattern: RegExp) => Array.from(scope.matchAll(pattern)).pop()?.[1];
+  const year = last(/(20\d{2})\s*년/gu);
+  const month = last(/(\d{1,2})\s*월\s*(?:모의고사|학력평가|학평|전국연합)/gu);
+  const grade = last(/고\s*([123])\s*(?:모의고사|학년|>)/gu) || gradeName.match(/([123])/)?.[1];
+  return { year: year ? Number(year) : undefined, month: month ? Number(month) : undefined,
+    number: number || undefined, grade: grade ? `고${grade}` : undefined };
+}
 
 export default function HighTestPage() {
   const planCacheRef = useRef<PlanCache | null>(null);
@@ -271,6 +290,19 @@ export default function HighTestPage() {
   // Library folder that each finished image is saved to ("" = do not save).
   const [libraryFolderId, setLibraryFolderId] = useState("");
   const [libraryNote, setLibraryNote] = useState("");
+  // Hand corrections for auto-sorted mock-exam passages, by plan id.
+  const [mockEdits, setMockEdits] = useState<Record<string, Partial<MockInfo>>>({});
+
+  const mockFor = (plan: HighComicPlan): Partial<MockInfo> => {
+    const sections = planCacheRef.current?.sections || [];
+    const index = Number(plan.id.replace("passage-", "")) - 1;
+    const read = sections[index]
+      ? readMockInfo(sections.slice(0, index).map(s => s.text).join(""), sections[index].text, plan.sourceRange || "", gradeName)
+      : readMockInfo("", "", plan.sourceRange || "", gradeName);
+    return { ...read, ...mockEdits[plan.id] };
+  };
+  const completeMock = (info: Partial<MockInfo>): MockInfo | null =>
+    info.grade && info.year && info.month && info.number ? (info as MockInfo) : null;
 
   const readPdf = async (file: File) => {
     // Choosing a new PDF while the saved-work question is open starts fresh work.
@@ -453,7 +485,11 @@ ${pageText}
         },
         body: JSON.stringify({
           plan,
-          library: libraryFolderId
+          library: libraryFolderId === AUTO_MOCK
+            ? (completeMock(mockFor(plan))
+                ? { mock: completeMock(mockFor(plan)), title: plan.englishTitle, subtitle: plan.koreanSubtitle }
+                : undefined)
+            : libraryFolderId
             ? {
                 folderId: libraryFolderId,
                 itemKey: [plan.sourceRange, plan.englishTitle].filter(Boolean).join(" | ") || plan.id,
@@ -468,7 +504,9 @@ ${pageText}
 
     const data = await response.json();
 
-    if (response.ok && libraryFolderId) {
+    if (response.ok && libraryFolderId === AUTO_MOCK && !completeMock(mockFor(plan))) {
+      setLibraryNote(`보관함 저장 안 됨 (${plan.englishTitle}): 연도·월·번호를 읽지 못했어요. 아래 표에서 채운 뒤 다시 만들어 주세요.`);
+    } else if (response.ok && libraryFolderId) {
       setLibraryNote(
         data?.saveError
           ? `보관함 저장 실패 (${plan.englishTitle}): ${data.saveError}`
@@ -1613,6 +1651,36 @@ ${pageText}
 
         <LibraryFolderSelect storageKey="library-folder:high-test" value={libraryFolderId}
           onChange={setLibraryFolderId} note={libraryNote} />
+
+        {libraryFolderId === AUTO_MOCK && result?.plans.length ? (
+          <section className="mt-4 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-amber-200">
+            <h3 className="font-black text-slate-900">자동 분류 확인</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              PDF에서 읽은 값이에요. 틀리거나 빈 칸이 있으면 고친 뒤 이미지를 만드세요. 작업함·PDF 순서는 원래 PDF 순서 그대로예요.
+            </p>
+            <div className="mt-3 grid gap-2">
+              {result.plans.map((plan, i) => {
+                const info = mockFor(plan);
+                const ok = Boolean(completeMock(info));
+                const set = (key: keyof MockInfo, value: string) => setMockEdits(prev => ({ ...prev,
+                  [plan.id]: { ...prev[plan.id], [key]: key === "grade" ? value : Number(value) || undefined } }));
+                return (
+                  <div key={plan.id} className={`flex flex-wrap items-center gap-2 rounded-xl px-3 py-2 text-sm ${ok ? "bg-slate-50" : "bg-rose-50"}`}>
+                    <span className="w-8 font-black text-slate-500">{i + 1}</span>
+                    <select value={info.grade || ""} onChange={e => set("grade", e.target.value)} className="rounded-lg border px-2 py-1">
+                      <option value="">학년</option><option>고1</option><option>고2</option><option>고3</option>
+                    </select>
+                    <input value={info.year ?? ""} onChange={e => set("year", e.target.value)} placeholder="연도" className="w-20 rounded-lg border px-2 py-1" />년
+                    <input value={info.month ?? ""} onChange={e => set("month", e.target.value)} placeholder="월" className="w-12 rounded-lg border px-2 py-1" />월
+                    <input value={info.number ?? ""} onChange={e => set("number", e.target.value)} placeholder="번호" className="w-12 rounded-lg border px-2 py-1" />번
+                    <span className="truncate text-slate-600">{plan.englishTitle}</span>
+                    {!ok && <span className="font-black text-rose-600">← 채워 주세요</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
 
         <section {...pdfDropHandlers} className="mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <h2 className="text-xl font-black text-slate-900">

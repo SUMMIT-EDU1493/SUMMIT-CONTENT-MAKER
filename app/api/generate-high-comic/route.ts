@@ -825,7 +825,7 @@ Verify all of the following:
     // Library saving never fails the generation: the page still gets its image.
     let savedId = "";
     let saveError = "";
-    if (body.library?.folderId) {
+    if (body.library?.folderId || body.library?.mock) {
       try {
         if (!(await isLibraryAllowed())) throw new Error("관리자 로그인이 필요합니다.");
         savedId = await saveLibraryImage({

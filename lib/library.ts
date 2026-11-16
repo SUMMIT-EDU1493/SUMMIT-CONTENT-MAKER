@@ -11,7 +11,12 @@ export type LibraryItem = {
   id: string; folderId: string; kind: string; itemKey: string; title: string; subtitle: string;
   sourceRange: string; imageUrl: string; createdAt: string; updatedAt: string;
 };
-export type LibraryTarget = { folderId: string; itemKey?: string; title?: string; subtitle?: string; sourceRange?: string };
+export type MockInfo = { grade: string; year: number; month: number; number: number };
+export type LibraryTarget = {
+  folderId?: string; itemKey?: string; title?: string; subtitle?: string; sourceRange?: string;
+  // Auto-sort: 모의고사 / 고2 / 2023년 6월, keyed by question number.
+  mock?: MockInfo;
+};
 
 function db() {
   const url = process.env.DATABASE_URL;
@@ -96,6 +101,9 @@ async function setup() {
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`;
   await sql`CREATE UNIQUE INDEX IF NOT EXISTS library_items_key ON library_items (folder_id, kind, item_key)`;
+  // Sibling names are unique, so parallel auto-sorting cannot create the same month folder twice.
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS library_folders_name
+    ON library_folders (COALESCE(parent_id, '00000000-0000-0000-0000-000000000000'::uuid), name)`;
   // Seed only an empty library, so folders the user deleted do not come back on the next start.
   const [{ count }] = await sql`SELECT COUNT(*)::int AS count FROM library_folders`;
   if (Number(count) > 0) return;
@@ -174,6 +182,24 @@ export async function deleteItem(id: string) {
   await del(item.imageUrl).catch(() => undefined);
 }
 
+/** Find (or create) 모의고사 / 고N / YYYY년 M월 and return its id. */
+export async function resolveMockFolder(info: MockInfo): Promise<string> {
+  await ensureLibrary();
+  const sql = db();
+  const path = ["모의고사", info.grade, `${info.year}년 ${info.month}월`];
+  let parentId: string | null = null;
+  for (const name of path) {
+    await sql`INSERT INTO library_folders (id, parent_id, name, sort)
+      SELECT ${randomUUID()}::uuid, ${parentId}::uuid, ${name}::text,
+        COALESCE((SELECT MAX(sort) + 1 FROM library_folders WHERE parent_id IS NOT DISTINCT FROM ${parentId}::uuid), 0)
+      ON CONFLICT DO NOTHING`;
+    const found: Record<string, unknown>[] = await sql`SELECT id FROM library_folders
+      WHERE parent_id IS NOT DISTINCT FROM ${parentId}::uuid AND name = ${name} LIMIT 1`;
+    parentId = String(found[0].id);
+  }
+  return parentId!;
+}
+
 // "2026년 09월 모의고사 · 22번" → 22, so mock-exam pages list in question order.
 const questionNumber = (text: string) => Number(text.match(/(\d+)\s*번(?!.*\d+\s*번)/u)?.[1] || 0);
 
@@ -181,9 +207,15 @@ const questionNumber = (text: string) => Number(text.match(/(\d+)\s*번(?!.*\d+\
  * Save one page. The same folder + key replaces the earlier image, so regenerating a passage keeps
  * only the latest version. Images are stored as JPEG to stay inside the free storage allowance.
  */
-export async function saveLibraryImage(target: LibraryTarget & { kind?: string; plan?: unknown; image: Buffer }): Promise<string> {
+export async function saveLibraryImage(input: LibraryTarget & { kind?: string; plan?: unknown; image: Buffer }): Promise<string> {
   await ensureLibrary();
   const sql = db();
+  const target = input.mock
+    ? { ...input, folderId: await resolveMockFolder(input.mock), itemKey: `${input.mock.number}번`,
+        title: `${input.mock.number}번 ${input.title || ""}`.trim(),
+        sourceRange: `${input.mock.year}년 ${input.mock.month}월 ${input.mock.grade} 모의고사 ${input.mock.number}번` }
+    : input;
+  if (!target.folderId) throw new Error("저장할 보관함 폴더가 없습니다.");
   const [folder] = await sql`SELECT id FROM library_folders WHERE id = ${target.folderId}::uuid`;
   if (!folder) throw new Error("저장할 보관함 폴더를 찾지 못했습니다.");
   const kind = target.kind || "comic";
