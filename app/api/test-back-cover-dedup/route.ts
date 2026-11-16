@@ -3,6 +3,7 @@ import { createTrackedOpenAI } from "@/lib/tracked-openai";
 import sharp from "sharp";
 import path from "path";
 import fs from "fs/promises";
+import { TEXT_MODEL } from "@/lib/ai-models";
 
 export async function GET() {
   try {
@@ -56,7 +57,7 @@ export async function GET() {
 `;
 
     const dedupResponse = await openai.responses.create({
-      model: "gpt-5-mini",
+      model: TEXT_MODEL,
       input: `
 다음은 한 Lesson의 여러 만화 컷에서 반복해서 등장한 캐릭터 설명이다.
 

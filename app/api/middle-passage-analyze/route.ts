@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 
 import { createTrackedOpenAI } from "@/lib/tracked-openai";
+import { TEXT_MODEL } from "@/lib/ai-models";
 export const maxDuration = 300;
 
 type Passage = {
@@ -308,7 +309,7 @@ ${text}
     const openaiStartedAt = performance.now();
     const result =
       await openai.responses.create({
-        model: "gpt-5-mini",
+        model: TEXT_MODEL,
         input: prompt,
         max_output_tokens: 8000,
       });

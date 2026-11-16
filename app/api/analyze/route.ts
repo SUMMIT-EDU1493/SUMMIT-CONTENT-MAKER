@@ -2,6 +2,7 @@ import OpenAI from "openai";
 
 import { createTrackedOpenAI } from "@/lib/tracked-openai";
 import { extractDialogueCandidates } from "@/lib/middle-dialogue-candidates";
+import { TEXT_MODEL } from "@/lib/ai-models";
 
 export async function POST(request: Request) {
   const totalStartedAt = performance.now();
@@ -156,7 +157,7 @@ ${sourceText}
 
     const openaiStartedAt = performance.now();
     const response = await openai.responses.create({
-      model: "gpt-5-mini",
+      model: TEXT_MODEL,
       input: prompt,
       max_output_tokens: 6000,
     });

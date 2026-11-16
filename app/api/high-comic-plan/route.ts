@@ -19,6 +19,7 @@ const STORY_MODES = [
 import OpenAI from "openai";
 
 import { createTrackedOpenAI } from "@/lib/tracked-openai";
+import { TEXT_MODEL } from "@/lib/ai-models";
 export const maxDuration = 300;
 
 type ComicDialogue = {
@@ -142,7 +143,7 @@ export async function POST(
       throw last;
     };
     const askFactCheck = async (prompt: string) => {
-      const response = await openai.responses.create({ model: "gpt-5-mini", max_output_tokens: 6000, input: prompt });
+      const response = await openai.responses.create({ model: TEXT_MODEL, max_output_tokens: 6000, input: prompt });
       if (response.status !== "completed" || !response.output_text?.trim()) {
         throw new Error("의미 검증 응답이 완료되지 않았습니다.");
       }
@@ -168,7 +169,7 @@ export async function POST(
     let subtitleOffsets: number[] = [];
     const boundaries = await retry(async () => {
       const response = await openai.responses.create({
-        model: "gpt-5-mini",
+        model: TEXT_MODEL,
         // Only picks word positions; the server re-checks order, range and full coverage below.
         reasoning: { effort: "low" },
         max_output_tokens: 8000,
@@ -274,7 +275,7 @@ JSON만 반환: {"startWordIds":[12,721],"sectionStartWordIds":[340,510]}
           batchResults[index] = await retry(async () => {
             timing.draftCalls++;
             const response = await openai.responses.create({
-              model: "gpt-5-mini",
+              model: TEXT_MODEL,
               max_output_tokens: 16000,
               input: `
 너는 고등 영어 지문을 각각 "써밋네컷"으로 바꾸는 전문 편집자다.
@@ -914,7 +915,7 @@ ${sourceSections[index].koreanReference}
               timing.reviewCalls++;
               const response = await openai.responses.create({
                 // Editing pass: facts are re-checked afterwards by the separate meaning check.
-                model: "gpt-5-mini", reasoning: { effort: "low" }, max_output_tokens: 10000, input: prompt,
+                model: TEXT_MODEL, reasoning: { effort: "low" }, max_output_tokens: 10000, input: prompt,
               });
               if (response.status !== "completed" || !response.output_text?.trim()) {
                 throw new Error("원문 대조 검수 응답이 완료되지 않았습니다.");
@@ -926,7 +927,7 @@ ${sourceSections[index].koreanReference}
           timing.review = Date.now() - timing.start - timing.draft;
           // Easy-reading pass: one story flow in plain Korean. The meaning check below still guards facts.
           const easy = cleanSourceVocabulary(await rewriteForEasyReading(passageText, audited, async (prompt) => {
-            const response = await openai.responses.create({ model: "gpt-5-mini", max_output_tokens: 8000, input: prompt });
+            const response = await openai.responses.create({ model: TEXT_MODEL, max_output_tokens: 8000, input: prompt });
             if (response.status !== "completed" || !response.output_text?.trim()) {
               throw new Error("쉬운 대사 다듬기 응답이 완료되지 않았습니다.");
             }

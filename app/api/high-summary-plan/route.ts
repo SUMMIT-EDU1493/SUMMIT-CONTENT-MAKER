@@ -3,6 +3,7 @@ import { runLimited } from "../../lib/run-limited";
 import OpenAI from "openai";
 
 import { createTrackedOpenAI } from "@/lib/tracked-openai";
+import { TEXT_MODEL } from "@/lib/ai-models";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
@@ -336,7 +337,7 @@ ${sectionText}
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           const generated = await openai.responses.create({
-            model: "gpt-5-mini", max_output_tokens: 16000,
+            model: TEXT_MODEL, max_output_tokens: 16000,
             input: buildPrompt(section.text) + (section.label
               ? "\n이 입력은 독립 지문 하나입니다. pages에 정확히 한 항목만 반환하세요. 출처: " + section.label
               : "\n이 구간의 독립 지문을 모두 순서대로 포함하세요."),

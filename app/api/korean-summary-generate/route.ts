@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 
 import { createTrackedOpenAI } from "@/lib/tracked-openai";
+import { TEXT_MODEL } from "@/lib/ai-models";
 type Passage = {
   id: string;
   title: string;
@@ -327,7 +328,7 @@ JSON만 반환한다.
 
     const response =
       await openai.responses.create({
-        model: "gpt-5-mini",
+        model: TEXT_MODEL,
         input: prompt,
       });
 

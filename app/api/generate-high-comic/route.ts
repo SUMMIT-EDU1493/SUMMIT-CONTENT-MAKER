@@ -5,6 +5,7 @@ import sharp from "sharp";
 import fs from "fs/promises";
 import path from "path";
 import TextToSVG from "text-to-svg";
+import { isLibraryAllowed, saveLibraryImage, type LibraryTarget } from "@/lib/library";
 
 export const runtime = "nodejs";
 
@@ -34,6 +35,8 @@ type HighComicPlan = {
 
 type RequestBody = {
   plan?: HighComicPlan;
+  // When set, the finished page is also saved to this library folder (admin only).
+  library?: LibraryTarget;
 };
 
 export async function POST(request: Request) {
@@ -819,8 +822,30 @@ Verify all of the following:
     const finalBase64 =
       finalImage.toString("base64");
 
+    // Library saving never fails the generation: the page still gets its image.
+    let savedId = "";
+    let saveError = "";
+    if (body.library?.folderId) {
+      try {
+        if (!(await isLibraryAllowed())) throw new Error("관리자 로그인이 필요합니다.");
+        savedId = await saveLibraryImage({
+          ...body.library,
+          title: body.library.title || plan.englishTitle || "",
+          subtitle: body.library.subtitle || plan.koreanSubtitle || "",
+          sourceRange: body.library.sourceRange || plan.sourceRange || "",
+          plan,
+          image: finalImage,
+        });
+      } catch (error) {
+        console.error("HIGH COMIC LIBRARY SAVE ERROR:", error);
+        saveError = error instanceof Error ? error.message : String(error);
+      }
+    }
+
     return Response.json({
       image: `data:image/png;base64,${finalBase64}`,
+      savedId,
+      saveError,
     });
   } catch (error: any) {
     console.error(

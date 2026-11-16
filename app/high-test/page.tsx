@@ -8,6 +8,7 @@ import { deleteDraft, deleteDraftsByPrefix, getDraft, getDraftsByPrefix, putDraf
 import * as pdfjsLib from "pdfjs-dist";
 import { jsPDF } from "jspdf";
 import HomeButton from "../components/HomeButton";
+import LibraryFolderSelect from "../components/LibraryFolderSelect";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -267,6 +268,10 @@ export default function HighTestPage() {
   const [makingPdf, setMakingPdf] =
     useState(false);
 
+  // Library folder that each finished image is saved to ("" = do not save).
+  const [libraryFolderId, setLibraryFolderId] = useState("");
+  const [libraryNote, setLibraryNote] = useState("");
+
   const readPdf = async (file: File) => {
     // Choosing a new PDF while the saved-work question is open starts fresh work.
     if (savedDraft) await discardDraft();
@@ -448,11 +453,28 @@ ${pageText}
         },
         body: JSON.stringify({
           plan,
+          library: libraryFolderId
+            ? {
+                folderId: libraryFolderId,
+                itemKey: [plan.sourceRange, plan.englishTitle].filter(Boolean).join(" | ") || plan.id,
+                sourceRange: plan.sourceRange,
+                title: plan.englishTitle,
+                subtitle: plan.koreanSubtitle,
+              }
+            : undefined,
         }),
       }
     );
 
     const data = await response.json();
+
+    if (response.ok && libraryFolderId) {
+      setLibraryNote(
+        data?.saveError
+          ? `보관함 저장 실패 (${plan.englishTitle}): ${data.saveError}`
+          : `보관함에 저장했어요: ${plan.englishTitle}`
+      );
+    }
 
     if (!response.ok) {
       throw new Error(
@@ -1087,7 +1109,7 @@ ${pageText}
 
     pdf.addImage(
       image,
-      "PNG",
+      image.startsWith("data:image/jpeg") ? "JPEG" : "PNG",
       0,
       0,
       pageWidth,
@@ -1431,6 +1453,19 @@ ${pageText}
     if (autosaveOn) void putDraft(`${AUTOSAVE}:work`, workItems);
   }, [autosaveOn, workItems]);
 
+  // Pages picked in the library arrive through browser storage and join the work box.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const sent = await getDraft<WorkItem[]>("library:send");
+      if (cancelled || !sent?.length) return;
+      await deleteDraft("library:send");
+      setWorkItems(prev => [...prev, ...sent.filter(item => !prev.some(old => old.id === item.id))]);
+      setLibraryNote(`보관함에서 ${sent.length}장을 작업함에 넣었어요. 아래 작업함에서 순서를 확인하고 학교명·학년·Lesson을 적은 뒤 PDF를 만드세요.`);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // Warn before closing the tab while something is still being generated.
   useEffect(() => {
     if (!isBusy) return;
@@ -1575,6 +1610,9 @@ ${pageText}
             </div>
           </div>
         </section>
+
+        <LibraryFolderSelect storageKey="library-folder:high-test" value={libraryFolderId}
+          onChange={setLibraryFolderId} note={libraryNote} />
 
         <section {...pdfDropHandlers} className="mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <h2 className="text-xl font-black text-slate-900">

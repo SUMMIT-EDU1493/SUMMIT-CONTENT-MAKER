@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 
 import { createTrackedOpenAI } from "@/lib/tracked-openai";
+import { TEXT_MODEL } from "@/lib/ai-models";
 type Passage = {
   title: string;
   source: string;
@@ -137,7 +138,7 @@ ${sourceText}
 `;
 
     const response = await openai.responses.create({
-      model: "gpt-5-mini",
+      model: TEXT_MODEL,
       input: prompt,
     });
 

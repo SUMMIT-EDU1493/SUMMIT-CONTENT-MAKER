@@ -2170,6 +2170,26 @@ export default function Home() {
                     고등 본문 핵심 요약 자료
                   </p>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href = "/library";
+                  }}
+                  className="rounded-3xl border border-emerald-200 bg-emerald-50 p-7 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+                >
+                  <p className="text-sm font-bold text-emerald-600">
+                    LIBRARY
+                  </p>
+
+                  <h2 className="mt-2 text-3xl font-black text-slate-900">
+                    보관함
+                  </h2>
+
+                  <p className="mt-3 text-slate-500">
+                    만든 자료 모아 보기 · 골라서 한 권으로
+                  </p>
+                </button>
               </>
             )}
           </div>

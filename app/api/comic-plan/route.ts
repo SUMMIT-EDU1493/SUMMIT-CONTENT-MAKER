@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 
 import { createTrackedOpenAI } from "@/lib/tracked-openai";
+import { TEXT_MODEL } from "@/lib/ai-models";
 export async function POST(request: Request) {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
     if (batchItems.length > 0) {
       const batchStartedAt = performance.now();
       const response = await openai.responses.create({
-        model: "gpt-5-mini",
+        model: TEXT_MODEL,
         max_output_tokens: Math.min(16000, 3200 * batchItems.length),
         input: `
 너는 중학생 영어 교재를 자연스럽고 재미있는 4컷 학습만화로 재구성하는 전문 작가다.
@@ -190,7 +191,7 @@ ${item.content}`
 
     const response =
       await openai.responses.create({
-        model: "gpt-5-mini",
+        model: TEXT_MODEL,
 
         input: `
 너는 중학생 영어 교재를

@@ -1,5 +1,6 @@
 ﻿import OpenAI from "openai";
 import { logApiUsage } from "@/lib/api-usage";
+import { TEXT_PRICING } from "@/lib/ai-models";
 
 type TrackingContext = {
   route: string;
@@ -21,14 +22,15 @@ function errorMessage(error: unknown): string {
 }
 
 function textCostUsd(model: string, usage: AnyRecord | undefined): number {
-  if (!usage || model !== "gpt-5-mini") return 0;
+  const price = TEXT_PRICING[model];
+  if (!usage || !price) return 0;
 
   const input = toNumber(usage.input_tokens);
   const output = toNumber(usage.output_tokens);
   const cached = toNumber(usage.input_tokens_details?.cached_tokens);
   const uncached = Math.max(0, input - cached);
 
-  return (uncached * 0.25 + cached * 0.025 + output * 2.0) / 1_000_000;
+  return (uncached * price.input + cached * price.cached + output * price.output) / 1_000_000;
 }
 
 function imageCostUsd(model: string, usage: AnyRecord | undefined): number {
@@ -89,7 +91,7 @@ export function createTrackedOpenAI(
         estimatedCostUsd: usd,
         estimatedCostKrw: usd * USD_KRW_RATE,
         metadata: {
-          pricingBasis: model === "gpt-5-mini" ? "gpt-5-mini token pricing" : "unknown",
+          pricingBasis: TEXT_PRICING[model] ? `${model} token pricing` : "unknown",
           usdKrwRate: USD_KRW_RATE,
           cachedInputTokens: toNumber(usage?.input_tokens_details?.cached_tokens),
         },
