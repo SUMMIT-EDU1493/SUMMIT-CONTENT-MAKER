@@ -905,6 +905,11 @@ ${sourceSections[index].koreanReference}
             if (sourceSections[index].label) {
               plan.sourceRange = [plan.sourceRange, sourceSections[index].label].filter(Boolean).join(" · ");
             }
+            // Mock-exam passages start with "22번 …"; keep that number even when the model leaves it out.
+            const questionNo = sourceSections[index].text.slice(0, 600).match(/(?:^|\s)(\d{1,2})\s*번(?=\s)/u)?.[1];
+            if (questionNo && !/\d{1,2}\s*번/u.test(plan.sourceRange || "")) {
+              plan.sourceRange = `${plan.sourceRange || ""} ${questionNo}번`.trim();
+            }
             result.plans = [cleanSourceVocabulary(plan, passageText)];
             return result;
           });

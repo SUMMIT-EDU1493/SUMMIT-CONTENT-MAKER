@@ -67,10 +67,19 @@ type MockInfo = { grade: string; year: number; month: number; number: number };
  * header just before the passage, so the end of the previous text is searched too.
  */
 function readMockInfo(before: string, section: string, sourceRange: string, gradeName: string): Partial<MockInfo> {
-  const head = section.slice(0, 600);
-  const numberAt = head.search(/(?:^|\n|\s)\d{1,2}\s*번/u);
-  const number = numberAt >= 0 ? Number(head.slice(numberAt).match(/(\d{1,2})\s*번/u)?.[1]) : undefined;
-  const scope = `${before.slice(-600)}\n${numberAt >= 0 ? head.slice(0, numberAt) : head}\n${sourceRange}`;
+  // The passage may be cut just before "22번" or just after it (at the first English sentence),
+  // so look at the start of this passage first and then at the end of the text before it.
+  const NUMBER = /(?:^|\s)(\d{1,2})\s*번(?=\s)/gu;
+  const inHead = Array.from(section.slice(0, 250).matchAll(NUMBER))[0];
+  const tail = before.slice(-400);
+  const inTail = inHead ? undefined : Array.from(tail.matchAll(NUMBER)).pop();
+  const number = Number(inHead?.[1] || inTail?.[1] || sourceRange.match(/(\d{1,2})\s*번/u)?.[1]) || undefined;
+  // Year and month are read only from the text before the number, never from the passage itself.
+  const header = inHead ? `${before.slice(-600)}\n${section.slice(0, inHead.index)}`
+    : inTail ? before.slice(0, before.length - tail.length + inTail.index!).slice(-600)
+    : `${before.slice(-600)}\n${section.slice(0, 150)}`;
+  // The PDF header wins over the planner's sourceRange, so the header goes last.
+  const scope = `${sourceRange}\n${header}`;
   const last = (pattern: RegExp) => Array.from(scope.matchAll(pattern)).pop()?.[1];
   const year = last(/(20\d{2})\s*년/gu);
   const month = last(/(\d{1,2})\s*월\s*(?:모의고사|학력평가|학평|전국연합)/gu);
@@ -442,6 +451,12 @@ ${pageText}
             if (data.plans?.length !== 1 || !plan || plan.id !== `passage-${index + 1}` ||
                 !Array.isArray(plan.panels) || plan.panels.length !== 4) {
               throw new Error("설계 응답이 올바르지 않습니다.");
+            }
+            // Mock-exam passages: show the question number ("22번") even when the planner left it out.
+            const info = readMockInfo(active.sections.slice(0, index).map(s => s.text).join(""), section.text,
+              plan.sourceRange || "", gradeName);
+            if (info.number && !/\d{1,2}\s*번/u.test(plan.sourceRange || "")) {
+              plan.sourceRange = `${plan.sourceRange || ""} ${info.number}번`.trim();
             }
             active.plans[index] = plan;
             updateProgress();
@@ -1865,9 +1880,17 @@ ${pageText}
                             SOURCE RANGE
                           </p>
 
-                          <p className="mt-2 font-bold text-slate-800">
-                            {plan.sourceRange}
-                          </p>
+                          <input
+                            value={plan.sourceRange}
+                            onChange={(e) =>
+                              updatePlanField(
+                                planIndex,
+                                "sourceRange",
+                                e.target.value
+                              )
+                            }
+                            className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-bold text-slate-800"
+                          />
                         </div>
 
                         <div className="rounded-2xl bg-slate-50 p-5">
