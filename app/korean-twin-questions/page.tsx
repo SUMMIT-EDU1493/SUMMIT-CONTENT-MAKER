@@ -691,36 +691,112 @@ export default function KoreanQuestionMakerPage() {
           );
 
           try {
-            const response =
-              await fetch(
-                "/api/korean-question-generate",
-                {
-                  method:
-                    "POST",
-
-                  headers: {
-                    "Content-Type":
-                      "application/json",
-                  },
-
-                  body:
-                    JSON.stringify({
-                      title:
-                        passage.title,
-
-                      passage:
-                        passage.content,
-
-                      difficulties,
-
-                      types:
-                        passageTypes,
-                    }),
-                }
+            // One request per question type, run side by side: a long passage with every type in one
+            // request can pass the 300-second server limit and then nothing comes back at all.
+            const parts =
+              await Promise.all(
+                passageTypes.map(
+                  async (typeItem) => {
+                    try {
+                      const partResponse =
+                        await fetch(
+                          "/api/korean-question-generate",
+                          {
+                            method: "POST",
+                            headers: {
+                              "Content-Type":
+                                "application/json",
+                            },
+                            body: JSON.stringify({
+                              title:
+                                passage.title,
+                              passage:
+                                passage.content,
+                              difficulties,
+                              types: [typeItem],
+                            }),
+                          }
+                        );
+                      const text =
+                        await partResponse.text();
+                      let partData: any = {};
+                      try {
+                        partData = JSON.parse(text);
+                      } catch {
+                        partData = {
+                          error:
+                            partResponse.status === 504 ||
+                            /timed? ?out|TIMEOUT/i.test(text)
+                              ? "시간이 너무 오래 걸려 이 유형을 만들지 못했습니다. 문항 수를 줄여 다시 시도해 주세요."
+                              : `서버 응답을 읽지 못했습니다 (HTTP ${partResponse.status}).`,
+                        };
+                      }
+                      return {
+                        ok: partResponse.ok && !partData?.error,
+                        data: partData,
+                        type: typeItem.type,
+                      };
+                    } catch (partError: any) {
+                      return {
+                        ok: false,
+                        data: {
+                          error:
+                            partError?.message ||
+                            "문제 생성 요청에 실패했습니다.",
+                        },
+                        type: typeItem.type,
+                      };
+                    }
+                  }
+                )
               );
 
-            const data =
-              await response.json();
+            const failedParts =
+              parts.filter(
+                (part) => !part.ok
+              );
+
+            const response = {
+              ok: parts.some(
+                (part) => part.ok
+              ),
+            };
+
+            const data: any = {
+              questions: parts.flatMap(
+                (part) =>
+                  part.ok &&
+                  Array.isArray(
+                    part.data?.questions
+                  )
+                    ? part.data.questions
+                    : []
+              ),
+              skippedTypes: parts.flatMap(
+                (part) =>
+                  part.ok
+                    ? Array.isArray(
+                        part.data?.skippedTypes
+                      )
+                      ? part.data.skippedTypes
+                      : []
+                    : [
+                        {
+                          type: part.type,
+                          reason:
+                            part.data?.detail ||
+                            part.data?.error ||
+                            "문제 생성에 실패했습니다.",
+                        },
+                      ]
+              ),
+              error: failedParts
+                .map(
+                  (part) =>
+                    `${part.type}: ${part.data?.detail || part.data?.error || "실패"}`
+                )
+                .join(" / "),
+            };
 
             if (
               !response.ok
